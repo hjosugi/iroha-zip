@@ -22,7 +22,7 @@ jobs:
       - name: Install a current MSYS2 UCRT64 libarchive source
         if: runner.os == 'Windows'
         id: msys2
-        uses: msys2/setup-msys2@c6f39ce767a3de8ac436a58b2d471ed9325a8d2d
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: UCRT64
           update: true
@@ -162,7 +162,7 @@ jobs:
 
       - name: Install a current MSYS2 UCRT64 libarchive source
         id: msys2
-        uses: msys2/setup-msys2@c6f39ce767a3de8ac436a58b2d471ed9325a8d2d
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: UCRT64
           update: true
