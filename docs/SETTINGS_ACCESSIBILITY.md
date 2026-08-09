@@ -67,8 +67,10 @@ Deterministic thread tests start simultaneous default creation and replacement s
 that the final file is one complete valid configuration and no staging artifact remains. A
 Windows-only integration test starts two independent copies of the test executable, releases both
 through one file barrier against the same non-ASCII configuration path, and requires one complete
-configuration plus zero temporary/backup artifacts. Abandoned-owner and timeout tests remain open;
-the independent-process test still needs its first passing Windows CI evidence.
+configuration plus zero temporary/backup artifacts. Windows unit tests use isolated mutex names to
+require a bounded wait to fail closed, verify a normal acquisition after release, and accept
+`WAIT_ABANDONED` after an owning thread exits without release. These Windows-only tests still need
+their first passing CI evidence.
 
 ## Real-Windows evidence still required
 
@@ -79,9 +81,8 @@ UX-001 stays open until disposable Windows 10 and 11 systems record:
 3. Narrator and at least one independent screen reader;
 4. Japanese and English Windows with long and non-ASCII paths;
 5. every external-state action, confirmation, progress indication, failure, and rollback;
-6. mutex abandoned-owner and timeout behavior;
-7. a passing Windows CI execution of the independent-process save test and both native UI
-   Automation phases for the current branch.
+6. a passing Windows CI execution of the independent-process, mutex timeout/abandonment, and both
+   native UI Automation phases for the current branch.
 
 Primary implementation references:
 

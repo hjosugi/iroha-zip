@@ -24,6 +24,7 @@ Updated: 2026-08-10
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Serialized initial configuration creation plus a Windows-only independent-process, non-ASCII-path save regression
+- Windows named-mutex timeout, post-release recovery, and abandoned-owner recovery unit tests
 - Normal-AppContainer/LPAC configuration round trips and Windows LPAC process/token API type-check
 - Machine-readable AppContainer token/capability, loopback-denial, timeout, memory-limit, staging-source read/write ACL, and explicit four-profile/root-cleanup probe type-check
 - Fixed-label Windows Server 2022/2025 archive, shell, settings-setup, and isolation E2E workflow parsing

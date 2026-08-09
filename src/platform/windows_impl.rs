@@ -71,6 +71,8 @@ use crate::util;
 use crate::windows_command_line;
 
 const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
+const CONFIG_SAVE_MUTEX_NAME: &str = r"Local\iroha-zip.ConfigSave.v1";
+const CONFIG_SAVE_MUTEX_TIMEOUT_MS: u32 = 30_000;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
 
 pub struct AttachmentHandoffSession {
@@ -138,10 +140,17 @@ impl Drop for ComApartment {
 pub struct ConfigSaveGuard(HANDLE);
 
 pub fn lock_config_save() -> Result<ConfigSaveGuard> {
-    let name = wide_null(OsStr::new(r"Local\iroha-zip.ConfigSave.v1"));
+    lock_named_config_save(
+        OsStr::new(CONFIG_SAVE_MUTEX_NAME),
+        CONFIG_SAVE_MUTEX_TIMEOUT_MS,
+    )
+}
+
+fn lock_named_config_save(name: &OsStr, timeout_milliseconds: u32) -> Result<ConfigSaveGuard> {
+    let name = wide_null(name);
     let handle = unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) }
         .map_err(|error| windows_error("CreateMutexW(config save)", error))?;
-    let wait = unsafe { WaitForSingleObject(handle, 30_000) };
+    let wait = unsafe { WaitForSingleObject(handle, timeout_milliseconds) };
     if wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED {
         let _ = unsafe { CloseHandle(handle) };
         return if wait == WAIT_TIMEOUT {
@@ -1667,5 +1676,55 @@ mod tests {
         assert!(fs::rename(&source, &moved).is_err());
         drop(snapshot);
         fs::rename(&source, &moved).unwrap();
+    }
+
+    #[test]
+    fn config_save_mutex_times_out_and_recovers() {
+        let name = OsString::from(format!(
+            r"Local\iroha-zip.ConfigSave.timeout.{}",
+            util::unique_token()
+        ));
+        let (acquired_sender, acquired_receiver) = std::sync::mpsc::sync_channel(0);
+        let (release_sender, release_receiver) = std::sync::mpsc::sync_channel(0);
+        let owner_name = name.clone();
+        let owner = std::thread::spawn(move || {
+            let guard = lock_named_config_save(owner_name.as_os_str(), 5_000).unwrap();
+            acquired_sender.send(()).unwrap();
+            release_receiver.recv().unwrap();
+            drop(guard);
+        });
+        acquired_receiver
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+
+        let error = lock_named_config_save(name.as_os_str(), 10)
+            .err()
+            .expect("a held config mutex must time out");
+        assert!(error.to_string().contains("timed out"));
+
+        release_sender.send(()).unwrap();
+        owner.join().unwrap();
+        drop(lock_named_config_save(name.as_os_str(), 5_000).unwrap());
+    }
+
+    #[test]
+    fn config_save_mutex_recovers_an_abandoned_owner() {
+        let name = OsString::from(format!(
+            r"Local\iroha-zip.ConfigSave.abandoned.{}",
+            util::unique_token()
+        ));
+        let owner_name = name.clone();
+        let abandoned_handle = std::thread::spawn(move || {
+            let guard = lock_named_config_save(owner_name.as_os_str(), 5_000).unwrap();
+            let raw_handle = guard.0.0 as usize;
+            std::mem::forget(guard);
+            raw_handle
+        })
+        .join()
+        .unwrap();
+
+        drop(lock_named_config_save(name.as_os_str(), 5_000).unwrap());
+        let handle = HANDLE(abandoned_handle as *mut c_void);
+        unsafe { CloseHandle(handle) }.unwrap();
     }
 }
