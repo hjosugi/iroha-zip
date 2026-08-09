@@ -1,0 +1,22 @@
+[backend]
+# safearc.exeからの相対パス、または絶対パス。
+directory = "backend/libarchive"
+
+[sandbox]
+timeout_seconds = 300
+memory_limit_mib = 768
+
+[limits]
+max_archive_bytes = 17179869184
+max_files = 100000
+max_directories = 25000
+max_total_bytes = 34359738368
+max_single_file_bytes = 8589934592
+max_depth = 64
+max_path_bytes = 4096
+
+[behavior]
+preserve_mark_of_the_web = true
+open_after_double_click = true
+# auto / utf8 / cp932 / cp437
+default_filename_encoding = "auto"

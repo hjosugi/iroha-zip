@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a reproducible SafeArc defect without publishing sensitive exploit material.
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach weaponized archives or disclose an unpatched vulnerability here. Use GitHub Security Advisories as described in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: SafeArc version
+      placeholder: v0.2.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and architecture
+      placeholder: Windows 11 24H2 x64
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Include the expected result and the actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Use a harmless sample or describe the structure without sensitive payloads.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste redacted output from the settings-screen diagnosis or `safearc doctor`.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This report does not disclose an unpatched vulnerability or attach a malicious archive.
+          required: true

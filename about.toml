@@ -1,0 +1,7 @@
+# Order is intentional: for OR expressions cargo-about selects the first
+# license that satisfies the dependency's declared SPDX expression.
+accepted = [
+  "Apache-2.0",
+  "MIT",
+  "Unicode-3.0",
+]

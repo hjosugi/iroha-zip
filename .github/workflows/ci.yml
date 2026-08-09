@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup default 1.97.1
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run tests
+        run: cargo test --all-targets --locked
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --locked
+
+      - name: Build release binaries
+        run: cargo build --release --all-targets --locked
+
+  dependency-policy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+
+      - name: Install pinned dependency-policy tools
+        run: |
+          cargo install cargo-deny --version 0.19.9 --locked
+          cargo install cargo-about --version 0.9.1 --locked --features cli
+
+      - name: Check advisories, licenses, bans, and sources
+        run: cargo deny check
+
+      - name: Verify generated third-party license inventory
+        shell: bash
+        run: |
+          cargo about generate --locked --all-features -o THIRD-PARTY-LICENSES.generated.html about.hbs
+          sed -i 's/\r$//' THIRD-PARTY-LICENSES.generated.html
+          cmp THIRD-PARTY-LICENSES.html THIRD-PARTY-LICENSES.generated.html

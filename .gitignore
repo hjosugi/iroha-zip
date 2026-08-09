@@ -1,0 +1,7 @@
+/target/
+/dist/
+/backend/libarchive/*
+!/backend/libarchive/.gitkeep
+*.log
+.DS_Store
+Thumbs.db

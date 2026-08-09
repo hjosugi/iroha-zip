@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-package:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup default 1.97.1
+
+      - name: Verify tag matches Cargo package version
+        shell: pwsh
+        run: |
+          $version = (Select-String -LiteralPath Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match Cargo.toml version $version."
+          }
+
+      - name: Build and package Windows release
+        shell: pwsh
+        run: .\scripts\build-release.ps1
+
+      - name: Create GitHub release and upload checksummed package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $packages = @(Get-ChildItem -LiteralPath dist -Filter 'SafeArc-*-windows-x64.zip')
+          if ($packages.Count -ne 1) {
+            throw "Expected exactly one release ZIP; found $($packages.Count)."
+          }
+          $zip = $packages[0]
+          gh release create $env:GITHUB_REF_NAME `
+            --verify-tag `
+            --title "SafeArc $($env:GITHUB_REF_NAME.TrimStart('v'))" `
+            --prerelease `
+            --generate-notes `
+            $zip.FullName `
+            ($zip.FullName + '.sha256')
