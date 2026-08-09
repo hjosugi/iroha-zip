@@ -436,8 +436,26 @@ impl Sandbox {
                 let parent = std::env::temp_dir().join("iroha-zip-staged-sources");
                 match util::create_unique_dir(&parent, "job-") {
                     Ok(path) => {
-                        sandbox.sealed_source_parent = Some(path);
-                        Ok(sandbox)
+                        sandbox.sealed_source_parent = Some(path.clone());
+                        let prepared = (|| {
+                            validate_directory_security(&path)?;
+                            let resolved = fs::canonicalize(&path).map_err(|error| {
+                                IrohaZipError::io_path(
+                                    "cannot resolve sealed staging source root",
+                                    &path,
+                                    error,
+                                )
+                            })?;
+                            validate_directory_security(&resolved)?;
+                            Ok(resolved)
+                        })();
+                        match prepared {
+                            Ok(resolved) => {
+                                sandbox.sealed_source_parent = Some(resolved);
+                                Ok(sandbox)
+                            }
+                            Err(error) => sandbox.fail_after_cleanup(error),
+                        }
                     }
                     Err(error) => sandbox.fail_after_cleanup(error),
                 }
