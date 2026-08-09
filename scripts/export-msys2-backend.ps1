@@ -41,7 +41,12 @@ function Invoke-Msys2([string]$Script, [string[]]$Arguments) {
 function Invoke-Msys2Scalar([string]$Script, [string[]]$Arguments) {
     $lines = @(Invoke-Msys2 $Script $Arguments | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($lines.Count -ne 1) {
-        throw "Expected one MSYS2 result line; found $($lines.Count)."
+        $argumentSummary = [string]::Join(", ", @($Arguments | ForEach-Object { "[$_]" }))
+        $outputSummary = [string]::Join(" | ", @($lines | ForEach-Object { "[$_]" }))
+        if ($outputSummary.Length -gt 1024) {
+            $outputSummary = $outputSummary.Substring(0, 1024) + "..."
+        }
+        throw "Expected one MSYS2 result line; found $($lines.Count). Arguments: $argumentSummary. Output: $outputSummary"
     }
     return [string]$lines[0]
 }
