@@ -1,0 +1,6 @@
+# Keep source and generated files byte-stable across Linux and Windows runners.
+* text=auto eol=lf
+
+*.exe binary
+*.dll binary
+*.zip binary
