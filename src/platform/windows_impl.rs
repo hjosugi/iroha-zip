@@ -37,10 +37,10 @@ use windows::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_FLAG_SEQUENTIAL_SCAN, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_ID_BOTH_DIR_INFO,
-    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FILE_TRAVERSE, FileIdBothDirectoryInfo,
-    FileIdBothDirectoryRestartInfo, FindClose, FindFirstStreamW, FindNextStreamW,
-    FindStreamInfoStandard, GetFileInformationByHandle, GetFileInformationByHandleEx,
-    OPEN_EXISTING, WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
+    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
+    FindClose, FindFirstStreamW, FindNextStreamW, FindStreamInfoStandard,
+    GetFileInformationByHandle, GetFileInformationByHandleEx, OPEN_EXISTING,
+    WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
 };
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -452,7 +452,7 @@ impl Sandbox {
                         match prepared {
                             Ok(resolved) => {
                                 if let Err(error) =
-                                    grant_appcontainer_parent_traverse(&resolved, sid)
+                                    grant_appcontainer_parent_readonly(&resolved, sid)
                                 {
                                     return sandbox.fail_after_cleanup(error);
                                 }
@@ -628,15 +628,15 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
     )
 }
 
-fn grant_appcontainer_parent_traverse(path: &Path, sid: PSID) -> Result<()> {
-    // The archive backend changes into the sealed source and then enumerates it.
-    // Grant only traversal on its private parent; do not expose sibling names or
-    // inherit access to future children. The source itself receives the separate
-    // read-only ACL immediately before the backend starts.
+fn grant_appcontainer_parent_readonly(path: &Path, sid: PSID) -> Result<()> {
+    // libarchive visits `.` before descending into it, which requires listing the
+    // source entry from its unique per-job parent. Keep that parent read-only and
+    // do not inherit access to future children. The source tree receives its own
+    // protected read-only ACL immediately before the backend starts.
     set_appcontainer_access(
         path,
         sid,
-        FILE_TRAVERSE.0,
+        FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
         NO_INHERITANCE,
         false,
         "sealed staging parent",

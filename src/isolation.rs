@@ -100,6 +100,16 @@ pub fn staging_write_probe(root: &Path) -> Result<StagingWriteProbeResult> {
     {
         readable_paths.push("nested-file".to_owned());
     }
+    let parent = root.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox("sealed staging root unexpectedly has no parent".to_owned())
+    })?;
+    let parent_entries = fs::read_dir(parent)
+        .map_err(|error| IrohaZipError::io("cannot enumerate sealed staging parent", error))?
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(|error| IrohaZipError::io("cannot enumerate a sealed parent entry", error))?;
+    if parent_entries.len() == 1 && parent_entries[0].file_name() == "source" {
+        readable_paths.push("parent-directory".to_owned());
+    }
     let root_entries = fs::read_dir(root)
         .map_err(|error| IrohaZipError::io("cannot enumerate sealed staging root", error))?
         .collect::<std::io::Result<Vec<_>>>()
@@ -147,6 +157,14 @@ pub fn staging_write_probe(root: &Path) -> Result<StagingWriteProbeResult> {
             .write(true)
             .create_new(true)
             .open(root.join("created.txt")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "create-parent-file",
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(parent.join("created-parent.txt")),
     )?;
     record_denial(
         &mut denied_operations,
@@ -551,6 +569,7 @@ fn expected_staging_write_probe() -> StagingWriteProbeResult {
         readable_paths: [
             "root-file",
             "nested-file",
+            "parent-directory",
             "root-directory",
             "nested-directory",
             "current-directory",
@@ -561,6 +580,7 @@ fn expected_staging_write_probe() -> StagingWriteProbeResult {
             "overwrite-existing-file",
             "append-existing-file",
             "create-root-file",
+            "create-parent-file",
             "create-root-directory",
             "overwrite-nested-file",
             "create-nested-file",

@@ -300,6 +300,7 @@ try {
     $expectedReadablePaths = @(
         "root-file",
         "nested-file",
+        "parent-directory",
         "root-directory",
         "nested-directory",
         "current-directory"
@@ -308,6 +309,7 @@ try {
         "overwrite-existing-file",
         "append-existing-file",
         "create-root-file",
+        "create-parent-file",
         "create-root-directory",
         "overwrite-nested-file",
         "create-nested-file",
