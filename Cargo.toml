@@ -1,6 +1,6 @@
 [package]
 name = "iroha-zip"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 rust-version = "1.97"
 description = "A fail-closed Windows archive wrapper that isolates bsdtar in AppContainer"
@@ -12,6 +12,9 @@ clap = { version = "4.6.5", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
 sha2 = "0.10.9"
 toml = "1.1.4"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.189"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [

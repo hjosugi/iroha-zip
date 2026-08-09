@@ -31,14 +31,18 @@ pub struct ProcessResult {
 mod windows_impl;
 #[cfg(windows)]
 pub use windows_impl::{
-    Sandbox, file_identity, open_folder, read_mark_of_the_web, validate_directory_security,
-    validate_extracted_entry_security, validate_regular_file_security, write_mark_of_the_web,
+    Sandbox, create_snapshot_target, file_identity, file_identity_from_handle, open_folder,
+    open_snapshot_source, read_mark_of_the_web, validate_directory_security,
+    validate_extracted_entry_security, validate_open_snapshot_source,
+    validate_regular_file_security, write_mark_of_the_web,
 };
 
 #[cfg(not(windows))]
 mod generic;
 #[cfg(not(windows))]
 pub use generic::{
-    Sandbox, file_identity, open_folder, read_mark_of_the_web, validate_directory_security,
-    validate_extracted_entry_security, validate_regular_file_security, write_mark_of_the_web,
+    Sandbox, create_snapshot_target, file_identity, file_identity_from_handle, open_folder,
+    open_snapshot_source, read_mark_of_the_web, validate_directory_security,
+    validate_extracted_entry_security, validate_open_snapshot_source,
+    validate_regular_file_security, write_mark_of_the_web,
 };

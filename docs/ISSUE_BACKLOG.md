@@ -40,6 +40,8 @@ Hold handles while validating/copying input archives and compression sources, an
 
 Acceptance: replacement, same-size mutation, rename, hardlink, and reparse races have deterministic regression tests and cannot cause unaudited bytes to enter the sandbox or final archive.
 
+Progress (2026-08-09): v0.3.1 keeps each input archive/source-file handle through validation, hashing, and copy; verifies identity, timestamps, length, and SHA-256; blocks write/delete sharing on Windows; uses `O_NOFOLLOW` on Unix; and compares deterministic path/type/content fingerprints before and after source-tree copy. Deterministic tests now cover same-size mutation, identity replacement, rename, hardlinks, and symbolic-link replacement. Parent-directory handle-relative enumeration, sealing the staged source tree until backend completion, created-archive re-extraction comparison, and a real-Windows reparse race stress test remain open.
+
 ### [SAFE-006: Evaluate LPAC and explicit capabilities](https://github.com/hjosugi/iroha-zip/issues/8)
 
 Prototype LPAC, document OS-version behavior, and measure whether required backend operations work without widening access.

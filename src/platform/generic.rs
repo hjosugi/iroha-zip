@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::fs::{self, File, Metadata};
+use std::fs::{self, File, Metadata, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -128,6 +128,51 @@ pub fn validate_regular_file_security(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub fn open_snapshot_source(path: &Path) -> Result<File> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW);
+    }
+    options
+        .open(path)
+        .map_err(|error| IrohaZipError::io_path("cannot open snapshot source", path, error))
+}
+
+pub fn create_snapshot_target(path: &Path) -> Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| IrohaZipError::io_path("cannot create snapshot target", path, error))
+}
+
+pub fn validate_open_snapshot_source(path: &Path, file: &File) -> Result<()> {
+    let metadata = file.metadata().map_err(|error| {
+        IrohaZipError::io_path("cannot inspect open snapshot file", path, error)
+    })?;
+    if !metadata.is_file() {
+        return Err(IrohaZipError::Policy(format!(
+            "open snapshot source is not a regular file: {}",
+            path.display()
+        )));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.nlink() != 1 {
+            return Err(IrohaZipError::Policy(format!(
+                "hard-linked snapshot source is rejected: {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_extracted_entry_security(path: &Path, metadata: &Metadata) -> Result<()> {
     #[cfg(unix)]
     {
@@ -148,6 +193,22 @@ pub fn file_identity(path: &Path) -> Result<Option<FileIdentity>> {
         use std::os::unix::fs::MetadataExt;
         let metadata = fs::metadata(path)
             .map_err(|error| IrohaZipError::io_path("cannot read file identity", path, error))?;
+        return Ok(Some(FileIdentity {
+            volume: metadata.dev(),
+            index: metadata.ino(),
+        }));
+    }
+    #[allow(unreachable_code)]
+    Ok(None)
+}
+
+pub fn file_identity_from_handle(path: &Path, file: &File) -> Result<Option<FileIdentity>> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = file.metadata().map_err(|error| {
+            IrohaZipError::io_path("cannot read open file identity", path, error)
+        })?;
         return Ok(Some(FileIdentity {
             volume: metadata.dev(),
             index: metadata.ino(),

@@ -10,6 +10,7 @@ pub mod monitor;
 pub mod platform;
 pub mod policy;
 pub mod settings;
+pub mod snapshot;
 pub mod transfer;
 pub mod util;
 

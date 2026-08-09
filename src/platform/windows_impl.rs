@@ -5,7 +5,7 @@ use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::mem::{size_of, size_of_val};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
-use std::os::windows::fs::MetadataExt;
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -25,8 +25,9 @@ use windows::Win32::Security::Isolation::{
 };
 use windows::Win32::Security::{FreeSid, PSID, SECURITY_CAPABILITIES};
 use windows::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FindClose, FindFirstStreamW,
-    FindNextStreamW, FindStreamInfoStandard, GetFileInformationByHandle, WIN32_FIND_STREAM_DATA,
+    BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT,
+    FILE_FLAG_SEQUENTIAL_SCAN, FILE_SHARE_READ, FindClose, FindFirstStreamW, FindNextStreamW,
+    FindStreamInfoStandard, GetFileInformationByHandle, WIN32_FIND_STREAM_DATA,
 };
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::JobObjects::{
@@ -511,6 +512,46 @@ pub fn validate_regular_file_security(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub fn open_snapshot_source(path: &Path) -> Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ.0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0 | FILE_FLAG_SEQUENTIAL_SCAN.0)
+        .open(path)
+        .map_err(|error| IrohaZipError::io_path("cannot open snapshot source", path, error))
+}
+
+pub fn create_snapshot_target(path: &Path) -> Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .share_mode(FILE_SHARE_READ.0)
+        .open(path)
+        .map_err(|error| IrohaZipError::io_path("cannot create snapshot target", path, error))
+}
+
+pub fn validate_open_snapshot_source(path: &Path, file: &File) -> Result<()> {
+    let metadata = file.metadata().map_err(|error| {
+        IrohaZipError::io_path("cannot inspect open snapshot file", path, error)
+    })?;
+    reject_reparse(path, &metadata)?;
+    if !metadata.is_file() {
+        return Err(IrohaZipError::Policy(format!(
+            "open snapshot source is not a regular file: {}",
+            path.display()
+        )));
+    }
+    let info = file_information_from_handle(path, file)?;
+    if info.nNumberOfLinks != 1 {
+        return Err(IrohaZipError::Policy(format!(
+            "hard-linked snapshot source is rejected: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
 pub fn validate_extracted_entry_security(path: &Path, metadata: &Metadata) -> Result<()> {
     reject_reparse(path, metadata)?;
     reject_named_streams(path)?;
@@ -535,6 +576,15 @@ pub fn file_identity(path: &Path) -> Result<Option<FileIdentity>> {
     }))
 }
 
+pub fn file_identity_from_handle(path: &Path, file: &File) -> Result<Option<FileIdentity>> {
+    let info = file_information_from_handle(path, file)?;
+    let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
+    Ok(Some(FileIdentity {
+        volume: u64::from(info.dwVolumeSerialNumber),
+        index,
+    }))
+}
+
 fn reject_reparse(path: &Path, metadata: &Metadata) -> Result<()> {
     if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
         return Err(IrohaZipError::Policy(format!(
@@ -549,8 +599,12 @@ fn file_information(path: &Path) -> Result<BY_HANDLE_FILE_INFORMATION> {
     let file = File::open(path).map_err(|error| {
         IrohaZipError::io_path("cannot open file for identity check", path, error)
     })?;
+    file_information_from_handle(path, &file)
+}
+
+fn file_information_from_handle(path: &Path, file: &File) -> Result<BY_HANDLE_FILE_INFORMATION> {
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
-    unsafe { GetFileInformationByHandle(raw_handle(&file), &raw mut info) }
+    unsafe { GetFileInformationByHandle(raw_handle(file), &raw mut info) }
         .map_err(|error| windows_error_path("GetFileInformationByHandle", path, error))?;
     Ok(info)
 }

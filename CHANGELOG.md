@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-08-09
+
+- Added handle-retaining SHA-256 snapshots for input archives and compression source files.
+- On Windows, deny write/delete sharing while source handles are retained and reject reparse points and multi-link files through the open handle.
+- On Unix, use `O_NOFOLLOW` for source snapshots and reject multi-link files through handle metadata.
+- Replace size-only source-tree comparisons with deterministic path, type, length, and content fingerprints.
+- Reject identity replacement, timestamp/length changes, same-size content mutation, links, and source/target root escapes during audited copy, removing partial output on failure.
+- Added deterministic full-copy race injection tests and snapshot regression tests for replacement, same-size mutation, rename, hardlinks, and symbolic links.
+
 ## 0.3.0 - 2026-08-09
 
 - Refactored backend-manifest parsing into a bounded, platform-neutral API suitable for deterministic tests and future fuzzing.

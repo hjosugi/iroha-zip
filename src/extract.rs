@@ -21,7 +21,8 @@ pub struct ExtractRequest<'a> {
 }
 
 pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
-    let archive = policy::validate_input_archive(request.archive, &request.config.limits)?;
+    let mut archive_snapshot = policy::open_input_archive(request.archive, &request.config.limits)?;
+    let archive = archive_snapshot.path().to_path_buf();
     let destination = request
         .output
         .map(Path::to_path_buf)
@@ -55,16 +56,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
 
     let sandbox_backend = request.backend.copy_verified_to(&backend_dir)?;
     let sandbox_archive = input_dir.join("archive.bin");
-    let copied_archive = util::copy_file_new_limited(
-        &archive,
-        &sandbox_archive,
-        request.config.limits.max_archive_bytes,
-    )?;
-    if copied_archive == 0 {
-        return Err(IrohaZipError::Policy(
-            "empty input archive is rejected".to_owned(),
-        ));
-    }
+    archive_snapshot.copy_to_new(&sandbox_archive)?;
 
     let stdout_log = sandbox.root().join("bsdtar.stdout.log");
     let stderr_log = sandbox.root().join("bsdtar.stderr.log");

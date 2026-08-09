@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{IrohaZipError, Result};
 use crate::platform;
+use crate::snapshot::AuditedFile;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -49,29 +50,17 @@ pub struct AuditSummary {
 }
 
 pub fn validate_input_archive(path: &Path, limits: &Limits) -> Result<PathBuf> {
-    platform::validate_regular_file_security(path)?;
-    let original_metadata = fs::symlink_metadata(path)
-        .map_err(|error| IrohaZipError::io_path("cannot inspect input archive", path, error))?;
-    check_archive_size(original_metadata.len(), limits)?;
-
-    let absolute = fs::canonicalize(path)
-        .map_err(|error| IrohaZipError::io_path("cannot open input archive", path, error))?;
-    platform::validate_regular_file_security(&absolute)?;
-    let metadata = fs::symlink_metadata(&absolute).map_err(|error| {
-        IrohaZipError::io_path("cannot inspect input archive", &absolute, error)
-    })?;
-    check_archive_size(metadata.len(), limits)?;
-    Ok(absolute)
+    Ok(open_input_archive(path, limits)?.path().to_path_buf())
 }
 
-fn check_archive_size(size: u64, limits: &Limits) -> Result<()> {
-    if size > limits.max_archive_bytes {
-        return Err(IrohaZipError::Policy(format!(
-            "input archive is {size} bytes; limit is {} bytes",
-            limits.max_archive_bytes
-        )));
+pub fn open_input_archive(path: &Path, limits: &Limits) -> Result<AuditedFile> {
+    let snapshot = AuditedFile::open(path, limits.max_archive_bytes)?;
+    if snapshot.fingerprint().length() == 0 {
+        return Err(IrohaZipError::Policy(
+            "empty input archive is rejected".to_owned(),
+        ));
     }
-    Ok(())
+    Ok(snapshot)
 }
 
 pub fn measure_tree(root: &Path) -> Result<AuditSummary> {

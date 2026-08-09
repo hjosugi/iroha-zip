@@ -115,7 +115,11 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 
 ### TOCTOU
 
-検査とコピーの間にローカルファイルが変更される競合を完全には排除していません。バックエンドはコピー後の再ハッシュで検出します。入力書庫は最終的にAppContainer内へコピーされたバイト列だけが解析されます。圧縮元はコピー前後の監査集計を比較し、各ファイルを監査時のサイズどおりにコピーしますが、同じサイズの内容差し替えまでは検出しません。
+入力書庫と圧縮元の通常ファイルは、検査からコピー完了まで同じファイルハンドルを維持します。ハンドルから取得したファイルidentity、長さ、作成・更新時刻、SHA-256をコピー前後で照合し、コピー先も保持中のハンドルから再ハッシュします。Windowsでは読み取り共有だけを許可して書き込み・削除・renameをブロックし、`FILE_FLAG_OPEN_REPARSE_POINT`で開いたうえでreparse pointと複数リンクを拒否します。Unixでは`O_NOFOLLOW`で開き、複数リンクを拒否します。
+
+圧縮元ツリーは相対パス、種別、長さ、各ファイルのSHA-256を決定的にfingerprintします。実コピー時には各ファイルのidentity・時刻・長さ・内容を監査時の値と照合し、コピー後のツリーfingerprintも再比較します。同一サイズの改変、同じ内容を持つ別ファイルへの置換、rename、hardlink、symlink、およびroot外へ解決されるファイルはfail closedになります。
+
+ディレクトリ列挙そのものを親ディレクトリハンドル相対で固定する実装、監査コピー完了後からbackend読取完了までのstaging tree封印、作成書庫の再展開照合、およびWindows実機でのreparse point競合stress testは未完です。同一ユーザー権限をすでに持つ能動的攻撃者との全競合を排除したとは扱いません。
 
 ### 暗号化書庫
 
@@ -128,6 +132,6 @@ v0.1では安全なパスワード受け渡しを実装していません。標�
 - Windows Defenderの`IAttachmentExecute`／スキャン連携
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
-- ファイルハンドルを維持したまま入力をコピーするTOCTOU低減
+- 親ディレクトリハンドル相対の列挙、staging tree封印、作成書庫の再照合、Windows reparse競合stress test
 - fuzzing、malicious archive corpus、Windows integration tests
 - バックエンドSBOMとライセンス自動収集
