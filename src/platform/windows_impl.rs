@@ -177,6 +177,7 @@ impl Drop for ConfigSaveGuard {
 
 pub struct Sandbox {
     root: PathBuf,
+    sealed_source_parent: Option<PathBuf>,
     memory_limit_bytes: usize,
     mode: Option<Mode>,
 }
@@ -421,15 +422,26 @@ impl Sandbox {
         }
 
         match create_appcontainer() {
-            Ok((profile_name, sid, root)) => Ok(Self {
-                root,
-                memory_limit_bytes: bytes,
-                mode: Some(Mode::AppContainer {
-                    profile_name,
-                    sid,
-                    isolation,
-                }),
-            }),
+            Ok((profile_name, sid, root)) => {
+                let mut sandbox = Self {
+                    root,
+                    sealed_source_parent: None,
+                    memory_limit_bytes: bytes,
+                    mode: Some(Mode::AppContainer {
+                        profile_name,
+                        sid,
+                        isolation,
+                    }),
+                };
+                let parent = std::env::temp_dir().join("iroha-zip-staged-sources");
+                match util::create_unique_dir(&parent, "job-") {
+                    Ok(path) => {
+                        sandbox.sealed_source_parent = Some(path);
+                        Ok(sandbox)
+                    }
+                    Err(error) => sandbox.fail_after_cleanup(error),
+                }
+            }
             Err(error) if allow_unsandboxed => {
                 eprintln!(
                     "warning: AppContainer creation failed; explicit unsandboxed fallback is active: {error}"
@@ -438,6 +450,7 @@ impl Sandbox {
                 let root = util::create_unique_dir(&parent, "job-")?;
                 Ok(Self {
                     root,
+                    sealed_source_parent: None,
                     memory_limit_bytes: bytes,
                     mode: Some(Mode::Unsandboxed),
                 })
@@ -448,6 +461,13 @@ impl Sandbox {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub fn staged_source_path(&self) -> PathBuf {
+        self.sealed_source_parent
+            .as_deref()
+            .unwrap_or(&self.root)
+            .join("source")
     }
 
     pub fn profile_name(&self) -> Option<&str> {
@@ -474,7 +494,8 @@ impl Sandbox {
             IrohaZipError::io_path("cannot resolve staged source before sealing", path, error)
         })?;
         validate_directory_security(&resolved)?;
-        if resolved == self.root || !resolved.starts_with(&self.root) {
+        let allowed_parent = self.sealed_source_parent.as_deref().unwrap_or(&self.root);
+        if resolved == allowed_parent || !resolved.starts_with(allowed_parent) {
             return Err(IrohaZipError::Sandbox(format!(
                 "refusing to change a staging ACL outside a sandbox child: {}",
                 resolved.display()
@@ -529,6 +550,17 @@ impl Sandbox {
                         error,
                     ));
                 }
+                if let Some(source_parent) = &self.sealed_source_parent
+                    && let Err(error) = fs::remove_dir_all(source_parent)
+                    && error.kind() != std::io::ErrorKind::NotFound
+                    && failure.is_none()
+                {
+                    failure = Some(IrohaZipError::io_path(
+                        "cannot remove sealed staging source root",
+                        source_parent,
+                        error,
+                    ));
+                }
                 let _ = FreeSid(sid);
             },
             Mode::Unsandboxed => {
@@ -547,6 +579,15 @@ impl Sandbox {
             failure = Some(IrohaZipError::Sandbox(format!(
                 "sandbox temporary root still exists after cleanup: {}",
                 self.root.display()
+            )));
+        }
+        if let Some(source_parent) = &self.sealed_source_parent
+            && source_parent.exists()
+            && failure.is_none()
+        {
+            failure = Some(IrohaZipError::Sandbox(format!(
+                "sealed staging source root still exists after cleanup: {}",
+                source_parent.display()
             )));
         }
         failure.map_or(Ok(()), Err)
@@ -586,9 +627,8 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
         }
 
         let entry = EXPLICIT_ACCESS_W {
-            // The package directory grants its Package SID broad inherited access.
-            // Replace that trustee's inherited grant with only the rights needed to
-            // enumerate and read the staged source tree.
+            // Replace any access for this Package SID with only the rights needed
+            // to enumerate and read the staged source tree.
             grfAccessPermissions: FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
             grfAccessMode: SET_ACCESS,
             grfInheritance: SUB_CONTAINERS_AND_OBJECTS_INHERIT,

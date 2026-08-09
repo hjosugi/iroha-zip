@@ -38,8 +38,8 @@ The archive harness fails the job unless all of these checks pass:
 | Network | A copied, byte-identical probe cannot connect to an active parent-owned loopback listener. |
 | Timeout | A 5-second child is terminated by a 250-millisecond sandbox timeout. |
 | Memory | A child requesting and touching 256 MiB fails inside a Job Object limited to 64 MiB. |
-| Staging source | The inherited Package SID grant is replaced with a protected, inheritable read/execute-only ACE. A byte-identical child can read nested staged data but cannot overwrite, append, create, rename, delete, change file attributes, open the DACL for writing, or open the owner for writing. |
-| Cleanup | All four probe profiles are deleted and all four temporary roots are absent after explicit cleanup. |
+| Staging source | The source is staged outside the AppContainer's intrinsically writable profile storage, then receives a protected, inheritable Package SID read/execute-only ACE. A byte-identical child can read nested staged data but cannot overwrite, append, create, rename, delete, change file attributes, open the DACL for writing, or open the owner for writing. |
+| Cleanup | All four probe profiles, their profile roots, and their owned external staged-source roots are absent after explicit cleanup. |
 | Doctor | A real `bsdtar --version` run reports measured AppContainer and zero-capability evidence. |
 | Create/read | ZIP, 7z, TAR, and TAR.GZ are internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. |
 | Additional read filters | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures; iroha-zip previews and extracts them to the same tree hash. |

@@ -46,7 +46,7 @@ pub fn create_archive(
     )?;
     let operation = (|| {
         let backend_dir = sandbox.root().join("backend");
-        let source_dir = sandbox.root().join("source");
+        let source_dir = sandbox.staged_source_path();
         let output_dir = sandbox.root().join("output");
         fs::create_dir(&output_dir).map_err(|error| {
             IrohaZipError::io_path(

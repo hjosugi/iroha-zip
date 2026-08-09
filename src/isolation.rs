@@ -405,7 +405,7 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
     let staging_probe =
         PreparedProbe::new(config, config.sandbox.memory_limit_mib, "staging-write")?;
     let staging_operation = (|| {
-        let staging_root = staging_probe.root.join("staging-source");
+        let staging_root = staging_probe.sandbox.staged_source_path();
         std::fs::create_dir(&staging_root).map_err(|error| {
             IrohaZipError::io_path(
                 "cannot create staging-write probe directory",

@@ -159,6 +159,10 @@ impl Sandbox {
         &self.root
     }
 
+    pub fn staged_source_path(&self) -> PathBuf {
+        self.root.join("source")
+    }
+
     pub fn profile_name(&self) -> Option<&str> {
         None
     }
