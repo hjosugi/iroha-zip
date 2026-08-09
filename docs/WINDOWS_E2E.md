@@ -38,7 +38,7 @@ The archive harness fails the job unless all of these checks pass:
 | Network | A copied, byte-identical probe cannot connect to an active parent-owned loopback listener. |
 | Timeout | A 5-second child is terminated by a 250-millisecond sandbox timeout. |
 | Memory | A child requesting and touching 256 MiB fails inside a Job Object limited to 64 MiB. |
-| Staging source | An inheritable deny ACE is applied to the AppContainer Package SID. A byte-identical child can read nested staged data but cannot overwrite, append, create, rename, delete, change file attributes, open the DACL for writing, or open the owner for writing. |
+| Staging source | The inherited Package SID grant is replaced with a protected, inheritable read/execute-only ACE. A byte-identical child can read nested staged data but cannot overwrite, append, create, rename, delete, change file attributes, open the DACL for writing, or open the owner for writing. |
 | Cleanup | All four probe profiles are deleted and all four temporary roots are absent after explicit cleanup. |
 | Doctor | A real `bsdtar --version` run reports measured AppContainer and zero-capability evidence. |
 | Create/read | ZIP, 7z, TAR, and TAR.GZ are internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. |

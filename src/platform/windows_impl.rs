@@ -20,26 +20,27 @@ use windows::Win32::Foundation::{
     LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Security::Authorization::{
-    ConvertSidToStringSidW, DENY_ACCESS, EXPLICIT_ACCESS_W, GetNamedSecurityInfoW,
-    NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, SetEntriesInAclW, SetNamedSecurityInfoW, TRUSTEE_IS_SID,
+    ConvertSidToStringSidW, EXPLICIT_ACCESS_W, GetNamedSecurityInfoW, NO_MULTIPLE_TRUSTEE,
+    SE_FILE_OBJECT, SET_ACCESS, SetEntriesInAclW, SetNamedSecurityInfoW, TRUSTEE_IS_SID,
     TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
 use windows::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeleteAppContainerProfile, GetAppContainerFolderPath,
 };
 use windows::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, FreeSid, GetTokenInformation, PSECURITY_DESCRIPTOR, PSID,
-    SECURITY_CAPABILITIES, SUB_CONTAINERS_AND_OBJECTS_INHERIT, TOKEN_GROUPS, TOKEN_QUERY,
-    TokenCapabilities, TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
+    ACL, DACL_SECURITY_INFORMATION, FreeSid, GetTokenInformation,
+    PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_CAPABILITIES,
+    SUB_CONTAINERS_AND_OBJECTS_INHERIT, TOKEN_GROUPS, TOKEN_QUERY, TokenCapabilities,
+    TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
 };
 use windows::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, CreateFileW, DELETE, FILE_APPEND_DATA, FILE_ATTRIBUTE_DIRECTORY,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_DELETE_CHILD, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN, FILE_ID_BOTH_DIR_INFO,
-    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA,
-    FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo, FindClose, FindFirstStreamW,
-    FindNextStreamW, FindStreamInfoStandard, GetFileInformationByHandle,
-    GetFileInformationByHandleEx, OPEN_EXISTING, WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
+    BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    FILE_FLAG_SEQUENTIAL_SCAN, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_ID_BOTH_DIR_INFO,
+    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
+    FindClose, FindFirstStreamW, FindNextStreamW, FindStreamInfoStandard,
+    GetFileInformationByHandle, GetFileInformationByHandleEx, OPEN_EXISTING,
+    WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
 };
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -485,7 +486,7 @@ impl Sandbox {
         })?;
         match mode {
             Mode::AppContainer { sid, .. } => {
-                deny_appcontainer_tree_mutation(&resolved, *sid)?;
+                restrict_appcontainer_tree_to_readonly(&resolved, *sid)?;
                 Ok(true)
             }
             Mode::Unsandboxed => Ok(false),
@@ -552,7 +553,7 @@ impl Sandbox {
     }
 }
 
-fn deny_appcontainer_tree_mutation(path: &Path, sid: PSID) -> Result<()> {
+fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> {
     let wide_path = wide_null(path.as_os_str());
     let mut existing_acl: *mut ACL = null_mut();
     let mut security_descriptor = PSECURITY_DESCRIPTOR::default();
@@ -584,17 +585,12 @@ fn deny_appcontainer_tree_mutation(path: &Path, sid: PSID) -> Result<()> {
             )));
         }
 
-        let denied = FILE_WRITE_DATA.0
-            | FILE_APPEND_DATA.0
-            | FILE_WRITE_EA.0
-            | FILE_DELETE_CHILD.0
-            | FILE_WRITE_ATTRIBUTES.0
-            | DELETE.0
-            | WRITE_DAC.0
-            | WRITE_OWNER.0;
         let entry = EXPLICIT_ACCESS_W {
-            grfAccessPermissions: denied,
-            grfAccessMode: DENY_ACCESS,
+            // The package directory grants its Package SID broad inherited access.
+            // Replace that trustee's inherited grant with only the rights needed to
+            // enumerate and read the staged source tree.
+            grfAccessPermissions: FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
+            grfAccessMode: SET_ACCESS,
             grfInheritance: SUB_CONTAINERS_AND_OBJECTS_INHERIT,
             Trustee: TRUSTEE_W {
                 pMultipleTrustee: null_mut(),
@@ -630,7 +626,7 @@ fn deny_appcontainer_tree_mutation(path: &Path, sid: PSID) -> Result<()> {
             SetNamedSecurityInfoW(
                 PCWSTR(wide_path.as_ptr()),
                 SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
                 None,
                 None,
                 Some(sealed_acl),
