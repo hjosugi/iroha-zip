@@ -75,6 +75,7 @@ impl IsolationMode {
 #[serde(default, deny_unknown_fields)]
 pub struct BehaviorConfig {
     pub preserve_mark_of_the_web: bool,
+    pub attachment_handoff: AttachmentHandoffPolicy,
     pub open_after_double_click: bool,
     pub default_filename_encoding: FilenameEncoding,
 }
@@ -83,9 +84,29 @@ impl Default for BehaviorConfig {
     fn default() -> Self {
         Self {
             preserve_mark_of_the_web: true,
+            attachment_handoff: AttachmentHandoffPolicy::Disabled,
             open_after_double_click: true,
             default_filename_encoding: FilenameEncoding::Auto,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AttachmentHandoffPolicy {
+    #[default]
+    Disabled,
+    BestEffort,
+    Required,
+}
+
+impl AttachmentHandoffPolicy {
+    pub fn is_enabled(self) -> bool {
+        self != Self::Disabled
+    }
+
+    pub fn is_required(self) -> bool {
+        self == Self::Required
     }
 }
 

@@ -23,6 +23,8 @@ AppContainer内で書庫を一時領域へ展開
     ↓
 Mark-of-the-Webを各ファイルへ伝播
     ↓
+設定時だけWindows Attachment Servicesへ引き渡し、内容とMotWを再検査
+    ↓
 書庫の隣に同名フォルダとして公開
 ```
 
@@ -198,6 +200,7 @@ dist\iroha-zip\
 | AppContainer | 通常AppContainer／実験的LPAC、timeout、Job Object memory limit |
 | Resource limits | 入力書庫容量、ファイル数、ディレクトリ数、合計容量、単一ファイル容量、パス深さ、パス長 |
 | 展開動作 | Mark-of-the-Web伝播、ダブルクリック後に開く、既定のfilename encoding |
+| Windows信頼連携 | 無効（既定）／best-effort／必須。Attachment Servicesへの引き渡しでありclean判定ではない |
 | Windows統合 | 関連付け候補の登録・解除、既定のアプリ画面、設定フォルダ |
 | 設定管理 | 入力検証、既定値復元、rollback-safe保存 |
 
@@ -212,6 +215,8 @@ dist\iroha-zip\
 ```
 
 設定例は[`config.example.toml`](config.example.toml)です。
+
+Windows信頼連携を有効にすると、公開前のpartialツリーに対して`IAttachmentExecute::Save`を呼び、完了後に通常データのSHA-256、ツリー構造、リンク／reparse point／ADS、Mark-of-the-Webを再検査します。`best-effort`はサービス不在を明示して続行し、`required`は最終フォルダを公開しません。どちらでも内容変更や削除はfail closedです。詳細は[`ANTIMALWARE_HANDOFF.md`](docs/ANTIMALWARE_HANDOFF.md)を参照してください。
 
 CLIだけで初期化・診断する場合は従来のコマンドも使用できます。
 

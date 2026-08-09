@@ -32,7 +32,10 @@ use windows::Win32::Storage::FileSystem::{
     FILE_FLAG_SEQUENTIAL_SCAN, FILE_SHARE_READ, FindClose, FindFirstStreamW, FindNextStreamW,
     FindStreamInfoStandard, GetFileInformationByHandle, WIN32_FIND_STREAM_DATA,
 };
-use windows::Win32::System::Com::CoTaskMemFree;
+use windows::Win32::System::Com::{
+    CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+    CoTaskMemFree, CoUninitialize,
+};
 use windows::Win32::System::JobObjects::{
     CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
@@ -47,7 +50,8 @@ use windows::Win32::System::Threading::{
     STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 use windows::Win32::System::WindowsProgramming::PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
-use windows::core::{Error as WindowsError, HRESULT, PCWSTR, PWSTR};
+use windows::Win32::UI::Shell::{AttachmentServices, IAttachmentExecute};
+use windows::core::{Error as WindowsError, GUID, HRESULT, PCWSTR, PWSTR};
 
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
@@ -56,6 +60,69 @@ use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
 use crate::util;
 
 const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
+static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
+
+pub struct AttachmentHandoffSession {
+    _apartment: ComApartment,
+}
+
+impl AttachmentHandoffSession {
+    pub fn new() -> Result<Self> {
+        let result = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        result.ok().map_err(|error| {
+            IrohaZipError::TrustHandoff(format!("cannot initialize COM: {error}"))
+        })?;
+        Ok(Self {
+            _apartment: ComApartment,
+        })
+    }
+
+    pub fn handoff(&self, path: &Path) -> Result<()> {
+        let local_path = wide_null(path.as_os_str());
+        let attachment: IAttachmentExecute =
+            unsafe { CoCreateInstance(&AttachmentServices, None, CLSCTX_INPROC_SERVER) }.map_err(
+                |error| {
+                    IrohaZipError::TrustHandoff(format!(
+                        "cannot create Attachment Services for {}: {error}",
+                        path.display()
+                    ))
+                },
+            )?;
+        unsafe {
+            attachment
+                .SetClientGuid(&raw const IROHA_ZIP_ATTACHMENT_CLIENT)
+                .map_err(|error| {
+                    IrohaZipError::TrustHandoff(format!(
+                        "cannot identify the iroha-zip client for {}: {error}",
+                        path.display()
+                    ))
+                })?;
+            attachment
+                .SetLocalPath(PCWSTR(local_path.as_ptr()))
+                .map_err(|error| {
+                    IrohaZipError::TrustHandoff(format!(
+                        "cannot set the local attachment path for {}: {error}",
+                        path.display()
+                    ))
+                })?;
+            attachment.Save().map_err(|error| {
+                IrohaZipError::TrustHandoff(format!(
+                    "Attachment Services rejected or could not process {}: {error}",
+                    path.display()
+                ))
+            })?;
+        }
+        Ok(())
+    }
+}
+
+struct ComApartment;
+
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        unsafe { CoUninitialize() };
+    }
+}
 
 pub struct Sandbox {
     root: PathBuf,
@@ -661,6 +728,21 @@ pub fn validate_extracted_entry_security(path: &Path, metadata: &Metadata) -> Re
     Ok(())
 }
 
+pub fn validate_post_handoff_entry_security(path: &Path, metadata: &Metadata) -> Result<()> {
+    reject_reparse(path, metadata)?;
+    reject_unexpected_post_handoff_streams(path, metadata.is_file())?;
+    if metadata.is_file() {
+        let info = file_information(path)?;
+        if info.nNumberOfLinks != 1 {
+            return Err(IrohaZipError::Policy(format!(
+                "hard-linked output is rejected after Windows trust handoff: {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn file_identity(path: &Path) -> Result<Option<FileIdentity>> {
     let info = file_information(path)?;
     let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
@@ -704,6 +786,14 @@ fn file_information_from_handle(path: &Path, file: &File) -> Result<BY_HANDLE_FI
 }
 
 fn reject_named_streams(path: &Path) -> Result<()> {
+    reject_streams(path, false)
+}
+
+fn reject_unexpected_post_handoff_streams(path: &Path, allow_zone_identifier: bool) -> Result<()> {
+    reject_streams(path, allow_zone_identifier)
+}
+
+fn reject_streams(path: &Path, allow_zone_identifier: bool) -> Result<()> {
     let mut data = WIN32_FIND_STREAM_DATA::default();
     let first = unsafe {
         FindFirstStreamW(
@@ -729,9 +819,11 @@ fn reject_named_streams(path: &Path) -> Result<()> {
 
     loop {
         let name = wide_array_to_string(&data.cStreamName);
-        if name != "::$DATA" {
+        let allowed = name == "::$DATA"
+            || (allow_zone_identifier && name.eq_ignore_ascii_case(":Zone.Identifier:$DATA"));
+        if !allowed {
             return Err(IrohaZipError::Policy(format!(
-                "NTFS alternate data stream is rejected on {}: {name:?}",
+                "unexpected NTFS alternate data stream is rejected on {}: {name:?}",
                 path.display()
             )));
         }
@@ -758,8 +850,17 @@ impl Drop for FindHandle {
 }
 
 pub fn read_mark_of_the_web(path: &Path) -> Result<Option<Vec<u8>>> {
-    let stream = zone_identifier_path(path);
-    let mut file = match File::open(&stream) {
+    let Some(bytes) = read_zone_identifier_stream(path)? else {
+        return Ok(None);
+    };
+    let zone = parse_zone_identifier(&bytes).unwrap_or(3);
+    Ok(Some(
+        format!("[ZoneTransfer]\r\nZoneId={zone}\r\n").into_bytes(),
+    ))
+}
+
+fn read_zone_identifier_stream(path: &Path) -> Result<Option<Vec<u8>>> {
+    let mut file = match File::open(zone_identifier_path(path)) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => {
@@ -772,12 +873,21 @@ pub fn read_mark_of_the_web(path: &Path) -> Result<Option<Vec<u8>>> {
     };
     let mut bytes = Vec::new();
     std::io::Read::by_ref(&mut file)
-        .take(16 * 1024)
+        .take(16 * 1024 + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| IrohaZipError::io_path("cannot read Mark-of-the-Web", path, error))?;
-    let text = String::from_utf8_lossy(&bytes);
-    let zone = text
-        .lines()
+    if bytes.len() > 16 * 1024 || bytes.contains(&0) {
+        return Err(IrohaZipError::Policy(format!(
+            "invalid Mark-of-the-Web payload on {}",
+            path.display()
+        )));
+    }
+    Ok(Some(bytes))
+}
+
+fn parse_zone_identifier(bytes: &[u8]) -> Option<u8> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    text.lines()
         .filter_map(|line| line.split_once('='))
         .find_map(|(key, value)| {
             if key.trim().eq_ignore_ascii_case("ZoneId") {
@@ -786,10 +896,6 @@ pub fn read_mark_of_the_web(path: &Path) -> Result<Option<Vec<u8>>> {
                 None
             }
         })
-        .unwrap_or(3);
-    Ok(Some(
-        format!("[ZoneTransfer]\r\nZoneId={zone}\r\n").into_bytes(),
-    ))
 }
 
 pub fn write_mark_of_the_web(path: &Path, zone: &[u8]) -> Result<()> {
@@ -810,6 +916,23 @@ pub fn write_mark_of_the_web(path: &Path, zone: &[u8]) -> Result<()> {
     file.sync_all()
         .map_err(|error| IrohaZipError::io_path("cannot flush Mark-of-the-Web", path, error))?;
     Ok(())
+}
+
+pub fn verify_mark_of_the_web(path: &Path, expected: &[u8]) -> Result<()> {
+    let expected_zone = parse_zone_identifier(expected).ok_or_else(|| {
+        IrohaZipError::Policy("invalid expected Mark-of-the-Web payload".to_owned())
+    })?;
+    match read_zone_identifier_stream(path)? {
+        Some(actual) if parse_zone_identifier(&actual) == Some(expected_zone) => Ok(()),
+        Some(_) => Err(IrohaZipError::Policy(format!(
+            "Mark-of-the-Web changed during Windows trust handoff: {}",
+            path.display()
+        ))),
+        None => Err(IrohaZipError::Policy(format!(
+            "Mark-of-the-Web disappeared during Windows trust handoff: {}",
+            path.display()
+        ))),
+    }
 }
 
 pub fn open_folder(path: &Path) -> Result<()> {
@@ -945,4 +1068,56 @@ fn windows_error_path(operation: &str, path: &Path, error: WindowsError) -> Iroh
 
 fn is_windows_error(error: &WindowsError, code: u32) -> bool {
     error.code() == HRESULT::from_win32(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "iroha-zip-windows-security-{}",
+                util::unique_token()
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn zone_identifier_parser_requires_valid_utf8_and_a_bounded_zone() {
+        assert_eq!(
+            parse_zone_identifier(b"[ZoneTransfer]\r\nZoneId=3\r\n"),
+            Some(3)
+        );
+        assert_eq!(parse_zone_identifier(b"ZoneId=5\r\n"), None);
+        assert_eq!(parse_zone_identifier(b"ZoneId=not-a-number\r\n"), None);
+        assert_eq!(parse_zone_identifier(b"\xffZoneId=3\r\n"), None);
+    }
+
+    #[test]
+    fn post_handoff_validation_allows_only_zone_identifier_ads() {
+        let directory = TestDirectory::new();
+        let path = directory.0.join("item.txt");
+        fs::write(&path, b"content").unwrap();
+        let zone = b"[ZoneTransfer]\r\nZoneId=3\r\n";
+        write_mark_of_the_web(&path, zone).unwrap();
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        validate_post_handoff_entry_security(&path, &metadata).unwrap();
+        verify_mark_of_the_web(&path, zone).unwrap();
+
+        let mut unexpected = path.as_os_str().to_owned();
+        unexpected.push(":unexpected");
+        fs::write(PathBuf::from(unexpected), b"untrusted").unwrap();
+        assert!(validate_post_handoff_entry_security(&path, &metadata).is_err());
+    }
 }

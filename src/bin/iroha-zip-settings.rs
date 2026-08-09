@@ -5,7 +5,9 @@
 #[cfg(windows)]
 mod windows_app {
     use iroha_zip::backend::BackendBundle;
-    use iroha_zip::config::{Config, FilenameEncoding, IsolationMode, default_config_path};
+    use iroha_zip::config::{
+        AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode, default_config_path,
+    };
     use iroha_zip::settings::{SettingsField, SettingsForm};
     use iroha_zip::util;
     use std::cell::RefCell;
@@ -78,6 +80,7 @@ mod windows_app {
         max_depth: HWND,
         max_path_bytes: HWND,
         preserve_motw: HWND,
+        attachment_handoff: HWND,
         open_after_double_click: HWND,
         encoding: HWND,
         status: HWND,
@@ -227,7 +230,7 @@ mod windows_app {
                     22,
                 )?;
 
-                add_group(parent, instance, "展開時の動作", 14, 447, 904, 78)?;
+                add_group(parent, instance, "展開時の動作", 14, 447, 904, 104)?;
                 self.controls.preserve_motw = add_checkbox(
                     parent,
                     instance,
@@ -251,14 +254,23 @@ mod windows_app {
                 for label in ["自動判定", "UTF-8", "CP932（日本語）", "CP437"] {
                     combo_add(self.controls.encoding, label);
                 }
+                add_static(parent, instance, "Windows信頼連携", 486, 515, 142, 22)?;
+                self.controls.attachment_handoff = add_combo(parent, instance, 636, 509, 262, 120)?;
+                for label in [
+                    "無効（既定）",
+                    "best-effort（失敗を表示）",
+                    "必須（失敗時は公開しない）",
+                ] {
+                    combo_add(self.controls.attachment_handoff, label);
+                }
 
-                add_group(parent, instance, "Windows 統合", 14, 531, 904, 72)?;
+                add_group(parent, instance, "Windows 統合", 14, 557, 904, 72)?;
                 add_button(
                     parent,
                     instance,
                     "関連付けを登録(&A)",
                     30,
-                    557,
+                    583,
                     160,
                     29,
                     ID_REGISTER,
@@ -269,7 +281,7 @@ mod windows_app {
                     instance,
                     "関連付けを解除(&U)",
                     200,
-                    557,
+                    583,
                     160,
                     29,
                     ID_UNREGISTER,
@@ -280,7 +292,7 @@ mod windows_app {
                     instance,
                     "既定のアプリを開く(&P)",
                     370,
-                    557,
+                    583,
                     180,
                     29,
                     ID_DEFAULT_APPS,
@@ -291,7 +303,7 @@ mod windows_app {
                     instance,
                     "設定フォルダを開く(&F)",
                     560,
-                    557,
+                    583,
                     180,
                     29,
                     ID_CONFIG_FOLDER,
@@ -303,7 +315,7 @@ mod windows_app {
                     instance,
                     "既定値に戻す(&R)",
                     18,
-                    616,
+                    642,
                     150,
                     32,
                     ID_DEFAULTS,
@@ -314,7 +326,7 @@ mod windows_app {
                     instance,
                     "保存(&S)",
                     670,
-                    616,
+                    642,
                     110,
                     32,
                     ID_SAVE,
@@ -325,14 +337,14 @@ mod windows_app {
                     instance,
                     "閉じる(&C)",
                     790,
-                    616,
+                    642,
                     110,
                     32,
                     ID_CANCEL,
                     false,
                 )?;
                 self.controls.status =
-                    add_static(parent, instance, "設定を読み込みました。", 18, 656, 882, 22)?;
+                    add_static(parent, instance, "設定を読み込みました。", 18, 682, 882, 22)?;
             }
 
             self.apply_config(&config);
@@ -369,6 +381,19 @@ mod windows_app {
             set_control_text(self.controls.max_depth, &form.max_depth);
             set_control_text(self.controls.max_path_bytes, &form.max_path_bytes);
             set_check(self.controls.preserve_motw, form.preserve_mark_of_the_web);
+            let attachment_handoff_index = match form.attachment_handoff {
+                AttachmentHandoffPolicy::Disabled => 0,
+                AttachmentHandoffPolicy::BestEffort => 1,
+                AttachmentHandoffPolicy::Required => 2,
+            };
+            unsafe {
+                SendMessageW(
+                    self.controls.attachment_handoff,
+                    CB_SETCURSEL,
+                    Some(WPARAM(attachment_handoff_index)),
+                    Some(LPARAM(0)),
+                );
+            }
             set_check(
                 self.controls.open_after_double_click,
                 form.open_after_double_click,
@@ -410,6 +435,7 @@ mod windows_app {
                 max_depth: control_text(self.controls.max_depth)?,
                 max_path_bytes: control_text(self.controls.max_path_bytes)?,
                 preserve_mark_of_the_web: is_checked(self.controls.preserve_motw),
+                attachment_handoff: AttachmentHandoffPolicy::Disabled,
                 open_after_double_click: is_checked(self.controls.open_after_double_click),
                 default_filename_encoding: FilenameEncoding::Auto,
             };
@@ -426,6 +452,21 @@ mod windows_app {
                 0 => IsolationMode::AppContainer,
                 1 => IsolationMode::Lpac,
                 _ => return Err("分離モードを選択してください。".to_owned()),
+            };
+            let attachment_handoff = unsafe {
+                SendMessageW(
+                    self.controls.attachment_handoff,
+                    CB_GETCURSEL,
+                    Some(WPARAM(0)),
+                    Some(LPARAM(0)),
+                )
+                .0
+            };
+            form.attachment_handoff = match attachment_handoff {
+                0 => AttachmentHandoffPolicy::Disabled,
+                1 => AttachmentHandoffPolicy::BestEffort,
+                2 => AttachmentHandoffPolicy::Required,
+                _ => return Err("Windows信頼連携の方針を選択してください。".to_owned()),
             };
             let encoding = unsafe {
                 SendMessageW(
@@ -803,7 +844,7 @@ mod windows_app {
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 950,
-                720,
+                760,
                 None,
                 None,
                 Some(instance),

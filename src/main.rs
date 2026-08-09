@@ -2,6 +2,8 @@
 
 #[cfg(windows)]
 use std::ffi::OsString;
+#[cfg(windows)]
+use std::fs;
 use std::process::ExitCode;
 #[cfg(windows)]
 use std::process::Stdio;
@@ -11,6 +13,8 @@ use std::time::Duration;
 use clap::Parser;
 use iroha_zip::backend::BackendBundle;
 use iroha_zip::cli::{Cli, Command};
+#[cfg(windows)]
+use iroha_zip::config::AttachmentHandoffPolicy;
 use iroha_zip::config::{Config, default_config_path};
 use iroha_zip::create;
 #[cfg(windows)]
@@ -18,7 +22,9 @@ use iroha_zip::error::IrohaZipError;
 use iroha_zip::error::Result;
 use iroha_zip::extract::{self, ExtractRequest};
 #[cfg(windows)]
-use iroha_zip::platform::{ProcessSpec, Sandbox};
+use iroha_zip::platform::{AttachmentHandoffSession, ProcessSpec, Sandbox};
+#[cfg(windows)]
+use iroha_zip::snapshot::AuditedFile;
 #[cfg(windows)]
 use iroha_zip::util;
 
@@ -69,6 +75,7 @@ fn run() -> Result<()> {
                     "isolation:     {}; backend execution succeeded",
                     config.sandbox.isolation.display_name()
                 );
+                report_attachment_handoff_diagnostic(config.behavior.attachment_handoff)?;
             }
             #[cfg(not(windows))]
             println!("AppContainer:  unavailable; backend execution was not attempted");
@@ -83,7 +90,7 @@ fn run() -> Result<()> {
             let config = Config::load(&config_path)?;
             let backend = BackendBundle::verify(&config.backend_directory()?)?;
             let encoding = encoding.unwrap_or(config.behavior.default_filename_encoding);
-            let published = extract::extract(ExtractRequest {
+            let result = extract::extract(ExtractRequest {
                 backend: &backend,
                 config: &config,
                 archive: &archive,
@@ -92,7 +99,8 @@ fn run() -> Result<()> {
                 open,
                 allow_unsandboxed,
             })?;
-            println!("{}", published.display());
+            eprintln!("{}", result.attachment_handoff.message());
+            println!("{}", result.destination.display());
         }
         Command::Create {
             format,
@@ -114,6 +122,59 @@ fn run() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(windows)]
+fn report_attachment_handoff_diagnostic(policy: AttachmentHandoffPolicy) -> Result<()> {
+    if !policy.is_enabled() {
+        println!("trust handoff: disabled by configuration");
+        return Ok(());
+    }
+    match probe_attachment_handoff() {
+        Ok(()) => {
+            println!(
+                "trust handoff: Windows Attachment Services accepted a benign diagnostic file; this is not a clean verdict"
+            );
+            Ok(())
+        }
+        Err(error) if !policy.is_required() => {
+            println!(
+                "trust handoff: unavailable; best-effort publication would continue with an explicit warning: {error}"
+            );
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(windows)]
+fn probe_attachment_handoff() -> Result<()> {
+    let parent = std::env::temp_dir().join("iroha-zip-attachment-diagnostic");
+    let root = util::create_unique_dir(&parent, "probe-")?;
+    let path = root.join("iroha-zip-benign-diagnostic.txt");
+    let result = (|| {
+        fs::write(&path, b"iroha-zip Windows trust handoff diagnostic\r\n").map_err(|error| {
+            IrohaZipError::io_path("cannot create handoff diagnostic", &path, error)
+        })?;
+        let before = AuditedFile::open(&path, 1024)?.fingerprint().clone();
+        let session = AttachmentHandoffSession::new()?;
+        session.handoff(&path)?;
+        let metadata = fs::symlink_metadata(&path).map_err(|error| {
+            IrohaZipError::io_path("cannot inspect handoff diagnostic", &path, error)
+        })?;
+        iroha_zip::platform::validate_post_handoff_entry_security(&path, &metadata)?;
+        let after = AuditedFile::open(&path, 1024)?;
+        if before.length() != after.fingerprint().length()
+            || before.sha256() != after.fingerprint().sha256()
+        {
+            return Err(IrohaZipError::TrustHandoff(
+                "Attachment Services changed the diagnostic file's primary data".to_owned(),
+            ));
+        }
+        Ok(())
+    })();
+    let _ = fs::remove_dir_all(&root);
+    result
 }
 
 #[cfg(windows)]

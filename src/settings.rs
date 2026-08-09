@@ -2,8 +2,8 @@ use std::fmt;
 use std::path::PathBuf;
 
 use crate::config::{
-    Config, FilenameEncoding, IsolationMode, MAX_MEMORY_LIMIT_MIB, MAX_TIMEOUT_SECONDS,
-    MIN_MEMORY_LIMIT_MIB, MIN_TIMEOUT_SECONDS,
+    AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode, MAX_MEMORY_LIMIT_MIB,
+    MAX_TIMEOUT_SECONDS, MIN_MEMORY_LIMIT_MIB, MIN_TIMEOUT_SECONDS,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -76,6 +76,7 @@ pub struct SettingsForm {
     pub max_depth: String,
     pub max_path_bytes: String,
     pub preserve_mark_of_the_web: bool,
+    pub attachment_handoff: AttachmentHandoffPolicy,
     pub open_after_double_click: bool,
     pub default_filename_encoding: FilenameEncoding,
 }
@@ -100,6 +101,7 @@ impl SettingsForm {
             max_depth: config.limits.max_depth.to_string(),
             max_path_bytes: config.limits.max_path_bytes.to_string(),
             preserve_mark_of_the_web: config.behavior.preserve_mark_of_the_web,
+            attachment_handoff: config.behavior.attachment_handoff,
             open_after_double_click: config.behavior.open_after_double_click,
             default_filename_encoding: config.behavior.default_filename_encoding,
         }
@@ -142,6 +144,7 @@ impl SettingsForm {
         config.limits.max_path_bytes =
             parse_positive_usize(&self.max_path_bytes, SettingsField::MaxPathBytes)?;
         config.behavior.preserve_mark_of_the_web = self.preserve_mark_of_the_web;
+        config.behavior.attachment_handoff = self.attachment_handoff;
         config.behavior.open_after_double_click = self.open_after_double_click;
         config.behavior.default_filename_encoding = self.default_filename_encoding;
 

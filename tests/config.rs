@@ -1,6 +1,6 @@
 use std::fs;
 
-use iroha_zip::config::{Config, FilenameEncoding, IsolationMode};
+use iroha_zip::config::{AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode};
 use iroha_zip::util;
 
 #[test]
@@ -27,6 +27,10 @@ fn default_config_round_trips_through_toml() {
     assert_eq!(decoded.sandbox.isolation, original.sandbox.isolation);
     assert_eq!(decoded.limits.max_files, original.limits.max_files);
     assert_eq!(
+        decoded.behavior.attachment_handoff,
+        original.behavior.attachment_handoff
+    );
+    assert_eq!(
         decoded.behavior.preserve_mark_of_the_web,
         original.behavior.preserve_mark_of_the_web
     );
@@ -46,6 +50,10 @@ fn documented_example_is_complete_and_valid() {
         FilenameEncoding::Auto
     );
     assert_eq!(config.sandbox.isolation, IsolationMode::AppContainer);
+    assert_eq!(
+        config.behavior.attachment_handoff,
+        AttachmentHandoffPolicy::Disabled
+    );
 }
 
 #[test]
@@ -70,6 +78,43 @@ open_after_double_click = false
         FilenameEncoding::Auto
     );
     assert_eq!(config.sandbox.isolation, IsolationMode::AppContainer);
+    assert_eq!(
+        config.behavior.attachment_handoff,
+        AttachmentHandoffPolicy::Disabled
+    );
+}
+
+#[test]
+fn attachment_handoff_policy_is_explicit_and_unknown_values_are_rejected() {
+    let best_effort: Config = toml::from_str(
+        r#"
+[behavior]
+attachment_handoff = "best-effort"
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        best_effort.behavior.attachment_handoff,
+        AttachmentHandoffPolicy::BestEffort
+    );
+
+    let required: Config = toml::from_str(
+        r#"
+[behavior]
+attachment_handoff = "required"
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        required.behavior.attachment_handoff,
+        AttachmentHandoffPolicy::Required
+    );
+
+    let invalid = r#"
+[behavior]
+attachment_handoff = "automatic"
+"#;
+    assert!(toml::from_str::<Config>(invalid).is_err());
 }
 
 #[test]
@@ -120,6 +165,7 @@ fn save_replaces_configuration_and_preserves_all_settings() {
     config.sandbox.isolation = IsolationMode::Lpac;
     config.limits.max_files = 123_456;
     config.behavior.open_after_double_click = false;
+    config.behavior.attachment_handoff = AttachmentHandoffPolicy::Required;
     config.behavior.default_filename_encoding = FilenameEncoding::Cp932;
 
     config.save(&path).unwrap();

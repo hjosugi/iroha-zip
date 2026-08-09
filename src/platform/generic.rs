@@ -16,6 +16,22 @@ pub struct Sandbox {
     root: PathBuf,
 }
 
+pub struct AttachmentHandoffSession;
+
+impl AttachmentHandoffSession {
+    pub fn new() -> Result<Self> {
+        Err(IrohaZipError::Unsupported(
+            "Windows Attachment Services are only available on Windows".to_owned(),
+        ))
+    }
+
+    pub fn handoff(&self, _path: &Path) -> Result<()> {
+        Err(IrohaZipError::Unsupported(
+            "Windows Attachment Services are only available on Windows".to_owned(),
+        ))
+    }
+}
+
 impl Sandbox {
     pub fn new(
         _memory_limit_mib: u64,
@@ -192,6 +208,10 @@ pub fn validate_extracted_entry_security(path: &Path, metadata: &Metadata) -> Re
     Ok(())
 }
 
+pub fn validate_post_handoff_entry_security(path: &Path, metadata: &Metadata) -> Result<()> {
+    validate_extracted_entry_security(path, metadata)
+}
+
 pub fn file_identity(path: &Path) -> Result<Option<FileIdentity>> {
     #[cfg(unix)]
     {
@@ -228,6 +248,10 @@ pub fn read_mark_of_the_web(_path: &Path) -> Result<Option<Vec<u8>>> {
 }
 
 pub fn write_mark_of_the_web(_path: &Path, _zone: &[u8]) -> Result<()> {
+    Ok(())
+}
+
+pub fn verify_mark_of_the_web(_path: &Path, _expected: &[u8]) -> Result<()> {
     Ok(())
 }
 

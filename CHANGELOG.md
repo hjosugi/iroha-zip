@@ -5,6 +5,9 @@
 - Added an opt-in zero-capability LPAC prototype, exposed in the settings screen and configuration file.
 - Verify the created child token is an AppContainer and, when requested, a less-privileged AppContainer; unsupported or downgraded launches fail closed.
 - Documented the fail-closed ConPTY design required for future encrypted-archive input without command-line, environment, log, or configuration exposure.
+- Added opt-in Windows Attachment Services handoff policies (`disabled`, `best-effort`, and `required`) to configuration and the settings screen.
+- Run enabled handoff on the staged tree before publication, then re-audit file identities, links, reparse points, ADS, content hashes, tree structure, and Mark-of-the-Web before the final rename.
+- Report Attachment Services acceptance separately from structural validation and never describe it as a clean malware verdict.
 
 ## 0.3.1 - 2026-08-09
 

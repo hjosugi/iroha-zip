@@ -70,9 +70,11 @@ AppContainerプロセス
 通常プロセス
   7. outputツリーを再帰監査
   8. 通常ファイル／ディレクトリだけをpartialへコピー
-  9. Mark-of-the-Webを付与
- 10. 新規名へrenameして公開
- 11. AppContainer profileと一時データを削除
+ 9. Mark-of-the-Webを付与
+ 10. 設定時はWindows Attachment Servicesへ引き渡す
+ 11. 内容・ツリー・リンク・ADS・Mark-of-the-Webを再監査
+ 12. 新規名へrenameして公開
+ 13. AppContainer profileと一時データを削除
 ```
 
 
@@ -111,6 +113,8 @@ LPAC指定時はprocess attributeを付けた後、生成した子プロセス�
 
 展開成功は安全判定ではありません。`.exe`、`.lnk`、`.js`、Office文書などをユーザーが開けば、そのファイル固有の危険があります。Mark-of-the-Webを保つ理由は、Windowsや各アプリの警告・保護機能を継続させるためです。
 
+`IAttachmentExecute::Save`によるWindows信頼連携もclean判定ではありません。Windowsはvirus scanner等を呼ぶ可能性があるとだけ規定しており、実際のprovider実行を成功値から証明できません。連携は既定で無効です。best-effort時のサービス失敗は明示して公開を続け、required時は公開しません。いずれも連携後の削除、通常データ変更、tree変更、reparse point、hardlink、予期しないADS、MotW消失を検出した場合はpartial全体を破棄します。詳細は[`ANTIMALWARE_HANDOFF.md`](ANTIMALWARE_HANDOFF.md)で追跡します。
+
 ### 同一ユーザーの能動的攻撃者
 
 すでに同一ユーザー権限で動く攻撃者は、設定やマニフェストを変更できます。コード署名、インストールディレクトリACL、更新署名は今後の課題です。
@@ -137,7 +141,7 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 
 - LPACの実書庫・ACL・network denial matrixと必要capability 0件の実証
 - Authenticode署名と署名済みアップデート
-- Windows Defenderの`IAttachmentExecute`／スキャン連携
+- Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
 - 親ディレクトリハンドル相対の列挙、staging tree封印、作成書庫の再照合、Windows reparse競合stress test

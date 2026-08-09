@@ -19,6 +19,8 @@ max_path_bytes = 4096
 
 [behavior]
 preserve_mark_of_the_web = true
+# disabled / best-effort / required。Windowsへの引き渡しであり、clean判定ではありません。
+attachment_handoff = "disabled"
 open_after_double_click = true
 # auto / utf8 / cp932 / cp437
 default_filename_encoding = "auto"

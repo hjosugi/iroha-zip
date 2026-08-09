@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
+use crate::config::AttachmentHandoffPolicy;
 use crate::error::{IrohaZipError, Result};
 use crate::platform;
 use crate::policy::{self, AuditSummary, Limits};
@@ -21,6 +22,47 @@ struct TreeAudit {
     files: BTreeMap<PathBuf, FileFingerprint>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AttachmentHandoffOutcome {
+    Disabled,
+    Completed {
+        files: u64,
+    },
+    Incomplete {
+        completed_files: u64,
+        total_files: u64,
+        reason: String,
+    },
+}
+
+impl AttachmentHandoffOutcome {
+    pub fn is_incomplete(&self) -> bool {
+        matches!(self, Self::Incomplete { .. })
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            Self::Disabled => "Windows trust handoff: disabled".to_owned(),
+            Self::Completed { files } => format!(
+                "Windows trust handoff: completed for {files} files (this is not a clean verdict)"
+            ),
+            Self::Incomplete {
+                completed_files,
+                total_files,
+                reason,
+            } => format!(
+                "Windows trust handoff: incomplete ({completed_files}/{total_files}); publication continued by explicit best-effort policy: {reason}"
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CommitResult {
+    pub destination: PathBuf,
+    pub attachment_handoff: AttachmentHandoffOutcome,
+}
+
 impl TreeFingerprint {
     pub fn summary(&self) -> &AuditSummary {
         &self.summary
@@ -35,8 +77,9 @@ pub fn commit_tree(
     source_root: &Path,
     destination: &Path,
     motw: Option<&[u8]>,
+    attachment_handoff: AttachmentHandoffPolicy,
     limits: &Limits,
-) -> Result<PathBuf> {
+) -> Result<CommitResult> {
     let destination = absolute_path(destination)?;
     let file_name = destination.file_name().ok_or_else(|| {
         IrohaZipError::Usage(format!(
@@ -72,8 +115,28 @@ pub fn commit_tree(
     let partial = parent.join(format!(".iroha-zip-partial-{}", util::unique_token()));
     let result = (|| {
         copy_audited_tree(source_root, &partial, limits)?;
+        let expected = build_tree_audit(&partial, limits)?;
         if let Some(zone) = motw {
             apply_motw_tree(&partial, zone)?;
+        }
+        let handoff = perform_attachment_handoff(&partial, &expected.files, attachment_handoff)?;
+        if attachment_handoff.is_enabled() {
+            let observed = build_post_handoff_tree_audit(&partial, limits)?;
+            let identities_match = expected.files.iter().all(|(path, before)| {
+                observed
+                    .files
+                    .get(path)
+                    .is_some_and(|after| after.identity() == before.identity())
+            });
+            if observed.fingerprint != expected.fingerprint || !identities_match {
+                return Err(IrohaZipError::Policy(
+                    "file identity, content, or tree structure changed during Windows trust handoff"
+                        .to_owned(),
+                ));
+            }
+            if let Some(zone) = motw {
+                verify_motw_tree(&partial, expected.files.keys(), zone)?;
+            }
         }
         if destination.exists() {
             return Err(IrohaZipError::Usage(format!(
@@ -88,7 +151,10 @@ pub fn commit_tree(
                 error,
             )
         })?;
-        Ok(destination.clone())
+        Ok(CommitResult {
+            destination: destination.clone(),
+            attachment_handoff: handoff,
+        })
     })();
 
     if result.is_err() {
@@ -147,6 +213,18 @@ pub fn fingerprint_tree(root: &Path, limits: &Limits) -> Result<TreeFingerprint>
 }
 
 fn build_tree_audit(root: &Path, limits: &Limits) -> Result<TreeAudit> {
+    build_tree_audit_with(root, limits, platform::validate_extracted_entry_security)
+}
+
+fn build_post_handoff_tree_audit(root: &Path, limits: &Limits) -> Result<TreeAudit> {
+    build_tree_audit_with(root, limits, platform::validate_post_handoff_entry_security)
+}
+
+fn build_tree_audit_with(
+    root: &Path,
+    limits: &Limits,
+    validate_entry: fn(&Path, &fs::Metadata) -> Result<()>,
+) -> Result<TreeAudit> {
     platform::validate_directory_security(root)?;
     let root = fs::canonicalize(root)
         .map_err(|error| IrohaZipError::io_path("cannot resolve audited tree", root, error))?;
@@ -193,7 +271,7 @@ fn build_tree_audit(root: &Path, limits: &Limits) -> Result<TreeAudit> {
                     relative.display()
                 )));
             }
-            platform::validate_extracted_entry_security(&path, &metadata)?;
+            validate_entry(&path, &metadata)?;
             if metadata.is_dir() {
                 stack.push(path);
             } else if !metadata.is_file() {
@@ -220,8 +298,8 @@ fn build_tree_audit(root: &Path, limits: &Limits) -> Result<TreeAudit> {
         let metadata = fs::symlink_metadata(&path).map_err(|error| {
             IrohaZipError::io_path("cannot inspect fingerprinted entry", &path, error)
         })?;
+        validate_entry(&path, &metadata)?;
         if metadata.is_dir() {
-            platform::validate_extracted_entry_security(&path, &metadata)?;
             summary.directories = checked_increment(summary.directories, "directory count")?;
             if summary.directories > limits.max_directories {
                 return Err(IrohaZipError::Policy(format!(
@@ -274,6 +352,81 @@ fn build_tree_audit(root: &Path, limits: &Limits) -> Result<TreeAudit> {
         },
         files,
     })
+}
+
+fn perform_attachment_handoff(
+    root: &Path,
+    files: &BTreeMap<PathBuf, FileFingerprint>,
+    policy: AttachmentHandoffPolicy,
+) -> Result<AttachmentHandoffOutcome> {
+    if !policy.is_enabled() {
+        return Ok(AttachmentHandoffOutcome::Disabled);
+    }
+    let total_files = u64::try_from(files.len())
+        .map_err(|_| IrohaZipError::Policy("attachment file count overflow".to_owned()))?;
+    if files.is_empty() {
+        return Ok(AttachmentHandoffOutcome::Completed { files: 0 });
+    }
+    let session = match platform::AttachmentHandoffSession::new() {
+        Ok(session) => session,
+        Err(error) if !policy.is_required() => {
+            return Ok(AttachmentHandoffOutcome::Incomplete {
+                completed_files: 0,
+                total_files,
+                reason: error.to_string(),
+            });
+        }
+        Err(error) => return Err(error),
+    };
+    let relative_files = files.keys().cloned().collect::<Vec<_>>();
+    perform_attachment_handoff_with(root, &relative_files, policy, |path| session.handoff(path))
+}
+
+fn perform_attachment_handoff_with(
+    root: &Path,
+    relative_files: &[PathBuf],
+    policy: AttachmentHandoffPolicy,
+    mut handoff: impl FnMut(&Path) -> Result<()>,
+) -> Result<AttachmentHandoffOutcome> {
+    let total_files = u64::try_from(relative_files.len())
+        .map_err(|_| IrohaZipError::Policy("attachment file count overflow".to_owned()))?;
+    let mut completed_files = 0_u64;
+    for relative in relative_files {
+        let path = root.join(relative);
+        let metadata = fs::symlink_metadata(&path).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot inspect file before Windows trust handoff",
+                &path,
+                error,
+            )
+        })?;
+        platform::validate_post_handoff_entry_security(&path, &metadata)?;
+        match handoff(&path) {
+            Ok(()) => completed_files = checked_increment(completed_files, "handoff file count")?,
+            Err(error) if !policy.is_required() => {
+                return Ok(AttachmentHandoffOutcome::Incomplete {
+                    completed_files,
+                    total_files,
+                    reason: error.to_string(),
+                });
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(AttachmentHandoffOutcome::Completed {
+        files: completed_files,
+    })
+}
+
+fn verify_motw_tree<'a>(
+    root: &Path,
+    files: impl Iterator<Item = &'a PathBuf>,
+    zone: &[u8],
+) -> Result<()> {
+    for relative in files {
+        platform::verify_mark_of_the_web(&root.join(relative), zone)?;
+    }
+    Ok(())
 }
 
 fn update_path_hash(hasher: &mut Sha256, tag: u8, path: &[u8]) -> Result<()> {
@@ -526,5 +679,151 @@ mod tests {
 
         assert!(result.is_err());
         assert!(!target.exists());
+    }
+
+    #[test]
+    fn best_effort_handoff_failure_is_explicit_but_required_failure_is_fatal() {
+        let directory = TestDirectory::new();
+        let root = directory.0.join("output");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("item.txt"), b"content").unwrap();
+        let files = vec![PathBuf::from("item.txt")];
+
+        let best_effort = perform_attachment_handoff_with(
+            &root,
+            &files,
+            AttachmentHandoffPolicy::BestEffort,
+            |_| {
+                Err(IrohaZipError::TrustHandoff(
+                    "simulated engine unavailability".to_owned(),
+                ))
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            best_effort,
+            AttachmentHandoffOutcome::Incomplete {
+                completed_files: 0,
+                total_files: 1,
+                ref reason,
+            } if reason.contains("simulated engine unavailability")
+        ));
+
+        let required = perform_attachment_handoff_with(
+            &root,
+            &files,
+            AttachmentHandoffPolicy::Required,
+            |_| {
+                Err(IrohaZipError::TrustHandoff(
+                    "simulated engine unavailability".to_owned(),
+                ))
+            },
+        );
+        assert!(required.is_err());
+    }
+
+    #[test]
+    fn successful_handoff_is_reported_without_claiming_a_clean_verdict() {
+        let directory = TestDirectory::new();
+        let root = directory.0.join("output");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("one.txt"), b"one").unwrap();
+        fs::write(root.join("two.txt"), b"two").unwrap();
+        let files = vec![PathBuf::from("one.txt"), PathBuf::from("two.txt")];
+        let mut calls = 0_u64;
+
+        let outcome = perform_attachment_handoff_with(
+            &root,
+            &files,
+            AttachmentHandoffPolicy::Required,
+            |_| {
+                calls += 1;
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(calls, 2);
+        assert_eq!(outcome, AttachmentHandoffOutcome::Completed { files: 2 });
+        assert!(outcome.message().contains("not a clean verdict"));
+    }
+
+    #[test]
+    fn post_handoff_fingerprint_detects_same_size_content_mutation() {
+        let directory = TestDirectory::new();
+        let root = directory.0.join("output");
+        fs::create_dir(&root).unwrap();
+        let file = root.join("item.txt");
+        fs::write(&file, b"alpha").unwrap();
+        let expected = build_tree_audit(&root, &Limits::default()).unwrap();
+
+        fs::write(&file, b"bravo").unwrap();
+        let observed = build_post_handoff_tree_audit(&root, &Limits::default()).unwrap();
+
+        assert_ne!(observed.fingerprint, expected.fingerprint);
+    }
+
+    #[test]
+    fn post_handoff_audit_records_identity_replacement_with_identical_bytes() {
+        let directory = TestDirectory::new();
+        let root = directory.0.join("output");
+        fs::create_dir(&root).unwrap();
+        let file = root.join("item.txt");
+        let moved = root.join("moved.txt");
+        fs::write(&file, b"same bytes").unwrap();
+        let expected = build_tree_audit(&root, &Limits::default()).unwrap();
+
+        fs::rename(&file, &moved).unwrap();
+        fs::write(&file, b"same bytes").unwrap();
+        fs::remove_file(&moved).unwrap();
+        let observed = build_post_handoff_tree_audit(&root, &Limits::default()).unwrap();
+
+        assert_eq!(observed.fingerprint, expected.fingerprint);
+        assert_ne!(
+            observed.files[Path::new("item.txt")].identity(),
+            expected.files[Path::new("item.txt")].identity()
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn unavailable_handoff_obeys_publication_policy_and_cleans_partial_tree() {
+        let directory = TestDirectory::new();
+        let source = directory.0.join("source");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("item.txt"), b"content").unwrap();
+
+        let best_effort_destination = directory.0.join("best-effort");
+        let best_effort = commit_tree(
+            &source,
+            &best_effort_destination,
+            None,
+            AttachmentHandoffPolicy::BestEffort,
+            &Limits::default(),
+        )
+        .unwrap();
+        assert_eq!(best_effort.destination, best_effort_destination);
+        assert!(matches!(
+            best_effort.attachment_handoff,
+            AttachmentHandoffOutcome::Incomplete { .. }
+        ));
+
+        let required_destination = directory.0.join("required");
+        let required = commit_tree(
+            &source,
+            &required_destination,
+            None,
+            AttachmentHandoffPolicy::Required,
+            &Limits::default(),
+        );
+        assert!(required.is_err());
+        assert!(!required_destination.exists());
+        assert!(fs::read_dir(&directory.0).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".iroha-zip-partial-")
+        }));
     }
 }

@@ -64,6 +64,8 @@ Evaluate `IAttachmentExecute`, AMSI, or supported Defender interfaces after publ
 
 Acceptance: scanning cannot silently downgrade fail-closed extraction, engine unavailability has an explicit policy, and results are distinguishable from iroha-zip structural validation.
 
+Progress (2026-08-09): an opt-in `IAttachmentExecute::Save` handoff now runs on the staged tree under explicit disabled, best-effort, or required policy. Enabled handoff is followed by deterministic primary-stream/tree fingerprint comparison, link/reparse/ADS revalidation, and MotW verification before atomic publication. Service acceptance is reported as a handoff rather than a clean verdict. The default remains disabled; a real Windows Defender/unavailable/third-party-provider/quarantine matrix remains open.
+
 ### [UX-001: Settings accessibility and integration automation](https://github.com/hjosugi/iroha-zip/issues/11)
 
 Exercise the native settings application at 100–300% DPI, keyboard-only navigation, Japanese/English Windows, screen readers, long/non-ASCII paths, import failure rollback, association changes, and concurrent saves.

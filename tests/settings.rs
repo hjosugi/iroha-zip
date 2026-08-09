@@ -1,4 +1,4 @@
-use iroha_zip::config::{Config, FilenameEncoding, IsolationMode};
+use iroha_zip::config::{AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode};
 use iroha_zip::settings::{SettingsField, SettingsForm, format_byte_count};
 
 #[test]
@@ -16,6 +16,7 @@ fn form_round_trip_preserves_every_configuration_field() {
     config.limits.max_depth = 48;
     config.limits.max_path_bytes = 2_048;
     config.behavior.preserve_mark_of_the_web = false;
+    config.behavior.attachment_handoff = AttachmentHandoffPolicy::BestEffort;
     config.behavior.open_after_double_click = false;
     config.behavior.default_filename_encoding = FilenameEncoding::Cp932;
 

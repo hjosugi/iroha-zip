@@ -10,6 +10,11 @@ use crate::error::{IrohaZipError, Result};
 use crate::platform::{ProcessSpec, Sandbox};
 use crate::{monitor, policy, transfer, util};
 
+pub struct ExtractResult {
+    pub destination: PathBuf,
+    pub attachment_handoff: transfer::AttachmentHandoffOutcome,
+}
+
 pub struct ExtractRequest<'a> {
     pub backend: &'a BackendBundle,
     pub config: &'a Config,
@@ -20,7 +25,7 @@ pub struct ExtractRequest<'a> {
     pub allow_unsandboxed: bool,
 }
 
-pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
+pub fn extract(request: ExtractRequest<'_>) -> Result<ExtractResult> {
     let mut archive_snapshot = policy::open_input_archive(request.archive, &request.config.limits)?;
     let archive = archive_snapshot.path().to_path_buf();
     let destination = request
@@ -148,20 +153,24 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
         &payload,
         &destination,
         motw.as_deref(),
+        request.config.behavior.attachment_handoff,
         &request.config.limits,
     )?;
 
     if request.open {
-        crate::platform::open_folder(&published)?;
+        crate::platform::open_folder(&published.destination)?;
     }
 
     eprintln!(
         "extracted {} files ({} bytes) to {}",
         summary.files,
         summary.total_bytes,
-        published.display()
+        published.destination.display()
     );
-    Ok(published)
+    Ok(ExtractResult {
+        destination: published.destination,
+        attachment_handoff: published.attachment_handoff,
+    })
 }
 
 fn choose_payload_root(output_root: &Path, archive: &Path) -> Result<PathBuf> {

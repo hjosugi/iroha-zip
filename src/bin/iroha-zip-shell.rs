@@ -30,15 +30,39 @@ fn run() -> iroha_zip::error::Result<()> {
         ));
     }
     let config = default_config_path()?;
-    let _ = iroha_zip::shell_extract(&archive, &config)?;
+    let result = iroha_zip::shell_extract_with_report(&archive, &config)?;
+    if result.attachment_handoff.is_incomplete() {
+        show_warning(&result.attachment_handoff.message());
+    }
     Ok(())
 }
 
 #[cfg(windows)]
+fn show_warning(message: &str) {
+    show_message(
+        message,
+        windows::Win32::UI::WindowsAndMessaging::MB_ICONWARNING,
+    );
+}
+
+#[cfg(not(windows))]
+fn show_warning(message: &str) {
+    eprintln!("iroha-zip-shell: warning: {message}");
+}
+
+#[cfg(windows)]
 fn show_error(message: &str) {
+    show_message(
+        message,
+        windows::Win32::UI::WindowsAndMessaging::MB_ICONERROR,
+    );
+}
+
+#[cfg(windows)]
+fn show_message(message: &str, icon: windows::Win32::UI::WindowsAndMessaging::MESSAGEBOX_STYLE) {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
-    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+    use windows::Win32::UI::WindowsAndMessaging::{MB_OK, MessageBoxW};
     use windows::core::PCWSTR;
 
     let body: Vec<u16> = OsStr::new(message)
@@ -54,7 +78,7 @@ fn show_error(message: &str) {
             None,
             PCWSTR(body.as_ptr()),
             PCWSTR(title.as_ptr()),
-            MB_OK | MB_ICONERROR,
+            MB_OK | icon,
         );
     }
 }

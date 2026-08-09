@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use backend::BackendBundle;
 use config::Config;
 use error::Result;
-use extract::ExtractRequest;
+use extract::{ExtractRequest, ExtractResult};
 
 pub fn load_config(path: &Path) -> Result<Config> {
     Config::load(path)
@@ -31,6 +31,10 @@ pub fn verify_backend(config: &Config) -> Result<BackendBundle> {
 }
 
 pub fn shell_extract(archive: &Path, config_path: &Path) -> Result<PathBuf> {
+    Ok(shell_extract_with_report(archive, config_path)?.destination)
+}
+
+pub fn shell_extract_with_report(archive: &Path, config_path: &Path) -> Result<ExtractResult> {
     let config = load_config(config_path)?;
     let backend = verify_backend(&config)?;
     extract::extract(ExtractRequest {
