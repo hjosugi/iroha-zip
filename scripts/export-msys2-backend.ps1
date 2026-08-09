@@ -191,26 +191,26 @@ Include = /etc/pacman.d/mirrorlist.mingw
             throw "Cannot parse installed package version: $installed"
         }
         $version = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%v", $packageName)
         $repository = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%r", $packageName)
         $architecture = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%a", $packageName)
         $downloadUrl = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%l", $packageName)
         $archiveSha256 = (Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%h", $packageName)).ToLowerInvariant()
         $signature = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%g", $packageName)
         $licenses = @(
             Invoke-Msys2 `
-                'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+                'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
                 @($secureConfigUnix, "%L", $packageName) |
                 ForEach-Object { ([string]$_).Trim() } |
                 Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
