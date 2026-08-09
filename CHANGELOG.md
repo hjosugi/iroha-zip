@@ -4,6 +4,7 @@
 
 - Added an opt-in zero-capability LPAC prototype, exposed in the settings screen and configuration file.
 - Verify the created child token is an AppContainer and, when requested, a less-privileged AppContainer; unsupported or downgraded launches fail closed.
+- Documented the fail-closed ConPTY design required for future encrypted-archive input without command-line, environment, log, or configuration exposure.
 
 ## 0.3.1 - 2026-08-09
 

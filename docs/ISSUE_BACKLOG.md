@@ -56,6 +56,8 @@ Support passwords without command-line, environment, log, crash-report, or persi
 
 Acceptance: use a protected anonymous channel or equivalent one-use mechanism, zero sensitive buffers where practical, prevent inherited handles, and test cancellation/wrong-password paths.
 
+Progress (2026-08-09): the stock Windows bsdtar boundary is documented. Its safe-looking interactive callback requires a console input handle, while `--passphrase` exposes the secret in process arguments and is explicitly documented upstream as insecure. The implementation contract therefore uses a one-use ConPTY channel with non-inheritable controller ends, zeroizing buffers, concurrent output draining, bounded prompt handling, and fail-closed cancellation. The ConPTY transport, native password dialog, and encrypted corpus tests remain open.
+
 ### [SAFE-008: Defender/antimalware handoff](https://github.com/hjosugi/iroha-zip/issues/10)
 
 Evaluate `IAttachmentExecute`, AMSI, or supported Defender interfaces after publication while preserving Mark-of-the-Web.
