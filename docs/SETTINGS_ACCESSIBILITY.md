@@ -44,15 +44,18 @@ all 26 controls for:
 
 It edits a path and numeric value through `ValuePattern`, toggles a checkbox through
 `TogglePattern`, verifies the dirty-title contract without writing the temporary configuration,
-closes through `WindowPattern`, and requires the unsaved-change confirmation to be exposed as an
-accessible window.
+and opens/cancels the backend Browse, arbitrary-bundle Import, and MSYS2 Import folder pickers. It
+then invokes Restore Defaults twice, requires accessible No/Yes confirmation paths, verifies both
+preserved edits and restored defaults, makes the form dirty again, and invokes the native Cancel
+button twice to verify both preservation and confirmed discard through the accessible dialog.
 
 When supplied a verified backend and evidence path by the dedicated Windows E2E job, a second disposable settings process also saves that backend path through the native Save button, dismisses the success dialog, invokes the settings-screen diagnosis, requires the real backend/AppContainer diagnostic success dialog, closes from a clean state, hashes the saved configuration and executable, and writes a JSON report after removing the temporary tree. This does not exercise backend replacement, file associations, Default Apps, or folder-picker side effects.
 
-The smoke test deliberately does not invoke backend import, association, Default Apps, or folder
-launch buttons because those actions mutate or open external Windows state. Their ID-to-handler
-dispatch is covered by the exhaustive platform-neutral test. Their side effects and rollback must
-be exercised only on a disposable Windows worker.
+The smoke test cancels import before a source is selected, and deliberately does not invoke actual
+backend replacement, association changes, Default Apps, or the configuration-folder launch because
+those actions mutate or open external Windows state. Their ID-to-handler dispatch is covered by the
+exhaustive platform-neutral test. Their side effects and rollback must be exercised only on a
+disposable Windows worker.
 
 ## Concurrent configuration saves
 

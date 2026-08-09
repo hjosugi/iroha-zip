@@ -23,6 +23,7 @@ Updated: 2026-08-10
 - Created-archive full-root re-extraction in a second sandbox, before/after source and archive fingerprints, handle-retained create-new publication, eight deterministic root/mutation/mismatch tests, and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
+- Safe UI Automation button paths for three folder-picker cancellations, Restore Defaults, and unsaved-change Cancel
 - Serialized initial configuration creation plus a Windows-only independent-process, non-ASCII-path save regression
 - Windows named-mutex timeout, post-release recovery, and abandoned-owner recovery unit tests
 - Deterministic configuration replacement/restore failure injection with preserved recovery evidence

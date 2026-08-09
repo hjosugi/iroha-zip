@@ -63,7 +63,7 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 - invalid-input publication result and shell extraction result;
 - final harness-root cleanup and any failure message.
 
-`malicious-corpus.json` records generated archive hashes and lengths, expected results, exit/rejection classes, publication booleans, native policy fixtures, and cleanup. `settings-e2e.json` records the settings executable hash, saved configuration hash, control count, save/doctor results, elapsed time, and cleanup result. These artifacts are diagnostic evidence, not release attestations or signatures; SAFE-003 tracks authenticated release provenance.
+`malicious-corpus.json` records generated archive hashes and lengths, expected results, exit/rejection classes, publication booleans, native policy fixtures, and cleanup. `settings-e2e.json` records the settings executable hash, saved configuration hash, control count, safe folder-picker cancellation count, Restore Defaults/Cancel confirmation paths, save/doctor results, elapsed time, and cleanup result. These artifacts are diagnostic evidence, not release attestations or signatures; SAFE-003 tracks authenticated release provenance.
 
 ## Remaining SAFE-001 work
 

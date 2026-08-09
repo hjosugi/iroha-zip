@@ -102,9 +102,20 @@ function Find-SecondaryWindow {
 
 function Dismiss-Message {
     param([System.Windows.Automation.AutomationElement]$Dialog)
-    $button = Find-ByAutomationId -Root $Dialog -Id 1
+    Invoke-DialogButton -Dialog $Dialog -Id 1
+}
+
+function Invoke-DialogButton {
+    param(
+        [System.Windows.Automation.AutomationElement]$Dialog,
+        [int]$Id
+    )
+    $button = Find-ByAutomationId -Root $Dialog -Id $Id
     if ($null -eq $button) {
-        throw "The settings message did not expose its OK button."
+        throw "The dialog did not expose button ID $Id."
+    }
+    if (-not $button.Current.IsEnabled) {
+        throw "Dialog button ID $Id is disabled."
     }
     if (-not [IrohaZipUiAutomationNative]::PostMessageW(
         [IntPtr]$button.Current.NativeWindowHandle,
@@ -112,7 +123,7 @@ function Dismiss-Message {
         [UIntPtr]::Zero,
         [IntPtr]::Zero
     )) {
-        throw "Cannot activate the settings message OK button."
+        throw "Cannot activate dialog button ID $Id."
     }
 }
 
@@ -126,6 +137,33 @@ function Invoke-Control {
     )) {
         throw "Cannot activate control $($Control.Current.AutomationId)."
     }
+}
+
+function Wait-ForNoSecondaryWindow {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [System.Windows.Automation.AutomationElement]$MainWindow
+    )
+    Wait-Until {
+        $null -eq (Find-SecondaryWindow -Process $Process -MainWindow $MainWindow)
+    } | Out-Null
+}
+
+function Invoke-AndCancelFolderPicker {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [System.Windows.Automation.AutomationElement]$Control
+    )
+    Invoke-Control $Control
+    $dialog = Wait-Until {
+        Find-SecondaryWindow -Process $Process -MainWindow $MainWindow
+    }
+    if ($dialog.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
+        throw "Folder picker was not exposed as an accessible window."
+    }
+    Invoke-DialogButton -Dialog $dialog -Id 2
+    Wait-ForNoSecondaryWindow -Process $Process -MainWindow $MainWindow
 }
 
 if ([string]::IsNullOrWhiteSpace($BackendDirectory) -ne
@@ -191,6 +229,11 @@ try {
             -Type ([System.Windows.Automation.ControlType]::Button)
     }
 
+    foreach ($id in @(1001, 1003, 1004)) {
+        Invoke-AndCancelFolderPicker -Process $process -MainWindow $window `
+            -Control $controls[$id]
+    }
+
     $pathPattern = [System.Windows.Automation.ValuePattern]$controls[2001].GetCurrentPattern(
         [System.Windows.Automation.ValuePattern]::Pattern
     )
@@ -214,22 +257,68 @@ try {
         throw "The UI automation smoke test must not save its temporary configuration."
     }
 
-    $windowPattern = [System.Windows.Automation.WindowPattern]$window.GetCurrentPattern(
-        [System.Windows.Automation.WindowPattern]::Pattern
-    )
-    $windowPattern.Close()
+    Invoke-Control $controls[1201]
+    $restoreConfirmation = Wait-Until {
+        Find-SecondaryWindow -Process $process -MainWindow $window
+    }
+    Invoke-DialogButton -Dialog $restoreConfirmation -Id 7
+    Wait-ForNoSecondaryWindow -Process $process -MainWindow $window
+    if ($timeoutPattern.Current.Value -ne "301") {
+        throw "Cancelling Restore Defaults unexpectedly changed the timeout."
+    }
+
+    Invoke-Control $controls[1201]
+    $restoreConfirmation = Wait-Until {
+        Find-SecondaryWindow -Process $process -MainWindow $window
+    }
+    Invoke-DialogButton -Dialog $restoreConfirmation -Id 6
+    Wait-ForNoSecondaryWindow -Process $process -MainWindow $window
+    Wait-Until { $timeoutPattern.Current.Value -eq "300" } | Out-Null
+    Wait-Until {
+        $motwPattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On
+    } | Out-Null
+    Wait-Until {
+        $name = $window.GetCurrentPropertyValue(
+            [System.Windows.Automation.AutomationElement]::NameProperty
+        )
+        $name -notmatch '\s\*$'
+    } | Out-Null
+
+    $pathPattern.SetValue($longDirectory)
+    $timeoutPattern.SetValue("301")
+    $motwPattern.Toggle()
+    Wait-Until {
+        $name = $window.GetCurrentPropertyValue(
+            [System.Windows.Automation.AutomationElement]::NameProperty
+        )
+        $name -match '\s\*$'
+    } | Out-Null
+
+    Invoke-Control $controls[2]
     $confirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
     }
     if ($confirmation.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
         throw "Unsaved-change confirmation was not exposed as an accessible window."
     }
+    Invoke-DialogButton -Dialog $confirmation -Id 7
+    Wait-ForNoSecondaryWindow -Process $process -MainWindow $window
+    if ($process.HasExited) {
+        throw "Cancelling the unsaved-change confirmation unexpectedly closed settings."
+    }
 
-    Write-Host "Settings UI Automation contract passed for 26 controls."
+    Invoke-Control $controls[2]
+    $confirmation = Wait-Until {
+        Find-SecondaryWindow -Process $process -MainWindow $window
+    }
+    Invoke-DialogButton -Dialog $confirmation -Id 6
+    if (-not $process.WaitForExit(15000)) {
+        throw "Settings did not exit after confirming unsaved-change discard."
+    }
+
+    Write-Host "Settings UI Automation contract passed for 26 controls and safe button paths."
 
     if ($null -ne $backendPath) {
-        $process.Kill()
-        $process.WaitForExit()
         $process = Start-Process -FilePath $executablePath `
             -ArgumentList @("--config", $configPath) -PassThru
         $window = Wait-Until {
@@ -301,6 +390,9 @@ try {
             status = "passed"
             generatedAtUtc = [DateTime]::UtcNow.ToString("o")
             controlCount = 26
+            safeFolderPickerCancellations = 3
+            restoreDefaultsCancelAndConfirm = $true
+            cancelButtonDiscardCancelAndConfirm = $true
             longAndNonAsciiPathEdited = $true
             unsavedChangeConfirmationExposed = $true
             backendPathSaved = $true
