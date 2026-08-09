@@ -297,7 +297,13 @@ try {
         -not $isolation.stagingWriteSeal.aclApplied) {
         throw "Isolation evidence did not satisfy the zero-capability AppContainer contract."
     }
-    $expectedReadablePaths = @("root-file", "nested-file")
+    $expectedReadablePaths = @(
+        "root-file",
+        "nested-file",
+        "root-directory",
+        "nested-directory",
+        "current-directory"
+    )
     $expectedDeniedOperations = @(
         "overwrite-existing-file",
         "append-existing-file",

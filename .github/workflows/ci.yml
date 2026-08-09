@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     strategy:
@@ -26,7 +30,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          cache: false
+          cache: true
           install: mingw-w64-ucrt-x86_64-libarchive
 
       - name: Install pinned Rust toolchain
@@ -34,6 +38,16 @@ jobs:
         run: |
           rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
           rustup default 1.97.1
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: ci-test-${{ matrix.os }}
+          workspaces: |
+            . -> target
+            fuzz -> target
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -166,7 +180,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          cache: false
+          cache: true
           install: mingw-w64-ucrt-x86_64-libarchive
 
       - name: Install pinned Rust toolchain
@@ -174,6 +188,13 @@ jobs:
         run: |
           rustup toolchain install 1.97.1 --profile minimal
           rustup default 1.97.1
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: ci-e2e-${{ matrix.os }}
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build release binaries
         run: cargo build --release --locked
@@ -238,6 +259,14 @@ jobs:
         run: |
           rustup toolchain install 1.97.1 --profile minimal
           rustup default 1.97.1
+
+      - name: Restore Rust tool cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: ci-dependency-policy
+          cache-all-crates: true
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install pinned dependency-policy tools
         run: |
