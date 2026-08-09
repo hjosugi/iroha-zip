@@ -178,8 +178,8 @@ default_filename_encoding = "auto"
     [System.IO.File]::WriteAllText($Path, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
-$executablePath = Resolve-Leaf $Executable "iroha-zip executable"
-$shellExecutablePath = Resolve-Leaf $ShellExecutable "iroha-zip shell executable"
+$builtExecutablePath = Resolve-Leaf $Executable "iroha-zip executable"
+$builtShellExecutablePath = Resolve-Leaf $ShellExecutable "iroha-zip shell executable"
 $backendPath = Resolve-Directory $BackendDirectory "verified backend"
 $evidencePath = [System.IO.Path]::GetFullPath($EvidenceOutput)
 $evidenceParent = Split-Path -Parent $evidencePath
@@ -188,6 +188,21 @@ $evidenceParent = Split-Path -Parent $evidencePath
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ("iroha-zip-e2e-日本語-" + [Guid]::NewGuid().ToString("N"))
 [System.IO.Directory]::CreateDirectory($testRoot) | Out-Null
+$runtimeRoot = Join-Path $testRoot "runtime"
+[System.IO.Directory]::CreateDirectory($runtimeRoot) | Out-Null
+$executablePath = Join-Path $runtimeRoot "iroha-zip.exe"
+$shellExecutablePath = Join-Path $runtimeRoot "iroha-zip-shell.exe"
+Copy-Item -LiteralPath $builtExecutablePath -Destination $executablePath
+Copy-Item -LiteralPath $builtShellExecutablePath -Destination $shellExecutablePath
+$executablePath = Resolve-Leaf $executablePath "independent iroha-zip executable"
+$shellExecutablePath = Resolve-Leaf $shellExecutablePath "independent iroha-zip shell executable"
+$builtExecutableHash = (Get-FileHash -LiteralPath $builtExecutablePath -Algorithm SHA256).Hash
+$executableHash = (Get-FileHash -LiteralPath $executablePath -Algorithm SHA256).Hash
+$builtShellHash = (Get-FileHash -LiteralPath $builtShellExecutablePath -Algorithm SHA256).Hash
+$shellHash = (Get-FileHash -LiteralPath $shellExecutablePath -Algorithm SHA256).Hash
+if ($builtExecutableHash -cne $executableHash -or $builtShellHash -cne $shellHash) {
+    throw "Independent E2E executable copies do not match the Cargo build artifacts."
+}
 $failure = $null
 $report = [ordered]@{
     schemaVersion = 1
