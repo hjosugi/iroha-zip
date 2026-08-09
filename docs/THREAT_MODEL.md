@@ -144,7 +144,7 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 ## 7. 将来の強化候補
 
 - LPACの実書庫・ACL・network denial matrixと必要capability 0件の実証
-- Authenticode署名と署名済みアップデート
+- 最初の実環境Authenticode/SLSA/immutable-release証跡と独立レビュー、および署名済みアップデート
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み

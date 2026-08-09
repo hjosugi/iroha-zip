@@ -28,6 +28,8 @@ Add Authenticode signing, documented certificate custody, signature verification
 
 Acceptance: all three executables are signed and verified in CI; ZIP/SHA-256/provenance are attached to an immutable release; verification steps are documented independently of GitHub transport security.
 
+Progress (2026-08-10): the local release path now separates validated build from packaging so Azure Artifact Signing can sign exactly the three Windows executables through GitHub OIDC. Packaging requires Windows `WinVerifyTrust` success, the exact configured publisher, Code Signing EKU, and RFC3161 timestamps before and after ZIP expansion; deterministic JSON evidence is embedded and attached. Pinned GitHub attestation creates an offline-verifiable SLSA bundle, and the workflow checks tag/current-`main` identity, all four non-empty draft assets, pre-enabled release immutability, and post-publication `isImmutable`. Certificate custody, least-privilege settings, incident response, and independent checksum/Authenticode/offline-bundle verification are documented in [the signed-release contract](RELEASE_VERIFICATION.md). Owner-managed Azure identity validation, OIDC/RBAC/environment configuration, enabling GitHub release immutability, the first real signed run, and independent evidence review remain open; no release is claimed signed yet.
+
 ### [SAFE-004: Backend provenance, SBOM, and license evidence](https://github.com/hjosugi/iroha-zip/issues/6)
 
 Define supported libarchive sources and verify package signatures/hashes before import. Produce an SBOM and third-party notices for every included backend file when a private package uses `-IncludeBackend`.

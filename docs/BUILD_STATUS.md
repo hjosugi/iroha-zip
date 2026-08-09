@@ -30,6 +30,7 @@ Updated: 2026-08-10
 - `cargo-about` third-party license inventory generation from the locked dependency graph
 - All PowerShell scripts parsed with the official PowerShell 7.6.4 parser; unsupported-source evidence generation, explicit-approval failure/rollback, Rust round-trip validation, strict-mode unsupported-source rejection, and notice-tamper rejection executed on Linux PowerShell
 - Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
+- Split build/sign/package release boundary, strict three-EXE Authenticode publisher/EKU/timestamp verification, deterministic signature evidence, pinned SLSA provenance generation, and fail-closed immutable-release workflow parsing
 
 The current Linux suite contains 76 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate. Windows CI additionally runs the source-handle sharing test that verifies open snapshots block writes and renames.
 
@@ -39,7 +40,7 @@ The CI workflow runs formatting, tests, Clippy, and release builds on both `ubun
 
 A separate fixed-label `windows-2022` / `windows-2025` x64 matrix builds release binaries, exports the verified backend, and produces machine-readable archive/isolation, malicious-corpus, and settings artifacts. It is designed to exercise token/capability inspection, loopback denial, timeout, memory limit, explicit cleanup, four create/read formats, Japanese and long paths, generated hostile ZIP/TAR inputs, native hardlink/ADS/junction fixtures, invalid input, shell invocation, settings save, and settings diagnosis. These new workflow steps have been parsed locally but have not yet produced a GitHub Actions result for the current local branch. The Server matrix is not Windows 10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md) and [corpus contract](MALICIOUS_CORPUS.md).
 
-A `v*` tag whose value matches `Cargo.toml` builds the backend-free Windows x64 ZIP, writes its SHA-256 sidecar, and creates the GitHub release.
+A `v*` tag whose value matches `Cargo.toml` and points to the current `main` commit enters the protected `release-signing` environment. The workflow requires Azure OIDC configuration and release immutability, signs and verifies all three executables, writes ZIP/SHA-256/signature evidence, verifies a local SLSA provenance bundle, checks a complete draft, publishes it, and then requires GitHub to report the release immutable. This workflow has been implemented and parsed locally but has not produced a signed release. The 2026-08-10 read-only audit found no release environment or Actions variables and found release immutability disabled; owner setup remains deliberately outstanding.
 
 ## Still requires a real Windows validation machine
 
@@ -54,6 +55,6 @@ A `v*` tag whose value matches `Cargo.toml` builds the backend-free Windows x64 
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring
 - Real-Windows reparse point race stress tests, parent-directory handle-relative source enumeration, staging-tree sealing, and created-archive re-extraction comparison
 - Attachment Services with Defender enabled/disabled/unavailable, third-party providers, quarantine/deletion, ADS inventory, and MotW preservation across publication
-- Authenticode signing and independent security review
+- First successful reviewed Authenticode/SLSA/immutable release after owner-managed Azure identity validation and repository settings, plus independent security review
 
 Until those Windows integration checks are complete, treat `v0.3.1` as a security-oriented preview rather than an audited security product.

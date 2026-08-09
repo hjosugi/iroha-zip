@@ -1,10 +1,10 @@
 # Security policy
 
-iroha-zip v0.1.0はセキュリティ指向の試作実装であり、第三者監査済みではありません。
+iroha-zip v0.3.1はセキュリティ指向のpreview実装であり、第三者監査済みではありません。
 
 ## Supported versions
 
-現時点では最新の`main`と`0.2.x`を対象とします。`0.1.x`はソースレビュー用の初期版であり、セキュリティ修正の対象外です。
+現時点では最新の`main`と`0.3.x`を対象とします。`0.1.x`と`0.2.x`はソースレビュー用の旧previewであり、セキュリティ修正の対象外です。
 
 ## Reporting a vulnerability
 
@@ -25,10 +25,13 @@ iroha-zip v0.1.0はセキュリティ指向の試作実装であり、第三者�
 - `src/transfer.rs`
 - `scripts/install-backend.ps1`
 - `scripts/export-msys2-backend.ps1`
+- `scripts/build-release.ps1`
+- `scripts/verify-release-signatures.ps1`
+- `.github/workflows/release.yml`
 
 ## Production release requirements
 
-監査済み・production-readyと表明するリリースの前に最低限、次を満たしてください。`v0.2.x`はこれらを完了するためのpreviewです。
+監査済み・production-readyと表明するリリースの前に最低限、次を満たしてください。`v0.3.x`はこれらを完了するためのpreviewです。
 
 - Windows CIで`cargo test`と`cargo clippy`が成功
 - 実際のWindows 11でZIP、7z、RAR、LZH、TAR.GZ、`.Z`を展開
@@ -36,5 +39,7 @@ iroha-zip v0.1.0はセキュリティ指向の試作実装であり、第三者�
 - パストラバーサル、symlink、hardlink、junction、ADS、ZIP bombの回帰試験
 - `Cargo.lock`を含むlocked build
 - Rust依存関係と同梱DLLの脆弱性確認
-- 生成物のAuthenticode署名
+- 3つのEXEのAuthenticode署名、publisher/EKU/timestamp検証、独立に検証可能なSLSA provenance、GitHub immutable release
 - バックエンド配布元の署名／ハッシュ確認
+
+正式リリースの証明書custody、GitHub/Azure設定、asset契約、利用者側の検証手順は[`docs/RELEASE_VERIFICATION.md`](docs/RELEASE_VERIFICATION.md)を参照してください。

@@ -179,6 +179,8 @@ dist\iroha-zip\
    dist\iroha-zip-0.3.1-windows-x64.zip
 ```
 
+この通常実行で作るZIPはローカル検証用の未署名previewです。正式リリースでは、tag-driven workflowが`-Phase Build`で検証・ビルドし、Azure Artifact Signingで3つのEXEへ署名した後、`-Phase Package -RequireAuthenticode`で署名・publisher・timestampを再検証して梱包します。GitHubの設定値、証明書custody、4つのrelease asset、独立検証手順は[署名付きリリース仕様](docs/RELEASE_VERIFICATION.md)を参照してください。
+
 初回ビルド時に`Cargo.lock`がない場合は生成されます。以後は`Cargo.lock`をバージョン管理し、`--locked`でビルドしてください。
 
 通常の公式ZIPは第三者backendを含めません。信頼済みbackendも含む私的な配布物を作る場合に限り、`-IncludeBackend`を明示できます。

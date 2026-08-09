@@ -1,14 +1,33 @@
+<#
+.SYNOPSIS
+Validates, builds, and packages iroha-zip Windows executables.
+
+.DESCRIPTION
+The default All phase creates an unsigned local preview. Formal releases use the Build
+phase, sign the three resulting executables outside this script, and then use Package
+with RequireAuthenticode and the exact expected publisher certificate subject.
+#>
 [CmdletBinding()]
 param(
     [string]$Target = "x86_64-pc-windows-msvc",
     [switch]$IncludeBackend,
-    [switch]$AllowUnsupportedBackendSource
+    [switch]$AllowUnsupportedBackendSource,
+    [ValidateSet("All", "Build", "Package")]
+    [string]$Phase = "All",
+    [switch]$RequireAuthenticode,
+    [string]$ExpectedPublisher
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
+$ExpectedBinaryNames = @(
+    "iroha-zip.exe",
+    "iroha-zip-settings.exe",
+    "iroha-zip-shell.exe"
+)
+$FailedPackageCleanupPaths = @()
 
 function Assert-BackendEvidence(
     [string]$Validator,
@@ -27,14 +46,25 @@ function Assert-BackendEvidence(
 
 Push-Location $ProjectRoot
 try {
+    $shouldBuild = $Phase -in @("All", "Build")
+    $shouldPackage = $Phase -in @("All", "Package")
+
     if ($AllowUnsupportedBackendSource -and -not $IncludeBackend) {
         throw "-AllowUnsupportedBackendSource is valid only together with -IncludeBackend."
     }
-    if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        throw "cargo was not found. Install the Rust toolchain specified by rust-toolchain.toml."
+    if ($RequireAuthenticode -and $Phase -ne "Package") {
+        throw "-RequireAuthenticode is valid only with -Phase Package after external signing."
     }
-    if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-        throw "rustup was not found."
+    if ($RequireAuthenticode -and [string]::IsNullOrWhiteSpace($ExpectedPublisher)) {
+        throw "-RequireAuthenticode requires -ExpectedPublisher."
+    }
+    if ($shouldBuild) {
+        if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            throw "cargo was not found. Install the Rust toolchain specified by rust-toolchain.toml."
+        }
+        if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            throw "rustup was not found."
+        }
     }
 
     if ($IncludeBackend) {
@@ -44,29 +74,31 @@ try {
         }
     }
 
-    & rustup target add $Target
-    if ($LASTEXITCODE -ne 0) { throw "rustup target add failed." }
+    if ($shouldBuild) {
+        & rustup target add $Target
+        if ($LASTEXITCODE -ne 0) { throw "rustup target add failed." }
 
-    if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot "Cargo.lock"))) {
-        & cargo generate-lockfile
-        if ($LASTEXITCODE -ne 0) { throw "cargo generate-lockfile failed." }
-        Write-Warning "Cargo.lock was generated. Review and commit it before a formal release."
+        if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot "Cargo.lock"))) {
+            & cargo generate-lockfile
+            if ($LASTEXITCODE -ne 0) { throw "cargo generate-lockfile failed." }
+            Write-Warning "Cargo.lock was generated. Review and commit it before a formal release."
+        }
+
+        & cargo fmt --all -- --check
+        if ($LASTEXITCODE -ne 0) { throw "cargo fmt check failed." }
+
+        & cargo test --all-targets --locked
+        if ($LASTEXITCODE -ne 0) { throw "cargo test failed." }
+
+        & cargo test --locked --features fuzzing --test fuzz_regressions
+        if ($LASTEXITCODE -ne 0) { throw "fuzz regression test failed." }
+
+        & cargo clippy --all-targets --locked -- -D warnings
+        if ($LASTEXITCODE -ne 0) { throw "cargo clippy failed." }
+
+        & cargo build --release --target $Target --locked
+        if ($LASTEXITCODE -ne 0) { throw "cargo build failed." }
     }
-
-    & cargo fmt --all -- --check
-    if ($LASTEXITCODE -ne 0) { throw "cargo fmt check failed." }
-
-    & cargo test --all-targets --locked
-    if ($LASTEXITCODE -ne 0) { throw "cargo test failed." }
-
-    & cargo test --locked --features fuzzing --test fuzz_regressions
-    if ($LASTEXITCODE -ne 0) { throw "fuzz regression test failed." }
-
-    & cargo clippy --all-targets --locked
-    if ($LASTEXITCODE -ne 0) { throw "cargo clippy failed." }
-
-    & cargo build --release --target $Target --locked
-    if ($LASTEXITCODE -ne 0) { throw "cargo build failed." }
 
     if ($IncludeBackend) {
         $backendDirectory = Join-Path $ProjectRoot "backend\libarchive"
@@ -77,12 +109,28 @@ try {
         }
     }
 
+    if (-not $shouldPackage) {
+        Write-Host "Release executables built in target\$Target\release."
+        return
+    }
+    if (-not $RequireAuthenticode) {
+        Write-Warning "Creating an unsigned local preview. Formal releases require externally signed binaries and -RequireAuthenticode."
+    }
+
     $version = ((Select-String -LiteralPath "Cargo.toml" -Pattern '^version\s*=\s*"([^\"]+)"').Matches[0].Groups[1].Value)
     $releaseSource = Join-Path $ProjectRoot "target\$Target\release"
     $distRoot = Join-Path $ProjectRoot "dist"
     $appRoot = Join-Path $distRoot "iroha-zip"
+    $zip = Join-Path $distRoot "iroha-zip-$version-windows-x64.zip"
+    $signatureEvidenceAsset = Join-Path $distRoot "iroha-zip-$version-windows-x64.signatures.json"
+    $FailedPackageCleanupPaths = @($appRoot, $zip, "$zip.sha256", $signatureEvidenceAsset)
     if (Test-Path -LiteralPath $appRoot) {
         Remove-Item -LiteralPath $appRoot -Recurse -Force
+    }
+    foreach ($staleAsset in @($zip, "$zip.sha256", $signatureEvidenceAsset)) {
+        if (Test-Path -LiteralPath $staleAsset) {
+            Remove-Item -LiteralPath $staleAsset -Force
+        }
     }
     New-Item -ItemType Directory -Path $appRoot | Out-Null
 
@@ -92,6 +140,18 @@ try {
             throw "Built binary is missing: $source"
         }
         Copy-Item -LiteralPath $source -Destination (Join-Path $appRoot $binary)
+    }
+
+    if ($RequireAuthenticode) {
+        $signatureVerifier = Join-Path $ProjectRoot "scripts\verify-release-signatures.ps1"
+        $embeddedSignatureEvidence = Join-Path $appRoot "release-signatures.json"
+        $packagedBinaries = @($ExpectedBinaryNames | ForEach-Object { Join-Path $appRoot $_ })
+        & $signatureVerifier `
+            -Files $packagedBinaries `
+            -ExpectedPublisher $ExpectedPublisher `
+            -EvidencePath $embeddedSignatureEvidence `
+            -RequireTimestamp
+        Copy-Item -LiteralPath $embeddedSignatureEvidence -Destination $signatureEvidenceAsset
     }
 
     $releaseBackend = Join-Path $appRoot "backend"
@@ -114,7 +174,8 @@ try {
         "register-associations.ps1",
         "test-settings-ui.ps1",
         "test-windows-e2e.ps1",
-        "unregister-associations.ps1"
+        "unregister-associations.ps1",
+        "verify-release-signatures.ps1"
     )) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts\$script") `
             -Destination (Join-Path $appRoot "scripts\$script")
@@ -143,6 +204,7 @@ try {
         "ISSUE_BACKLOG.md",
         "LPAC_EVALUATION.md",
         "MALICIOUS_CORPUS.md",
+        "RELEASE_VERIFICATION.md",
         "SETTINGS_ACCESSIBILITY.md",
         "THREAT_MODEL.md",
         "WINDOWS_E2E.md"
@@ -151,19 +213,35 @@ try {
             -Destination (Join-Path $appRoot "docs\$document")
     }
 
-    $zip = Join-Path $distRoot "iroha-zip-$version-windows-x64.zip"
-    if (Test-Path -LiteralPath $zip) {
-        Remove-Item -LiteralPath $zip -Force
-    }
     Compress-Archive -LiteralPath $appRoot -DestinationPath $zip -CompressionLevel Optimal
-    if ($IncludeBackend) {
+    if ($IncludeBackend -or $RequireAuthenticode) {
         $expandedPackage = Join-Path $distRoot (".iroha-zip-package-check-" + [Guid]::NewGuid().ToString("N"))
         try {
             Expand-Archive -LiteralPath $zip -DestinationPath $expandedPackage
-            Assert-BackendEvidence `
-                $validator `
-                (Join-Path $expandedPackage "iroha-zip\backend\libarchive") `
-                $AllowUnsupportedBackendSource
+            if ($IncludeBackend) {
+                Assert-BackendEvidence `
+                    $validator `
+                    (Join-Path $expandedPackage "iroha-zip\backend\libarchive") `
+                    $AllowUnsupportedBackendSource
+            }
+            if ($RequireAuthenticode) {
+                $expandedRoot = Join-Path $expandedPackage "iroha-zip"
+                $expandedBinaries = @($ExpectedBinaryNames | ForEach-Object {
+                    Join-Path $expandedRoot $_
+                })
+                $expandedEvidence = Join-Path $expandedRoot "release-signatures.json"
+                & $signatureVerifier `
+                    -Files $expandedBinaries `
+                    -ExpectedPublisher $ExpectedPublisher `
+                    -ExpectedEvidencePath $expandedEvidence `
+                    -RequireTimestamp
+
+                $embeddedHash = (Get-FileHash -LiteralPath $expandedEvidence -Algorithm SHA256).Hash
+                $assetHash = (Get-FileHash -LiteralPath $signatureEvidenceAsset -Algorithm SHA256).Hash
+                if ($embeddedHash -cne $assetHash) {
+                    throw "Embedded and detached signature evidence differ."
+                }
+            }
         }
         finally {
             if (Test-Path -LiteralPath $expandedPackage) {
@@ -181,9 +259,20 @@ try {
     Write-Host "Release folder: $appRoot"
     Write-Host "Release ZIP:    $zip"
     Write-Host "SHA-256:        $hash"
+    if ($RequireAuthenticode) {
+        Write-Host "Signatures:     $signatureEvidenceAsset"
+    }
     if (-not $IncludeBackend) {
         Write-Host "Backend:        not bundled; install it from the settings screen"
     }
+}
+catch {
+    foreach ($failedOutput in $FailedPackageCleanupPaths) {
+        if (Test-Path -LiteralPath $failedOutput) {
+            Remove-Item -LiteralPath $failedOutput -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    throw
 }
 finally {
     Pop-Location

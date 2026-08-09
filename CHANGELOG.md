@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Split formal Windows releases into validated build, Azure OIDC Authenticode signing, fail-closed publisher/EKU/timestamp verification, and packaging phases; attach signature evidence and offline-verifiable SLSA provenance only through an immutable-release gate.
+
 - Added a deterministic, source-generated malicious ZIP/TAR corpus with 18 reject cases, one benign control, native Windows hardlink/ADS/junction fixtures, JSON-only evidence, and mandatory temporary-root cleanup.
 - Added a sandboxed, UTF-8-locale, 64 MiB-bounded `bsdtar -t` preflight that rejects raw absolute/drive/UNC names, unsafe Windows components, depth/path violations, and case-aliasing duplicate members before extraction can normalize or overwrite them.
 - Added fixed-label Windows Server 2022/2025 E2E jobs with machine-readable evidence for verified-backend setup, zero-capability AppContainer tokens, loopback denial, timeout, memory limits, cleanup, archive creation/preview/re-extraction, invalid input, shell invocation, and settings-screen setup.

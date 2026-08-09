@@ -6,17 +6,75 @@ on:
       - "v*"
 
 permissions:
+  attestations: write
   contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   windows-package:
-    runs-on: windows-latest
+    name: Sign, attest, and publish Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 60
+    environment:
+      name: release-signing
 
     steps:
-      - name: Check out source
-        uses: actions/checkout@v7
+      - name: Check out the exact tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release policy and configuration
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          SIGNING_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          EXPECTED_PUBLISHER: ${{ vars.AZURE_ARTIFACT_SIGNING_PUBLISHER }}
+        run: |
+          $required = [ordered]@{
+            AZURE_CLIENT_ID = $env:AZURE_CLIENT_ID
+            AZURE_TENANT_ID = $env:AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID = $env:AZURE_SUBSCRIPTION_ID
+            AZURE_ARTIFACT_SIGNING_ENDPOINT = $env:SIGNING_ENDPOINT
+            AZURE_ARTIFACT_SIGNING_ACCOUNT = $env:SIGNING_ACCOUNT
+            AZURE_ARTIFACT_SIGNING_PROFILE = $env:SIGNING_PROFILE
+            AZURE_ARTIFACT_SIGNING_PUBLISHER = $env:EXPECTED_PUBLISHER
+          }
+          foreach ($entry in $required.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace([string]$entry.Value)) {
+              throw "Missing release-signing environment setting: $($entry.Key)"
+            }
+          }
+
+          $version = (Select-String -LiteralPath Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF_NAME -cne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match Cargo.toml version $version."
+          }
+          $checkedOutCommit = (& git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $checkedOutCommit -cne $env:GITHUB_SHA) {
+            throw "The checked-out commit does not match GITHUB_SHA."
+          }
+          $remoteMain = (& gh api "repos/$env:GITHUB_REPOSITORY/commits/main" --jq .sha).Trim()
+          if ($LASTEXITCODE -ne 0 -or $remoteMain -cne $checkedOutCommit) {
+            throw "Release tags must point to the current main commit."
+          }
+
+          $immutable = & gh api `
+            -H "X-GitHub-Api-Version: 2026-03-10" `
+            "repos/$env:GITHUB_REPOSITORY/immutable-releases" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $immutable.enabled) {
+            throw "GitHub release immutability must be enabled before a tag is pushed."
+          }
 
       - name: Install pinned Rust toolchain
         shell: bash
@@ -24,32 +82,191 @@ jobs:
           rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
           rustup default 1.97.1
 
-      - name: Verify tag matches Cargo package version
+      - name: Validate and build unsigned release executables
         shell: pwsh
         run: |
-          $version = (Select-String -LiteralPath Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
-          if ($env:GITHUB_REF_NAME -ne "v$version") {
-            throw "Tag $env:GITHUB_REF_NAME does not match Cargo.toml version $version."
+          .\scripts\build-release.ps1 -Phase Build
+          & git diff --exit-code HEAD --
+          if ($LASTEXITCODE -ne 0) {
+            throw "The release build modified tracked source files."
           }
 
-      - name: Build and package Windows release
-        shell: pwsh
-        run: .\scripts\build-release.ps1
+      - name: Authenticate to Azure with GitHub OIDC
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Create GitHub release and upload checksummed package
+      - name: Authenticode-sign all release executables
+        uses: Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: |
+            ${{ github.workspace }}\target\x86_64-pc-windows-msvc\release\iroha-zip.exe
+            ${{ github.workspace }}\target\x86_64-pc-windows-msvc\release\iroha-zip-settings.exe
+            ${{ github.workspace }}\target\x86_64-pc-windows-msvc\release\iroha-zip-shell.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: iroha-zip
+          description-url: https://github.com/hjosugi/iroha-zip
+
+      - name: Verify signatures and build the release package
+        id: package
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          EXPECTED_PUBLISHER: ${{ vars.AZURE_ARTIFACT_SIGNING_PUBLISHER }}
         run: |
+          .\scripts\build-release.ps1 `
+            -Phase Package `
+            -RequireAuthenticode `
+            -ExpectedPublisher $env:EXPECTED_PUBLISHER
+
           $packages = @(Get-ChildItem -LiteralPath dist -Filter 'iroha-zip-*-windows-x64.zip')
           if ($packages.Count -ne 1) {
             throw "Expected exactly one release ZIP; found $($packages.Count)."
           }
           $zip = $packages[0]
-          gh release create $env:GITHUB_REF_NAME `
+          $checksum = "$($zip.FullName).sha256"
+          $signatures = Join-Path $zip.DirectoryName "$($zip.BaseName).signatures.json"
+          foreach ($asset in @($checksum, $signatures)) {
+            if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+              throw "Release asset is missing: $asset"
+            }
+          }
+
+          $checksumLine = (Get-Content -LiteralPath $checksum -Raw).Trim()
+          $expectedLine = "{0}  {1}" -f `
+            (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), `
+            $zip.Name
+          if ($checksumLine -cne $expectedLine) {
+            throw "The release checksum sidecar does not match the package."
+          }
+
+          "zip=$($zip.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "checksum=$checksum" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "signatures=$signatures" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "base_name=$($zip.BaseName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Generate SLSA build provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.checksum }}
+            ${{ steps.package.outputs.signatures }}
+
+      - name: Stage and independently verify the provenance bundle
+        id: provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP_PATH: ${{ steps.package.outputs.zip }}
+          CHECKSUM_PATH: ${{ steps.package.outputs.checksum }}
+          SIGNATURES_PATH: ${{ steps.package.outputs.signatures }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+          BASE_NAME: ${{ steps.package.outputs.base_name }}
+        run: |
+          if (-not (Test-Path -LiteralPath $env:BUNDLE_PATH -PathType Leaf)) {
+            throw "The provenance action did not produce a local Sigstore bundle."
+          }
+          $provenance = Join-Path $env:GITHUB_WORKSPACE "dist\$env:BASE_NAME.intoto.jsonl"
+          Copy-Item -LiteralPath $env:BUNDLE_PATH -Destination $provenance
+
+          foreach ($subject in @($env:ZIP_PATH, $env:CHECKSUM_PATH, $env:SIGNATURES_PATH)) {
+            & gh attestation verify $subject `
+              --bundle $provenance `
+              --repo $env:GITHUB_REPOSITORY `
+              --signer-workflow "$env:GITHUB_REPOSITORY/.github/workflows/release.yml" `
+              --source-ref $env:GITHUB_REF `
+              --source-digest $env:GITHUB_SHA `
+              --deny-self-hosted-runners
+            if ($LASTEXITCODE -ne 0) {
+              throw "Offline provenance bundle verification failed: $subject"
+            }
+          }
+          "path=$provenance" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Create a complete draft, then publish it immutably
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP_PATH: ${{ steps.package.outputs.zip }}
+          CHECKSUM_PATH: ${{ steps.package.outputs.checksum }}
+          SIGNATURES_PATH: ${{ steps.package.outputs.signatures }}
+          PROVENANCE_PATH: ${{ steps.provenance.outputs.path }}
+        run: |
+          $assets = @(
+            $env:ZIP_PATH,
+            $env:CHECKSUM_PATH,
+            $env:SIGNATURES_PATH,
+            $env:PROVENANCE_PATH
+          )
+
+          $remoteMain = (& gh api "repos/$env:GITHUB_REPOSITORY/commits/main" --jq .sha).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw "Cannot resolve remote main after the build."
+          }
+          $remoteTag = (& gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_REF_NAME" --jq .sha).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw "Cannot resolve the remote release tag after the build."
+          }
+          if ($remoteMain -cne $env:GITHUB_SHA -or $remoteTag -cne $env:GITHUB_SHA) {
+            throw "The remote main/tag identity changed after the build."
+          }
+          $immutable = & gh api `
+            -H "X-GitHub-Api-Version: 2026-03-10" `
+            "repos/$env:GITHUB_REPOSITORY/immutable-releases" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $immutable.enabled) {
+            throw "Release immutability was disabled after the build."
+          }
+
+          & gh release create $env:GITHUB_REF_NAME `
+            --draft `
             --verify-tag `
             --title "iroha-zip $($env:GITHUB_REF_NAME.TrimStart('v'))" `
             --prerelease `
             --generate-notes `
-            $zip.FullName `
-            ($zip.FullName + '.sha256')
+            @assets
+          if ($LASTEXITCODE -ne 0) {
+            throw "Draft release creation failed."
+          }
+
+          $draft = & gh release view $env:GITHUB_REF_NAME --json isDraft,assets | ConvertFrom-Json
+          $expectedNames = @($assets | ForEach-Object { Split-Path -Leaf $_ } | Sort-Object)
+          $actualNames = @($draft.assets | ForEach-Object { $_.name } | Sort-Object)
+          if (-not $draft.isDraft -or $draft.assets.Count -ne $assets.Count) {
+            throw "The release draft is incomplete."
+          }
+          if ([string]::Join("`n", $expectedNames) -cne [string]::Join("`n", $actualNames)) {
+            throw "The release draft asset inventory does not match the local inventory."
+          }
+          if (@($draft.assets | Where-Object { $_.size -le 0 }).Count -ne 0) {
+            throw "The release draft contains an empty asset."
+          }
+
+          & gh release edit $env:GITHUB_REF_NAME --draft=false
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release publication failed."
+          }
+
+          $published = $null
+          foreach ($attempt in 1..5) {
+            $published = & gh release view $env:GITHUB_REF_NAME `
+              --json isDraft,isImmutable,assets,url | ConvertFrom-Json
+            if ($published.isImmutable) {
+              break
+            }
+            Start-Sleep -Seconds 2
+          }
+          if ($published.isDraft -or -not $published.isImmutable) {
+            throw "The published release is not immutable."
+          }
+          if ($published.assets.Count -ne $assets.Count) {
+            throw "The immutable release asset inventory is incomplete."
+          }
+          Write-Host "Published immutable release: $($published.url)"
