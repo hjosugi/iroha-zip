@@ -19,6 +19,16 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
+      - name: Install a current MSYS2 UCRT64 libarchive source
+        if: runner.os == 'Windows'
+        id: msys2
+        uses: msys2/setup-msys2@c6f39ce767a3de8ac436a58b2d471ed9325a8d2d
+        with:
+          msystem: UCRT64
+          update: true
+          cache: false
+          install: mingw-w64-ucrt-x86_64-libarchive
+
       - name: Install pinned Rust toolchain
         shell: bash
         run: |
@@ -44,6 +54,93 @@ jobs:
 
       - name: Build release binaries
         run: cargo build --release --all-targets --locked
+
+      - name: Verify supported and unsupported backend evidence flows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $verified = Join-Path $env:RUNNER_TEMP 'iroha-zip-verified-backend'
+          ./scripts/export-msys2-backend.ps1 `
+            -Msys2Root $env:MSYS2_ROOT `
+            -DestinationDirectory $verified
+          ./target/release/iroha-zip.exe verify-backend-evidence `
+            $verified --require-supported
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Supported MSYS2 evidence validation failed.'
+          }
+
+          $localSource = Join-Path $env:RUNNER_TEMP 'iroha-zip-local-source'
+          $localBackend = Join-Path $env:RUNNER_TEMP 'iroha-zip-local-backend'
+          New-Item -ItemType Directory -Path $localSource | Out-Null
+          New-Item -ItemType Directory -Path $localBackend | Out-Null
+          New-Item -ItemType Directory `
+            -Path (Join-Path $localSource '.iroha-zip-evidence') | Out-Null
+          [IO.File]::WriteAllBytes(
+            (Join-Path $localSource 'bsdtar.exe'),
+            [Text.Encoding]::UTF8.GetBytes('test backend')
+          )
+          [IO.File]::WriteAllText(
+            (Join-Path $localSource '.iroha-zip-evidence/stale.txt'),
+            'stale evidence'
+          )
+          [IO.File]::WriteAllText(
+            (Join-Path $localSource '.iroha-zip-evidence-notes.bin'),
+            'ordinary payload with a similar name'
+          )
+          [IO.File]::WriteAllText(
+            (Join-Path $localBackend 'preserve.marker'),
+            'existing backend'
+          )
+          $rejected = $false
+          try {
+            ./scripts/install-backend.ps1 `
+              -SourceDirectory $localSource `
+              -DestinationDirectory $localBackend
+          }
+          catch {
+            $rejected = $true
+          }
+          if (-not $rejected) {
+            throw 'An unapproved local bundle was unexpectedly accepted.'
+          }
+          if (-not (Test-Path -LiteralPath `
+              (Join-Path $localBackend 'preserve.marker') -PathType Leaf)) {
+            throw 'Rejected import did not preserve the existing backend.'
+          }
+          ./scripts/install-backend.ps1 `
+            -SourceDirectory $localSource `
+            -DestinationDirectory $localBackend `
+            -AllowUnsupportedSource
+          if (Test-Path -LiteralPath `
+              (Join-Path $localBackend '.iroha-zip-evidence/stale.txt')) {
+            throw 'Stale source evidence was unexpectedly reused.'
+          }
+          if (-not (Test-Path -LiteralPath `
+              (Join-Path $localBackend '.iroha-zip-evidence-notes.bin') `
+              -PathType Leaf)) {
+            throw 'An ordinary payload with a similar name was incorrectly excluded.'
+          }
+          ./target/release/iroha-zip.exe verify-backend-evidence $localBackend
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Explicitly unsupported evidence validation failed.'
+          }
+          ./target/release/iroha-zip.exe verify-backend-evidence `
+            $localBackend --require-supported
+          if ($LASTEXITCODE -eq 0) {
+            throw 'Unsupported evidence unexpectedly passed --require-supported.'
+          }
+          $global:LASTEXITCODE = 0
+
+          Add-Content `
+            -LiteralPath (Join-Path $localBackend '.iroha-zip-evidence/THIRD-PARTY-NOTICES.md') `
+            -Value 'tampered'
+          ./target/release/iroha-zip.exe verify-backend-evidence $localBackend
+          if ($LASTEXITCODE -eq 0) {
+            throw 'Tampered evidence unexpectedly passed validation.'
+          }
+          $global:LASTEXITCODE = 0
 
       - name: Exercise native settings accessibility contract
         if: runner.os == 'Windows'

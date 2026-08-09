@@ -1,15 +1,35 @@
 [CmdletBinding()]
 param(
     [string]$Target = "x86_64-pc-windows-msvc",
-    [switch]$IncludeBackend
+    [switch]$IncludeBackend,
+    [switch]$AllowUnsupportedBackendSource
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
+
+function Assert-BackendEvidence(
+    [string]$Validator,
+    [string]$BackendDirectory,
+    [bool]$AllowUnsupported
+) {
+    $validationArguments = @("verify-backend-evidence", $BackendDirectory)
+    if (-not $AllowUnsupported) {
+        $validationArguments += "--require-supported"
+    }
+    & $Validator @validationArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Backend provenance, SPDX SBOM, or license evidence validation failed: $BackendDirectory"
+    }
+}
+
 Push-Location $ProjectRoot
 try {
+    if ($AllowUnsupportedBackendSource -and -not $IncludeBackend) {
+        throw "-AllowUnsupportedBackendSource is valid only together with -IncludeBackend."
+    }
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
         throw "cargo was not found. Install the Rust toolchain specified by rust-toolchain.toml."
     }
@@ -48,6 +68,15 @@ try {
     & cargo build --release --target $Target --locked
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed." }
 
+    if ($IncludeBackend) {
+        $backendDirectory = Join-Path $ProjectRoot "backend\libarchive"
+        $validator = Join-Path $ProjectRoot "target\$Target\release\iroha-zip.exe"
+        Assert-BackendEvidence $validator $backendDirectory $AllowUnsupportedBackendSource
+        if ($AllowUnsupportedBackendSource) {
+            Write-Warning "The private package may include a backend from an explicitly unsupported source. Review its embedded evidence."
+        }
+    }
+
     $version = ((Select-String -LiteralPath "Cargo.toml" -Pattern '^version\s*=\s*"([^\"]+)"').Matches[0].Groups[1].Value)
     $releaseSource = Join-Path $ProjectRoot "target\$Target\release"
     $distRoot = Join-Path $ProjectRoot "dist"
@@ -72,10 +101,15 @@ try {
     if ($IncludeBackend) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "backend\libarchive") `
             -Destination (Join-Path $releaseBackend "libarchive") -Recurse
+        Assert-BackendEvidence `
+            $validator `
+            (Join-Path $releaseBackend "libarchive") `
+            $AllowUnsupportedBackendSource
     }
     New-Item -ItemType Directory -Force -Path (Join-Path $appRoot "scripts") | Out-Null
     foreach ($script in @(
         "install-backend.ps1",
+        "backend-evidence.ps1",
         "export-msys2-backend.ps1",
         "register-associations.ps1",
         "unregister-associations.ps1"
@@ -99,6 +133,7 @@ try {
     foreach ($document in @(
         "ANTIMALWARE_HANDOFF.md",
         "ARCHIVE_PREVIEW.md",
+        "BACKEND_EVIDENCE.md",
         "BACKEND_MANIFEST.md",
         "BUILD_STATUS.md",
         "ENCRYPTED_ARCHIVES.md",
@@ -117,6 +152,21 @@ try {
         Remove-Item -LiteralPath $zip -Force
     }
     Compress-Archive -LiteralPath $appRoot -DestinationPath $zip -CompressionLevel Optimal
+    if ($IncludeBackend) {
+        $expandedPackage = Join-Path $distRoot (".iroha-zip-package-check-" + [Guid]::NewGuid().ToString("N"))
+        try {
+            Expand-Archive -LiteralPath $zip -DestinationPath $expandedPackage
+            Assert-BackendEvidence `
+                $validator `
+                (Join-Path $expandedPackage "iroha-zip\backend\libarchive") `
+                $AllowUnsupportedBackendSource
+        }
+        finally {
+            if (Test-Path -LiteralPath $expandedPackage) {
+                Remove-Item -LiteralPath $expandedPackage -Recurse -Force
+            }
+        }
+    }
     $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText(
         "$zip.sha256",

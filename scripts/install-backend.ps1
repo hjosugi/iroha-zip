@@ -3,13 +3,20 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$SourceDirectory,
 
-    [string]$DestinationDirectory
+    [string]$DestinationDirectory,
+
+    [string]$EvidenceMetadataPath,
+
+    [string]$LicenseDirectory,
+
+    [switch]$AllowUnsupportedSource
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "backend-evidence.ps1")
 [char[]]$PathSeparators = @([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
     $DestinationDirectory = Join-Path $ProjectRoot "backend\libarchive"
@@ -60,9 +67,22 @@ foreach ($item in $allItems) {
     }
 }
 
+$sourceEvidenceRoot = Join-Path $SourceDirectory ".iroha-zip-evidence"
+if (Test-Path -LiteralPath $sourceEvidenceRoot) {
+    $sourceEvidenceItem = Get-Item -LiteralPath $sourceEvidenceRoot -Force
+    if (-not $sourceEvidenceItem.PSIsContainer) {
+        throw "The reserved .iroha-zip-evidence source entry must be a directory."
+    }
+}
+$sourceEvidencePrefix = $sourceEvidenceRoot.TrimEnd($PathSeparators) + [System.IO.Path]::DirectorySeparatorChar
 $sourceFiles = @(
     $allItems |
-        Where-Object { -not $_.PSIsContainer -and $_.Name -ne "backend-manifest.tsv" }
+        Where-Object {
+            -not $_.PSIsContainer -and
+            $_.Name -ne "backend-manifest.tsv" -and
+            -not $_.FullName.Equals($sourceEvidenceRoot, [System.StringComparison]::OrdinalIgnoreCase) -and
+            -not $_.FullName.StartsWith($sourceEvidencePrefix, [System.StringComparison]::OrdinalIgnoreCase)
+        }
 )
 if ($sourceFiles.Count -eq 0) {
     throw "The backend bundle contains no files."
@@ -144,6 +164,82 @@ try {
         [System.Text.UTF8Encoding]::new($false)
     )
 
+    if ([string]::IsNullOrWhiteSpace($EvidenceMetadataPath)) {
+        if (-not $AllowUnsupportedSource) {
+            Write-Warning "The selected local bundle is an unsupported source. Its origin and distributor signature cannot be verified."
+            throw "Re-run with -AllowUnsupportedSource only after reviewing and accepting this provenance warning."
+        }
+        Write-Warning "UNSUPPORTED BACKEND SOURCE: origin and distributor signature were not verified."
+        $localPackageId = "unverified-local-bundle"
+        $fileMappings = @(
+            foreach ($file in $stageFiles) {
+                $relative = $file.FullName.Substring($stage.Length).TrimStart($PathSeparators).Replace('\', '/')
+                [ordered]@{
+                    path = $relative
+                    packageId = $localPackageId
+                }
+            }
+        )
+        $sourceMetadata = [pscustomobject][ordered]@{
+            source = [pscustomobject][ordered]@{
+                kind = "unverified-local-bundle"
+                supported = $false
+                repository = "unverified-local"
+                verification = [pscustomobject][ordered]@{
+                    status = "unverified"
+                    method = "explicit-user-accepted-local-bundle"
+                    keyringPackage = $null
+                    keyringVersion = $null
+                }
+            }
+            packages = @([pscustomobject][ordered]@{
+                id = $localPackageId
+                name = $localPackageId
+                version = "NOASSERTION"
+                architecture = "windows"
+                repository = "unverified-local"
+                downloadUrl = $null
+                archiveSha256 = $null
+                signature = $null
+                licenses = @("NOASSERTION")
+            })
+            files = @($fileMappings)
+        }
+    }
+    else {
+        $metadataItem = Get-Item -LiteralPath $EvidenceMetadataPath -Force -ErrorAction Stop
+        if ($metadataItem.PSIsContainer -or
+            ($metadataItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or
+            $metadataItem.Length -gt 4MB) {
+            throw "Evidence metadata must be a regular JSON file no larger than 4 MiB."
+        }
+        $metadataText = [System.IO.File]::ReadAllText($metadataItem.FullName)
+        $sourceMetadata = $metadataText | ConvertFrom-Json
+    }
+
+    New-IrohaZipBackendEvidence `
+        -BackendDirectory $stage `
+        -SourceMetadata $sourceMetadata `
+        -LicenseSourceDirectory $LicenseDirectory
+
+    $validatorCandidates = @(
+        (Join-Path $ProjectRoot "iroha-zip.exe"),
+        (Join-Path $ProjectRoot "target\x86_64-pc-windows-msvc\release\iroha-zip.exe"),
+        (Join-Path $ProjectRoot "target\release\iroha-zip.exe")
+    )
+    $validator = $validatorCandidates |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+    if ($null -ne $validator) {
+        & $validator verify-backend-evidence $stage
+        if ($LASTEXITCODE -ne 0) {
+            throw "Generated backend evidence failed independent validation; the existing backend was preserved."
+        }
+    }
+    else {
+        Write-Warning "iroha-zip.exe was not available for independent evidence validation. The settings screen and private release build validate it before use."
+    }
+
     $backup = $null
     if (Test-Path -LiteralPath $DestinationDirectory) {
         $backup = Join-Path $destinationParent (".iroha-zip-backend-backup-" + [Guid]::NewGuid().ToString("N"))
@@ -165,6 +261,12 @@ try {
 
     Write-Host "Installed a pinned backend bundle: $DestinationDirectory"
     Write-Host "Files: $($stageFiles.Count)"
+    if ($sourceMetadata.source.supported) {
+        Write-Host "Provenance: verified supported source ($($sourceMetadata.source.kind))"
+    }
+    else {
+        Write-Warning "Provenance: unsupported source; see .iroha-zip-evidence for the explicit warning and inventory."
+    }
     Write-Host "Run: .\target\x86_64-pc-windows-msvc\release\iroha-zip.exe doctor"
 }
 finally {

@@ -60,6 +60,26 @@ fn settings_subcommand_is_available() {
 }
 
 #[test]
+fn backend_evidence_validation_can_require_a_supported_source() {
+    let cli = Cli::try_parse_from([
+        "iroha-zip",
+        "verify-backend-evidence",
+        "backend/libarchive",
+        "--require-supported",
+    ])
+    .unwrap();
+    let Command::VerifyBackendEvidence {
+        backend,
+        require_supported,
+    } = cli.command
+    else {
+        panic!("expected backend evidence command");
+    };
+    assert_eq!(backend, std::path::Path::new("backend/libarchive"));
+    assert!(require_supported);
+}
+
+#[test]
 fn preview_uses_the_same_encoding_and_isolation_controls_as_extract() {
     let cli = Cli::try_parse_from([
         "iroha-zip",

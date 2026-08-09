@@ -143,12 +143,14 @@ Set-ExecutionPolicy -Scope Process Bypass
 すでに最小構成のbsdtarフォルダを持っている場合は、設定画面の「bundleを取り込む」から直接取り込めます。PowerShellで自動化する場合は次のとおりです。
 
 ```powershell
-.\scripts\install-backend.ps1 -SourceDirectory C:\path\to\minimal-bsdtar-bundle
+.\scripts\install-backend.ps1 `
+  -SourceDirectory C:\path\to\minimal-bsdtar-bundle `
+  -AllowUnsupportedSource
 ```
 
-`SourceDirectory`直下またはその配下にある全ファイルがバックエンドとして固定されます。不要なEXEやDLLを混ぜないでください。
+任意bundleは未対応の取得元であり、配布元署名を検証できないため、設定画面では専用警告への明示確認、CLIでは`-AllowUnsupportedSource`が必須です。`SourceDirectory`直下またはその配下にある全payloadファイルがバックエンドとして固定されます。不要なEXEやDLLを混ぜないでください。
 
-`backend-manifest.tsv`の形式、入力上限、パス規則、検証範囲は[backend manifest仕様](docs/BACKEND_MANIFEST.md)に記載しています。v1マニフェストは取り込み後の完全性を固定するものであり、取得元そのものの信頼性や署名を証明するものではありません。
+`backend-manifest.tsv`の形式、入力上限、パス規則、検証範囲は[backend manifest仕様](docs/BACKEND_MANIFEST.md)に記載しています。MSYS2 UCRT64の署名必須export、任意bundleの警告、machine-readable provenance、SPDX 2.3 SBOM、license inventory、private packageのfail-closed条件は[backend証跡仕様](docs/BACKEND_EVIDENCE.md)に記載しています。
 
 ## ビルド
 
@@ -184,6 +186,8 @@ dist\iroha-zip\
 .\scripts\build-release.ps1 -IncludeBackend
 ```
 
+`-IncludeBackend`はsupported sourceの証跡を既定で必須にします。独立に確認済みの未対応bundleを意図的に含める場合だけ、追加の`-AllowUnsupportedBackendSource`も同時に指定します。
+
 ## 設定画面と初期設定
 
 配布フォルダで設定画面を開きます。
@@ -197,7 +201,7 @@ dist\iroha-zip\
 
 | 分類 | 設定・操作 |
 |---|---|
-| Backend | 保存先の選択、既存bundleの取り込み、MSYS2からの収集、SHA-256検証、AppContainer診断 |
+| Backend | 保存先の選択、未対応bundleの明示警告付き取り込み、MSYS2署名検証付き収集、SHA-256／provenance／SPDX／license inventory検証、AppContainer診断 |
 | AppContainer | 通常AppContainer／実験的LPAC、timeout、Job Object memory limit |
 | Resource limits | 入力書庫容量、ファイル数、ディレクトリ数、合計容量、単一ファイル容量、パス深さ、パス長 |
 | 展開動作 | Mark-of-the-Web伝播、ダブルクリック後に開く、既定のfilename encoding |

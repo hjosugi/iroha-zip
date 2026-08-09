@@ -1,6 +1,6 @@
 # Backend directory
 
-`backend/libarchive/`には、利用者が信頼する`bsdtar.exe`と必要最小限のDLL、および自動生成される`backend-manifest.tsv`を配置します。
+`backend/libarchive/`には、利用者が信頼する`bsdtar.exe`と必要最小限のDLL、自動生成される`backend-manifest.tsv`、および`.iroha-zip-evidence/`のprovenance・SPDX SBOM・license inventoryを配置します。
 
 ソース配布にはバイナリを含めません。
 
@@ -13,7 +13,9 @@
 または、用意済みの最小bundleを取り込みます。
 
 ```powershell
-.\scripts\install-backend.ps1 -SourceDirectory C:\path\to\bundle
+.\scripts\install-backend.ps1 `
+  -SourceDirectory C:\path\to\bundle `
+  -AllowUnsupportedSource
 ```
 
-iroha-zipはマニフェストにない余分なファイルも拒否します。
+任意bundleは署名と取得元を検証できないため、設定画面では明示警告への確認、スクリプトでは`-AllowUnsupportedSource`が必須です。iroha-zipはmanifest、provenance、SBOM、license inventory間の不一致と、各inventoryにない余分なファイルを拒否します。詳細は[`docs/BACKEND_EVIDENCE.md`](../docs/BACKEND_EVIDENCE.md)を参照してください。

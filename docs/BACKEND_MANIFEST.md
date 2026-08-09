@@ -36,8 +36,8 @@ Manifest paths use `/` separators and must be normalized relative paths. iroha-z
 - control characters, NTFS stream syntax, Windows-invalid characters, and trailing dots or spaces;
 - Windows device names such as `CON`, `NUL`, `COM1`, and `LPT1`.
 
-After parsing, iroha-zip enumerates the backend directory without following links. Symlinks, reparse points, special files, missing files, extra files, unsafe file identities, and digest mismatches fail verification.
+After parsing, iroha-zip enumerates the executable payload without following links. Symlinks, reparse points, special files, missing files, extra files, unsafe file identities, and digest mismatches fail verification. The only reserved non-payload entry is `.iroha-zip-evidence/`; when present, its entire separate tree is validated against the provenance, SPDX, and license inventories before the backend is accepted. Evidence files are not copied into the AppContainer.
 
 ## Trust boundary
 
-The v1 manifest proves consistency with the bytes recorded during local import. It does not prove where those bytes came from, whether the distributor signed them, or whether the source was trustworthy. Acquisition provenance, package-signature verification, and backend SBOM/license evidence are tracked separately in [SAFE-004](https://github.com/hjosugi/iroha-zip/issues/6).
+The v1 manifest proves consistency with the bytes recorded during local import. Source classification, enforced MSYS2/pacman signature policy, package archive digests, SPDX 2.3 SBOM, payload ownership, and license evidence are recorded and independently checked as described in [Backend provenance, SBOM, and license evidence](BACKEND_EVIDENCE.md).

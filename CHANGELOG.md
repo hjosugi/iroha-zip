@@ -19,6 +19,9 @@
 - Added five pinned `cargo-fuzz` targets, a bounded weekly sanitizer workflow, seed isolation, failure artifacts, and SHA-256-addressed deterministic regression promotion.
 - Refactored Windows command-line quoting into a platform-neutral, property-tested encoder that rejects interior NUL, invalid program names, and the `CreateProcessW` length overflow before launch.
 - Archive-derived destination names now fall back to `archive` when extension removal would produce a Windows-invalid or reserved component.
+- Added atomic backend provenance bundles containing a strict source record, exact payload ownership, SPDX 2.3 SBOM, license inventory, notices, and copied license evidence.
+- The supported MSYS2 UCRT64 exporter now refreshes isolated signed databases under `Required TrustedOnly`, records package signatures/archive hashes, verifies current versions, and compares imported bytes with signed package archives.
+- Arbitrary backend bundles now require explicit unsupported-source approval; diagnostics warn permanently, and private backend packaging rejects unsupported or inconsistent evidence by default.
 
 ## 0.3.1 - 2026-08-09
 

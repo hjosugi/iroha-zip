@@ -9,7 +9,7 @@ use crate::error::{IrohaZipError, Result};
 use crate::platform;
 use crate::policy;
 
-const MANIFEST_FILE: &str = "backend-manifest.tsv";
+pub(crate) const MANIFEST_FILE: &str = "backend-manifest.tsv";
 const MANIFEST_HEADER: &str = "IROHA-ZIP-BACKEND-MANIFEST\t1";
 pub const MAX_BACKEND_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_BACKEND_MANIFEST_FILES: usize = 4096;
@@ -201,11 +201,19 @@ impl BackendBundle {
         }
 
         let executable_path = root.join(&manifest.executable);
-        Ok(Self {
+        let bundle = Self {
             root,
             executable: executable_path,
             files: manifest.files,
-        })
+        };
+        if bundle
+            .root
+            .join(crate::backend_evidence::EVIDENCE_DIRECTORY)
+            .exists()
+        {
+            crate::backend_evidence::BackendEvidence::verify(&bundle)?;
+        }
+        Ok(bundle)
     }
 
     pub fn root(&self) -> &Path {
@@ -214,6 +222,12 @@ impl BackendBundle {
 
     pub fn executable(&self) -> &Path {
         &self.executable
+    }
+
+    pub fn files(&self) -> impl ExactSizeIterator<Item = (&Path, &str)> {
+        self.files
+            .iter()
+            .map(|(path, hash)| (path.as_path(), hash.as_str()))
     }
 
     pub fn executable_relative(&self) -> Result<&Path> {
@@ -302,7 +316,7 @@ fn read_manifest(path: &Path) -> Result<BackendManifest> {
     BackendManifest::parse(&bytes)
 }
 
-fn validate_manifest_path(value: &str) -> Result<PathBuf> {
+pub(crate) fn validate_manifest_path(value: &str) -> Result<PathBuf> {
     if value.is_empty()
         || value.len() > MAX_BACKEND_MANIFEST_PATH_BYTES
         || value
@@ -366,6 +380,13 @@ fn collect_files(root: &Path) -> Result<BTreeSet<PathBuf>> {
             platform::validate_extracted_entry_security(&path, &metadata).map_err(|error| {
                 IrohaZipError::Backend(format!("unsafe backend entry {}: {error}", path.display()))
             })?;
+            if metadata.is_dir()
+                && directory == root
+                && entry.file_name()
+                    == std::ffi::OsStr::new(crate::backend_evidence::EVIDENCE_DIRECTORY)
+            {
+                continue;
+            }
             if metadata.is_dir() {
                 stack.push(path);
             } else if metadata.is_file() {

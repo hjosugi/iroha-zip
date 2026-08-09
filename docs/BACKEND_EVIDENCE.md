@@ -1,0 +1,82 @@
+# Backend provenance, SBOM, and license evidence
+
+iroha-zip keeps executable backend payloads and their supply-chain evidence at one atomic installation boundary. `backend-manifest.tsv` hashes only the executable payload. The reserved `.iroha-zip-evidence/` directory is never copied into the AppContainer, but when it exists its complete tree is validated before the backend is accepted.
+
+## Supported source
+
+The only supported binary source is the current `ucrt64` package set exported from an up-to-date MSYS2 installation by `scripts/export-msys2-backend.ps1`.
+
+The exporter:
+
+1. resolves `bsdtar.exe` and its transitive UCRT64 DLLs with `ldd`;
+2. identifies the installed package owning every selected file with `pacman -Qqo`;
+3. creates an isolated pacman database configured with `SigLevel = Required TrustedOnly` and refreshes its signed `msys` and `ucrt64` databases;
+4. requires the installed version to equal the freshly signature-verified repository version and takes all source metadata from that isolated database;
+5. downloads each exact package through pacman under the same required/trusted-only policy;
+6. compares the downloaded archive SHA-256 with the signed repository metadata and records the embedded package signature;
+7. runs pacman's detailed installed-file check and compares every selected installed file with the corresponding file extracted from the verified archive;
+8. imports the archive-derived bytes and the package's standard license files.
+
+This follows the documented MSYS2 package ownership and license queries and pacman's signature policy. See the [MSYS2 package-management guide](https://www.msys2.org/docs/package-management/), [MSYS2 package tips](https://www.msys2.org/docs/package-management-tips/), and [`pacman.conf(5)` signature checking](https://man.archlinux.org/man/pacman.conf.5.en#PACKAGE_AND_DATABASE_SIGNATURE_CHECKING).
+
+The exporter fails rather than silently treating a stale installed version, another repository, an unsigned package, a weak signature policy, an archive digest mismatch, or installed/archive byte drift as supported provenance.
+
+## Unsupported local bundles
+
+An arbitrary local bundle cannot prove its distributor or acquisition path. The settings screen shows a dedicated warning and requires a second confirmation. The automation script fails unless the caller explicitly adds:
+
+```powershell
+.\scripts\install-backend.ps1 `
+  -SourceDirectory C:\path\to\bundle `
+  -AllowUnsupportedSource
+```
+
+The generated provenance permanently records `supported: false`, `unverified`, and `explicit-user-accepted-local-bundle`. `doctor` and `verify-backend-evidence` print an explicit warning. Private packaging rejects this source by default; the separate `-AllowUnsupportedBackendSource` switch is required in addition to `-IncludeBackend`.
+
+## Evidence layout
+
+```text
+backend/libarchive/
+  backend-manifest.tsv
+  bsdtar.exe
+  *.dll
+  .iroha-zip-evidence/
+    backend-provenance.json
+    backend.spdx.json
+    backend-license-inventory.json
+    THIRD-PARTY-NOTICES.md
+    licenses/<package-id>/...
+```
+
+- `backend-provenance.json` records the UTC import time, source classification, enforced verification method, installed `msys2-keyring` version, manifest digest, package versions, repository/archive hashes, embedded signatures, distributor license metadata, and exact package owner of every payload file.
+- `backend.spdx.json` is an SPDX 2.3 JSON document. It includes every payload file and SHA-256, one analyzed SPDX package per recorded owner, SPDX package verification codes, and exact `DESCRIBES`/`CONTAINS` relationships. See the [SPDX 2.3 package rules](https://spdx.github.io/spdx-spec/v2.3/package-information/) and [relationship rules](https://spdx.github.io/spdx-spec/v2.3/relationships-between-SPDX-elements/).
+- `backend-license-inventory.json` repeats the exact payload-to-package mapping and hashes the generated notice and every copied license file.
+- `THIRD-PARTY-NOTICES.md` presents the recorded package/version/license data and makes the unsupported-source warning visible without a JSON reader. It preserves distributor metadata and is not an independent legal conclusion.
+
+The validator requires all three machine-readable views to agree exactly with the manifest. It rejects unknown JSON fields, unsupported schema versions, duplicate records, unsafe Windows paths, missing or extra files/directories, symlinks/reparse points, digest drift, ownership drift, unrelated packages, invalid SPDX package verification codes and relationships, more than 256 packages, more than 1024 evidence files, any JSON document over 4 MiB, or an evidence tree over 32 MiB.
+
+## Verification and packaging
+
+```powershell
+.\iroha-zip.exe doctor
+.\iroha-zip.exe verify-backend-evidence .\backend\libarchive
+.\iroha-zip.exe verify-backend-evidence .\backend\libarchive --require-supported
+```
+
+Normal public release packages remain backend-free. A private package can embed a verified backend and its evidence:
+
+```powershell
+.\scripts\build-release.ps1 -IncludeBackend
+```
+
+The build validates the source backend, the copied release tree, and the completed ZIP after re-expansion. At every boundary it checks the payload, provenance, SPDX SBOM, license inventory, notice, and license files. To package a deliberately unsupported local source after independent review, both risk switches are required:
+
+```powershell
+.\scripts\build-release.ps1 `
+  -IncludeBackend `
+  -AllowUnsupportedBackendSource
+```
+
+## Scope limits
+
+The evidence describes the import event and the exact bytes accepted then. It does not make a package vulnerability-free, turn distributor metadata into legal advice, or protect a machine whose administrator, MSYS2 keyring, pacman executable, or iroha-zip scripts are already compromised. Public releases therefore continue to exclude third-party backend binaries.

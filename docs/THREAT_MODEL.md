@@ -150,4 +150,4 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 - パスワードを保護された匿名パイプで渡す仕組み
 - 親ディレクトリハンドル相対の列挙、staging tree封印、作成書庫の再照合、Windows reparse競合stress test
 - fuzzing、malicious archive corpus、Windows integration tests
-- バックエンドSBOMとライセンス自動収集
+- MSYS2 package key rotation、過去archive availability、生成済みbackend SBOM/license証跡の独立レビュー

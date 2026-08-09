@@ -5,6 +5,7 @@
 #[cfg(windows)]
 mod windows_app {
     use iroha_zip::backend::BackendBundle;
+    use iroha_zip::backend_evidence::BackendEvidence;
     use iroha_zip::config::{
         AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode, default_config_path,
     };
@@ -679,6 +680,18 @@ mod windows_app {
             let Some(source) = choose_folder(parent, title, "")? else {
                 return Ok(());
             };
+            if !from_msys2
+                && !confirm_action(
+                    parent,
+                    "警告: 任意のbundleは未対応の取得元です。配布元の署名や由来を検証できません。\n\nこの警告を理解し、未検証の取得元として取り込みますか？",
+                )
+            {
+                set_control_text(
+                    self.controls.status,
+                    "未検証bundleの取り込みを中止しました。",
+                );
+                return Ok(());
+            }
             let config = self.collect_config()?;
             let destination = config
                 .backend_directory()
@@ -701,28 +714,31 @@ mod windows_app {
             } else {
                 ("install-backend.ps1", "-SourceDirectory")
             };
-            let bundle = self.run_busy(
+            let (bundle, evidence) = self.run_busy(
                 parent,
-                "バックエンドを取り込み、検証しています...",
+                "バックエンドと供給元証跡を取り込み、検証しています...",
                 || {
-                    let output = run_script(
-                        script,
-                        &[
-                            OsString::from(source_argument),
-                            source.into_os_string(),
-                            OsString::from("-DestinationDirectory"),
-                            destination.as_os_str().to_owned(),
-                        ],
-                    )?;
+                    let mut arguments = vec![
+                        OsString::from(source_argument),
+                        source.into_os_string(),
+                        OsString::from("-DestinationDirectory"),
+                        destination.as_os_str().to_owned(),
+                    ];
+                    if !from_msys2 {
+                        arguments.push(OsString::from("-AllowUnsupportedSource"));
+                    }
+                    let output = run_script(script, &arguments)?;
                     if !output.status.success() {
                         return Err(command_failure("バックエンド取り込み", &output));
                     }
                     let bundle =
                         BackendBundle::verify(&destination).map_err(|error| error.to_string())?;
+                    let evidence =
+                        BackendEvidence::verify(&bundle).map_err(|error| error.to_string())?;
                     config
                         .save(&self.config_path)
                         .map_err(|error| error.to_string())?;
-                    Ok(bundle)
+                    Ok((bundle, evidence))
                 },
             )?;
             self.saved_config.replace(config);
@@ -734,9 +750,15 @@ mod windows_app {
             show_message(
                 Some(parent),
                 &format!(
-                    "バックエンドを取り込みました。\n\n保存先: {}\n実行ファイル: {}",
+                    "バックエンドを取り込みました。\n\n保存先: {}\n実行ファイル: {}\n取得元: {}\n証跡: {}",
                     bundle.root().display(),
-                    bundle.executable().display()
+                    bundle.executable().display(),
+                    if evidence.is_supported() {
+                        "MSYS2 UCRT64（署名方針を強制して検証済み）"
+                    } else {
+                        "未対応・未検証（明示承認済み）"
+                    },
+                    evidence.root().display()
                 ),
                 MB_OK | MB_ICONINFORMATION,
             );

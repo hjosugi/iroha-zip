@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 
 pub mod backend;
+pub mod backend_evidence;
 pub mod cli;
 pub mod config;
 pub mod create;

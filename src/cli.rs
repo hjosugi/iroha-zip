@@ -84,6 +84,16 @@ pub enum Command {
     /// Validate configuration and the pinned backend bundle.
     Doctor,
 
+    /// Validate backend provenance, SPDX SBOM, and license evidence.
+    VerifyBackendEvidence {
+        /// Backend directory containing backend-manifest.tsv.
+        backend: PathBuf,
+
+        /// Reject evidence from an explicitly unsupported source.
+        #[arg(long)]
+        require_supported: bool,
+    },
+
     /// Write a default configuration file if one does not exist.
     InitConfig,
 

@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use iroha_zip::backend::BackendBundle;
+use iroha_zip::backend_evidence::BackendEvidence;
 use iroha_zip::cli::{Cli, Command};
 #[cfg(windows)]
 use iroha_zip::config::AttachmentHandoffPolicy;
@@ -68,6 +69,20 @@ fn run() -> Result<()> {
             println!("backend:       {}", backend.root().display());
             println!("executable:    {}", backend.executable().display());
             println!("backend files: verified by SHA-256 manifest");
+            let evidence_root = BackendEvidence::directory_for(backend.root());
+            if evidence_root.exists() {
+                let evidence = BackendEvidence::verify(&backend)?;
+                print_evidence(&evidence);
+                if !evidence.is_supported() {
+                    eprintln!(
+                        "WARNING: backend source is unsupported and was accepted explicitly; provenance is not verified"
+                    );
+                }
+            } else {
+                eprintln!(
+                    "WARNING: backend provenance/SBOM/license evidence is missing; re-import the backend"
+                );
+            }
             #[cfg(windows)]
             {
                 let version = probe_backend_in_sandbox(&backend, &config)?;
@@ -80,6 +95,25 @@ fn run() -> Result<()> {
             }
             #[cfg(not(windows))]
             println!("AppContainer:  unavailable; backend execution was not attempted");
+        }
+        Command::VerifyBackendEvidence {
+            backend,
+            require_supported,
+        } => {
+            let backend = BackendBundle::verify(&backend)?;
+            let evidence = BackendEvidence::verify(&backend)?;
+            if require_supported && !evidence.is_supported() {
+                return Err(iroha_zip::error::IrohaZipError::Backend(
+                    "backend evidence identifies an unsupported source; omit --require-supported only after explicit review"
+                        .to_owned(),
+                ));
+            }
+            print_evidence(&evidence);
+            if !evidence.is_supported() {
+                eprintln!(
+                    "WARNING: backend source is unsupported and was accepted explicitly; provenance is not verified"
+                );
+            }
         }
         Command::Preview {
             archive,
@@ -153,6 +187,17 @@ fn run() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_evidence(evidence: &BackendEvidence) {
+    println!("evidence:      {}", evidence.root().display());
+    println!("source:        {}", evidence.source_kind());
+    println!("verification:  {}", evidence.verification_method());
+    println!(
+        "inventory:     {} packages, {} payload files",
+        evidence.package_count(),
+        evidence.file_count()
+    );
 }
 
 #[cfg(windows)]
