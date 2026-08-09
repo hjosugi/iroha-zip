@@ -203,9 +203,13 @@ Include = /etc/pacman.d/mirrorlist.mingw
         $signature = Invoke-Msys2Scalar `
             'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%g", $packageName)
-        $licenseText = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
-            @($secureConfigUnix, "%L", $packageName)
+        $licenses = @(
+            Invoke-Msys2 `
+                'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sp --print-format "$2" -- "$3"' `
+                @($secureConfigUnix, "%L", $packageName) |
+                ForEach-Object { ([string]$_).Trim() } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
         if ($installedParts[1] -ne $version) {
             throw "Installed package is not the current signed repository version: $packageName installed=$($installedParts[1]) repository=$version. Update MSYS2 first."
         }
@@ -216,13 +220,8 @@ Include = /etc/pacman.d/mirrorlist.mingw
             $signature -notmatch '^[A-Za-z0-9+/=]+$') {
             throw "Incomplete or unsupported signed repository metadata for package: $packageName"
         }
-        if ([string]::IsNullOrWhiteSpace($licenseText)) {
+        if ($licenses.Count -eq 0) {
             $licenses = @("NOASSERTION")
-        }
-        else {
-            # pacman's print format does not provide an unambiguous separator for the
-            # license array. Preserve the complete distributor string losslessly.
-            $licenses = @($licenseText.Trim())
         }
         $packageIdByName[$packageName] = $packageName
         $packageMetadata += [pscustomobject][ordered]@{
