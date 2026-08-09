@@ -136,11 +136,19 @@ impl Config {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let text = fs::read_to_string(path)
+        let input = fs::read(path)
             .map_err(|error| IrohaZipError::io_path("cannot read configuration", path, error))?;
-        let config: Self = toml::from_str(&text).map_err(|error| {
+        Self::parse(&input).map_err(|error| {
             IrohaZipError::Config(format!("cannot parse {}: {error}", path.display()))
+        })
+    }
+
+    pub(crate) fn parse(input: &[u8]) -> Result<Self> {
+        let text = std::str::from_utf8(input).map_err(|error| {
+            IrohaZipError::Config(format!("configuration is not valid UTF-8: {error}"))
         })?;
+        let config: Self = toml::from_str(text)
+            .map_err(|error| IrohaZipError::Config(format!("invalid TOML: {error}")))?;
         config.validate()?;
         Ok(config)
     }
@@ -284,7 +292,7 @@ impl Config {
         Ok(())
     }
 
-    fn serialized(&self) -> Result<String> {
+    pub(crate) fn serialized(&self) -> Result<String> {
         self.validate()?;
         toml::to_string_pretty(self).map_err(|error| {
             IrohaZipError::Config(format!("cannot serialize configuration: {error}"))

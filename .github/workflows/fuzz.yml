@@ -1,0 +1,79 @@
+name: Bounded fuzzing
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bounded-fuzzing
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install pinned Rust toolchains
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup toolchain install nightly-2026-08-01 \
+            --profile minimal \
+            --component rust-src
+
+      - name: Install pinned cargo-fuzz
+        run: cargo +1.97.1 install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Verify deterministic regression corpus
+        run: cargo +1.97.1 test --locked --features fuzzing --test fuzz_regressions
+
+      - name: Fetch the locked fuzz dependency graph
+        run: >-
+          cargo +nightly-2026-08-01 fetch
+          --manifest-path fuzz/Cargo.toml
+          --locked
+
+      - name: Run bounded fuzz targets
+        shell: bash
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          targets=(
+            backend_manifest
+            windows_paths
+            archive_name
+            command_line
+            config_round_trip
+          )
+          for target in "${targets[@]}"; do
+            corpus_directory="$RUNNER_TEMP/iroha-zip-fuzz-corpus/$target"
+            mkdir -p "$corpus_directory"
+            cp "fuzz/corpus/$target/"* "$corpus_directory/"
+            cargo +nightly-2026-08-01 fuzz run "$target" "$corpus_directory" -- \
+              -max_len=65536 \
+              -max_total_time=45 \
+              -print_final_stats=1 \
+              -rss_limit_mb=2048 \
+              -timeout=10 \
+              -verbosity=0
+          done
+
+      - name: Ensure fuzzing did not rewrite locked inputs
+        run: git diff --exit-code -- fuzz/Cargo.lock fuzz/corpus
+
+      - name: Upload failing fuzz artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

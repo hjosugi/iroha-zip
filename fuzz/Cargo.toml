@@ -1,0 +1,55 @@
+[package]
+name = "iroha-zip-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+
+[dependencies.iroha-zip]
+path = ".."
+version = "=0.3.1"
+features = ["fuzzing"]
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "backend_manifest"
+path = "fuzz_targets/backend_manifest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "windows_paths"
+path = "fuzz_targets/windows_paths.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "archive_name"
+path = "fuzz_targets/archive_name.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "command_line"
+path = "fuzz_targets/command_line.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config_round_trip"
+path = "fuzz_targets/config_round_trip.rs"
+test = false
+doc = false
+bench = false

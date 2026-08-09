@@ -31,6 +31,14 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets --locked
 
+      - name: Run minimized fuzz regressions
+        if: runner.os == 'Linux'
+        run: cargo test --locked --features fuzzing --test fuzz_regressions
+
+      - name: Type-check the locked fuzz workspace
+        if: runner.os == 'Linux'
+        run: cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked
+
       - name: Run Clippy
         run: cargo clippy --all-targets --locked
 
@@ -64,6 +72,11 @@ jobs:
 
       - name: Check advisories, licenses, bans, and sources
         run: cargo deny check
+
+      - name: Check fuzz-workspace dependencies
+        run: >-
+          cargo deny --manifest-path fuzz/Cargo.toml --locked check
+          --config fuzz/deny.toml
 
       - name: Verify generated third-party license inventory
         shell: bash

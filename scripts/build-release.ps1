@@ -39,6 +39,9 @@ try {
     & cargo test --all-targets --locked
     if ($LASTEXITCODE -ne 0) { throw "cargo test failed." }
 
+    & cargo test --locked --features fuzzing --test fuzz_regressions
+    if ($LASTEXITCODE -ne 0) { throw "fuzz regression test failed." }
+
     & cargo clippy --all-targets --locked
     if ($LASTEXITCODE -ne 0) { throw "cargo clippy failed." }
 
@@ -99,6 +102,7 @@ try {
         "BACKEND_MANIFEST.md",
         "BUILD_STATUS.md",
         "ENCRYPTED_ARCHIVES.md",
+        "FUZZING.md",
         "ISSUE_BACKLOG.md",
         "LPAC_EVALUATION.md",
         "SETTINGS_ACCESSIBILITY.md",

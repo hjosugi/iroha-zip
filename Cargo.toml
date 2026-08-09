@@ -7,6 +7,9 @@ description = "A fail-closed Windows archive wrapper that isolates bsdtar in App
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+fuzzing = []
+
 [dependencies]
 clap = { version = "4.6.5", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }

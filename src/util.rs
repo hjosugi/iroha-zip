@@ -92,15 +92,24 @@ pub fn archive_base_name(filename: &str) -> String {
                 .get(filename.len() - extension.len()..)
                 .is_some_and(|tail| tail.eq_ignore_ascii_case(extension))
         {
-            return filename[..filename.len() - extension.len()].to_owned();
+            return safe_archive_base(&filename[..filename.len() - extension.len()]);
         }
     }
-    Path::new(filename)
+    let candidate = Path::new(filename)
         .file_stem()
         .and_then(|stem| stem.to_str())
         .filter(|stem| !stem.is_empty())
         .unwrap_or("archive")
-        .to_owned()
+        .to_owned();
+    safe_archive_base(&candidate)
+}
+
+fn safe_archive_base(candidate: &str) -> String {
+    if crate::policy::validate_component(std::ffi::OsStr::new(candidate)).is_ok() {
+        candidate.to_owned()
+    } else {
+        "archive".to_owned()
+    }
 }
 
 pub fn copy_file_new_limited(source: &Path, target: &Path, max_bytes: u64) -> Result<u64> {

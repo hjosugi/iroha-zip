@@ -14,3 +14,11 @@ fn strips_simple_extension_and_keeps_useful_name() {
     assert_eq!(archive_base_name("archive"), "archive");
     assert_eq!(archive_base_name(".zip"), ".zip");
 }
+
+#[test]
+fn unsafe_windows_destination_names_fall_back_safely() {
+    for name in ["CON.zip", "trailing..zip", "bad?.zip"] {
+        assert_eq!(archive_base_name(name), "archive", "unsafe name: {name:?}");
+    }
+    assert_eq!(archive_base_name("nested/name.zip"), "name");
+}

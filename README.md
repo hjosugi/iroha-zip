@@ -164,6 +164,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```text
    cargo fmt --all -- --check
 cargo test --all-targets
+cargo test --features fuzzing --test fuzz_regressions
 cargo clippy --all-targets
 cargo build --release
 ```
@@ -279,7 +280,7 @@ iroha-zip.exe doctor
 - AppContainerやWindowsカーネル、libarchive自体の未知の脆弱性を防げる保証はありません。
 - 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。
 - 同一ユーザー権限をすでに奪取した攻撃者との競合を完全には防げません。
-- Linuxでの全テスト、Clippy、Windows MSVC targetの型検査は実行済みです。実際のWindowsカーネルを使うAppContainer統合試験と実書庫corpus試験の状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
+- Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。再現可能な定期実行と最小化regressionの昇格手順は[`docs/FUZZING.md`](docs/FUZZING.md)、実際のWindowsカーネルを使うAppContainer統合試験と実書庫corpus試験の状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
 
 残作業は、優先度・依存関係・受け入れ条件を付けた[`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md)で追跡します。変更を提案する場合は[`CONTRIBUTING.md`](CONTRIBUTING.md)も確認してください。
 

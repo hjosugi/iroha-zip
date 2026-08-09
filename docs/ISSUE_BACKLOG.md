@@ -96,7 +96,7 @@ Fuzz manifest parsing, Windows path validation, archive-name normalization, comm
 
 Acceptance: reproducible fuzz targets run in CI on a bounded schedule and all minimized regressions become deterministic tests.
 
-Progress (2026-08-09): backend manifest parsing is separated from filesystem I/O and covered by malformed UTF-8, structural, hash, duplicate, Windows-path, size, depth, and record-count regression tests. Dedicated fuzz targets and a bounded scheduled workflow remain open.
+Progress (2026-08-10): backend manifest parsing is separated from filesystem I/O and covered by malformed UTF-8, structural, hash, duplicate, Windows-path, size, depth, and record-count regression tests. Five reproducible `cargo-fuzz` targets now cover the manifest, Windows path validation, archive destination names, Windows command-line quoting, and validated configuration round-trips. A pinned, read-only, weekly workflow bounds each campaign and uploads failures; minimized artifacts are SHA-256-named inputs executed by ordinary CI. The initial local sanitizer campaign completed without a crash. Long-running campaigns and review of future promoted regressions remain ongoing; see [the operating guide](FUZZING.md).
 
 ### [PORT-001: Windows ARM64 package](https://github.com/hjosugi/iroha-zip/issues/15)
 

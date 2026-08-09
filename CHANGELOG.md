@@ -16,6 +16,9 @@
 - Added a `preview` CLI that inventories only a fully extracted, audited, fingerprint-stable temporary tree and publishes nothing.
 - Added repeatable `extract --select PATH` filtering after the complete archive audit, followed by selected-tree and source-tree revalidation before the existing atomic publication boundary.
 - Make verified backend copies owner-readable/executable on Unix so the explicit unsandboxed integration-test path can exercise real process orchestration.
+- Added five pinned `cargo-fuzz` targets, a bounded weekly sanitizer workflow, seed isolation, failure artifacts, and SHA-256-addressed deterministic regression promotion.
+- Refactored Windows command-line quoting into a platform-neutral, property-tested encoder that rejects interior NUL, invalid program names, and the `CreateProcessW` length overflow before launch.
+- Archive-derived destination names now fall back to `archive` when extension removal would produce a Windows-invalid or reserved component.
 
 ## 0.3.1 - 2026-08-09
 

@@ -59,6 +59,7 @@ use crate::error::{IrohaZipError, Result};
 use crate::monitor;
 use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
 use crate::util;
+use crate::windows_command_line;
 
 const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
@@ -432,7 +433,14 @@ fn run_in_appcontainer(
 
     let application = wide_null(spec.program.as_os_str());
     let current_directory = wide_null(spec.current_dir.as_os_str());
-    let mut command_line = make_command_line(&spec.program, &spec.args);
+    let program_units: Vec<u16> = spec.program.as_os_str().encode_wide().collect();
+    let argument_units: Vec<Vec<u16>> = spec
+        .args
+        .iter()
+        .map(|argument| argument.encode_wide().collect())
+        .collect();
+    let mut command_line = windows_command_line::encode(&program_units, &argument_units)
+        .map_err(|error| IrohaZipError::Sandbox(format!("cannot encode command line: {error}")))?;
     let environment = minimal_environment(&spec.program, &spec.current_dir);
     let mut process_info = PROCESS_INFORMATION::default();
 
@@ -1010,49 +1018,6 @@ fn wide_array_to_string(value: &[u16]) -> String {
         .position(|unit| *unit == 0)
         .unwrap_or(value.len());
     String::from_utf16_lossy(&value[..length])
-}
-
-fn make_command_line(program: &Path, args: &[OsString]) -> Vec<u16> {
-    let mut result = Vec::<u16>::new();
-    append_quoted_argument(&mut result, program.as_os_str());
-    for argument in args {
-        result.push(u16::from(b' '));
-        append_quoted_argument(&mut result, argument);
-    }
-    result.push(0);
-    result
-}
-
-fn append_quoted_argument(output: &mut Vec<u16>, argument: &OsStr) {
-    let units: Vec<u16> = argument.encode_wide().collect();
-    let needs_quotes = units.is_empty()
-        || units
-            .iter()
-            .any(|unit| matches!(*unit, 0x20 | 0x09 | 0x0a | 0x0b | 0x0c | 0x0d | 0x22));
-    if !needs_quotes {
-        output.extend(units);
-        return;
-    }
-
-    output.push(u16::from(b'"'));
-    let mut backslashes = 0usize;
-    for unit in units {
-        if unit == u16::from(b'\\') {
-            backslashes += 1;
-            continue;
-        }
-        if unit == u16::from(b'"') {
-            output.extend(std::iter::repeat_n(u16::from(b'\\'), backslashes * 2 + 1));
-            output.push(unit);
-            backslashes = 0;
-            continue;
-        }
-        output.extend(std::iter::repeat_n(u16::from(b'\\'), backslashes));
-        backslashes = 0;
-        output.push(unit);
-    }
-    output.extend(std::iter::repeat_n(u16::from(b'\\'), backslashes * 2));
-    output.push(u16::from(b'"'));
 }
 
 fn minimal_environment(program: &Path, root: &Path) -> Vec<u16> {

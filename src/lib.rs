@@ -16,6 +16,12 @@ pub mod snapshot;
 mod staging;
 pub mod transfer;
 pub mod util;
+#[cfg(any(windows, test, feature = "fuzzing"))]
+mod windows_command_line;
+
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing;
 
 use std::path::{Path, PathBuf};
 

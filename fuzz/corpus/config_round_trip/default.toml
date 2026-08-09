@@ -1,0 +1,21 @@
+[backend]
+
+[sandbox]
+timeout_seconds = 300
+memory_limit_mib = 768
+isolation = "appcontainer"
+
+[limits]
+max_archive_bytes = 4294967296
+max_files = 100000
+max_directories = 20000
+max_total_bytes = 17179869184
+max_single_file_bytes = 4294967296
+max_depth = 64
+max_path_bytes = 4096
+
+[behavior]
+preserve_mark_of_the_web = true
+attachment_handoff = "disabled"
+open_after_double_click = true
+default_filename_encoding = "auto"
