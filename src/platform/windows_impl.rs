@@ -1182,6 +1182,8 @@ fn minimal_environment_pairs(program: &Path, root: &Path) -> Vec<(OsString, OsSt
     let backend_dir = program.parent().unwrap_or(root).as_os_str().to_owned();
     let root_os = root.as_os_str().to_owned();
     vec![
+        (OsString::from("LANG"), OsString::from(".UTF8")),
+        (OsString::from("LC_ALL"), OsString::from(".UTF8")),
         (OsString::from("LOCALAPPDATA"), root_os.clone()),
         (OsString::from("PATH"), backend_dir),
         (OsString::from("SystemRoot"), system_root.clone()),

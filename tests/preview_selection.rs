@@ -147,13 +147,21 @@ fn shared_staging_drives_preview_and_selected_publication_end_to_end() {
         &executable,
         br#"#!/bin/sh
 output=
+list=false
 while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-t" ]; then
+        list=true
+    fi
     if [ "$1" = "-C" ]; then
         shift
         output=$1
     fi
     shift
 done
+if [ "$list" = true ]; then
+    printf 'archive/\narchive/docs/\narchive/docs/readme.txt\narchive/images/\narchive/images/photo.jpg\n'
+    exit 0
+fi
 /bin/mkdir -p "$output/archive/docs" "$output/archive/images"
 printf 'readme' > "$output/archive/docs/readme.txt"
 printf 'image' > "$output/archive/images/photo.jpg"
@@ -208,4 +216,62 @@ printf 'image' > "$output/archive/images/photo.jpg"
         b"readme"
     );
     assert!(!destination.join("images").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn unsafe_raw_member_listing_stops_before_extraction_or_publication() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use iroha_zip::error::IrohaZipError;
+
+    let directory = TestDirectory::new();
+    let backend_root = directory.path().join("backend");
+    fs::create_dir(&backend_root).unwrap();
+    let executable = backend_root.join("fake-bsdtar");
+    fs::write(
+        &executable,
+        br#"#!/bin/sh
+for argument in "$@"; do
+    if [ "$argument" = "-t" ]; then
+        printf '/absolute-would-be-normalized.txt\n'
+        exit 0
+    fi
+done
+exit 42
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o500)).unwrap();
+    let hash = backend::sha256_file(&executable).unwrap();
+    fs::write(
+        backend_root.join("backend-manifest.tsv"),
+        format!(
+            "IROHA-ZIP-BACKEND-MANIFEST\t1\nexecutable\tfake-bsdtar\nsha256\t{hash}\tfake-bsdtar\n"
+        ),
+    )
+    .unwrap();
+    let backend = BackendBundle::verify(&backend_root).unwrap();
+    let archive = directory.path().join("unsafe.zip");
+    fs::write(&archive, b"fake archive bytes").unwrap();
+    let destination = directory.path().join("must-not-exist");
+
+    let result = extract::extract(ExtractRequest {
+        backend: &backend,
+        config: &Config::default(),
+        archive: &archive,
+        output: Some(&destination),
+        encoding: FilenameEncoding::Auto,
+        selections: &[],
+        open: false,
+        allow_unsandboxed: true,
+    });
+    let Err(error) = result else {
+        panic!("unsafe raw member listing was unexpectedly published");
+    };
+    assert!(
+        matches!(&error, IrohaZipError::Policy(message) if message.contains("relative path")),
+        "unexpected preflight result: {error}"
+    );
+    assert!(!destination.exists());
 }

@@ -80,8 +80,8 @@ impl Sandbox {
         })?;
 
         let mut environment = BTreeMap::<OsString, OsString>::new();
-        environment.insert(OsString::from("LC_ALL"), OsString::from("C"));
-        environment.insert(OsString::from("LANG"), OsString::from("C"));
+        environment.insert(OsString::from("LC_ALL"), OsString::from("C.UTF-8"));
+        environment.insert(OsString::from("LANG"), OsString::from("C.UTF-8"));
         environment.insert(OsString::from("HOME"), self.root.as_os_str().to_owned());
         environment.insert(OsString::from("TMPDIR"), self.root.as_os_str().to_owned());
         if let Some(parent) = spec.program.parent() {

@@ -196,6 +196,16 @@ jobs:
           -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
           -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'windows-e2e.json')
 
+      - name: Exercise generated malicious archive corpus
+        shell: pwsh
+        env:
+          IROHA_ZIP_CORPUS_EXECUTABLE: ${{ github.workspace }}/target/release/iroha-zip.exe
+          IROHA_ZIP_CORPUS_BACKEND: ${{ runner.temp }}/iroha-zip-e2e-backend
+          IROHA_ZIP_CORPUS_EVIDENCE: ${{ runner.temp }}/malicious-corpus.json
+        run: >-
+          cargo test --test malicious_archive_corpus --locked --
+          --ignored --nocapture
+
       - name: Exercise settings-screen setup and diagnosis
         shell: pwsh
         run: >-
@@ -212,6 +222,7 @@ jobs:
           path: |
             ${{ runner.temp }}/windows-e2e.json
             ${{ runner.temp }}/settings-e2e.json
+            ${{ runner.temp }}/malicious-corpus.json
           if-no-files-found: warn
           retention-days: 14
 

@@ -31,6 +31,7 @@ pub fn windows_paths(input: &[u8]) {
                 .expect("every component of a validated path must be valid");
         }
     }
+    let _ = policy::validate_archive_listing(input, &limits);
 }
 
 pub fn archive_name(input: &[u8]) {

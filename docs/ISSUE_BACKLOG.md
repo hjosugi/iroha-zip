@@ -1,6 +1,6 @@
 # Issue backlog
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 
 This backlog records the remaining work discovered during the v0.2.0 refactor. Each stable ID links to its GitHub issue. Priority is based on security and release risk; an item being listed here does not mean its unsafe behavior is currently enabled.
 
@@ -19,6 +19,8 @@ Progress (2026-08-10): a fixed-label Windows Server 2022/2025 Actions matrix now
 Build a legally redistributable local corpus for Zip Slip, absolute/drive/UNC paths, symlinks, hardlinks, junctions, reparse points, ADS, device names, trailing-dot aliases, duplicate file identities, deep paths, sparse expansion, and count/size bombs.
 
 Acceptance: every sample has expected policy output, runs on a disposable worker, cannot publish weaponized payloads as ordinary issue attachments, and fails closed before final publication.
+
+Progress (2026-08-10): the source tree now deterministically generates one benign ZIP control plus 18 inert hostile ZIP/ustar/old-GNU sparse inputs without checking binary archives into Git. It covers traversal, absolute/drive/UNC paths, ADS/device/alias/invalid names, duplicates, ZIP/TAR links, depth/count/single/total-size bombs, and a one-byte/2 MiB sparse expansion. A bounded sandboxed `bsdtar -t` preflight rejects raw names and case aliases that libarchive would otherwise normalize or overwrite before post-extraction audit. The fixed Server 2022/2025 jobs also generate native hardlink, ADS, and junction fixtures, require non-publication and cleanup, upload only bounded JSON evidence, and never upload the archives. The workflow is locally parsed/cross-compiled but has no Actions result for this branch; Windows 10/11, broader legacy formats, malformed headers, embedded control names, CPU bombs, cancellation/crash/disk-full, races, and long-term evidence remain open. See [the corpus contract](MALICIOUS_CORPUS.md).
 
 ### [SAFE-003: Signed release chain](https://github.com/hjosugi/iroha-zip/issues/5)
 

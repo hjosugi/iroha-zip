@@ -23,7 +23,7 @@ Each job builds the release executables, exports a current MSYS2 UCRT64 libarchi
   -EvidenceOutput $evidence
 ```
 
-It then runs `test-settings-ui.ps1` with the same verified backend. Both JSON reports are uploaded as `windows-e2e-windows-2022` or `windows-e2e-windows-2025` artifacts for 14 days.
+It then runs the generated malicious archive corpus and `test-settings-ui.ps1` with the same verified backend. The three JSON reports are uploaded as `windows-e2e-windows-2022` or `windows-e2e-windows-2025` artifacts for 14 days. Generated hostile ZIP/TAR files are deleted and are never uploaded; see the [corpus contract](MALICIOUS_CORPUS.md).
 
 The harness invokes verified `bsdtar.exe` directly only to generate BZ2/XZ/Zstandard/compress fixtures from deterministic, harness-owned data on the disposable runner. All reads of those archives and every product create operation still pass through iroha-zip's AppContainer boundary. Direct backend execution is not a supported path for untrusted or user-owned input.
 
@@ -44,6 +44,7 @@ The archive harness fails the job unless all of these checks pass:
 | Additional read filters | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures; iroha-zip previews and extracts them to the same tree hash. |
 | Paths | The source includes Japanese names, an empty directory, deterministic binary data, and a relative path longer than 260 characters. |
 | Failure | A deliberately invalid ZIP exits nonzero, publishes no destination, and takes the cleanup-required backend-failure path. |
+| Malicious corpus | One control extracts, 18 generated hostile archives fail before destination publication, hardlink/ADS/junction fixtures return policy errors, and the temporary root is removed. |
 | Shell | `iroha-zip-shell.exe` uses an isolated `%LOCALAPPDATA%` configuration and produces a hash-identical sibling tree. |
 | Settings | UI Automation reaches all 26 controls, observes dirty-state confirmation, saves the real backend path, runs the settings-screen backend/AppContainer diagnosis, and removes its temporary configuration tree. |
 
@@ -60,7 +61,7 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 - invalid-input publication result and shell extraction result;
 - final harness-root cleanup and any failure message.
 
-`settings-e2e.json` records the settings executable hash, saved configuration hash, control count, save/doctor results, elapsed time, and cleanup result. These artifacts are diagnostic evidence, not release attestations or signatures; SAFE-003 tracks authenticated release provenance.
+`malicious-corpus.json` records generated archive hashes and lengths, expected results, exit/rejection classes, publication booleans, native policy fixtures, and cleanup. `settings-e2e.json` records the settings executable hash, saved configuration hash, control count, save/doctor results, elapsed time, and cleanup result. These artifacts are diagnostic evidence, not release attestations or signatures; SAFE-003 tracks authenticated release provenance.
 
 ## Remaining SAFE-001 work
 

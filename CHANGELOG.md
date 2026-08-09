@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a deterministic, source-generated malicious ZIP/TAR corpus with 18 reject cases, one benign control, native Windows hardlink/ADS/junction fixtures, JSON-only evidence, and mandatory temporary-root cleanup.
+- Added a sandboxed, UTF-8-locale, 64 MiB-bounded `bsdtar -t` preflight that rejects raw absolute/drive/UNC names, unsafe Windows components, depth/path violations, and case-aliasing duplicate members before extraction can normalize or overwrite them.
 - Added fixed-label Windows Server 2022/2025 E2E jobs with machine-readable evidence for verified-backend setup, zero-capability AppContainer tokens, loopback denial, timeout, memory limits, cleanup, archive creation/preview/re-extraction, invalid input, shell invocation, and settings-screen setup.
 - Require explicit AppContainer profile/root cleanup on successful create, extract, preview, shell, and doctor operations and on backend launch, timeout, resource, or nonzero-exit failures; cleanup failures are no longer silently hidden.
 - Extended `doctor` and the dedicated isolation report with measured token flags and capability counts instead of reporting only the requested isolation mode.

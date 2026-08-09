@@ -231,6 +231,82 @@ pub fn validate_relative_path(path: &Path, limits: &Limits) -> Result<()> {
     Ok(())
 }
 
+/// Validates the line-oriented member-name stream emitted by a sandboxed
+/// `bsdtar -t` preflight. The backend performs all archive parsing; this
+/// function only accepts a bounded UTF-8 list of normalized Windows-safe names.
+pub fn validate_archive_listing(input: &[u8], limits: &Limits) -> Result<u64> {
+    let text = std::str::from_utf8(input).map_err(|error| {
+        IrohaZipError::Policy(format!(
+            "archive member listing is not valid UTF-8: {error}"
+        ))
+    })?;
+    let max_entries = limits
+        .max_files
+        .checked_add(limits.max_directories)
+        .ok_or_else(|| IrohaZipError::Config("archive entry limit overflow".to_owned()))?;
+    let mut seen = HashSet::new();
+    let mut entries = 0u64;
+
+    for raw_line in text.split_terminator('\n') {
+        let member = raw_line.strip_suffix('\r').unwrap_or(raw_line);
+        validate_archive_member_name(member, limits)?;
+        entries = checked_add(entries, 1, "archive entry count")?;
+        if entries > max_entries {
+            return Err(IrohaZipError::Policy(format!(
+                "archive member listing exceeds {max_entries} entries"
+            )));
+        }
+
+        let normalized = member
+            .strip_suffix(['/', '\\'])
+            .unwrap_or(member)
+            .replace('\\', "/")
+            .to_lowercase();
+        if !seen.insert(normalized) {
+            return Err(IrohaZipError::Policy(format!(
+                "duplicate or case-aliasing archive member is rejected: {member:?}"
+            )));
+        }
+    }
+
+    Ok(entries)
+}
+
+fn validate_archive_member_name(member: &str, limits: &Limits) -> Result<()> {
+    if member.is_empty()
+        || member.starts_with(['/', '\\'])
+        || member.as_bytes().get(1).is_some_and(|byte| *byte == b':')
+    {
+        return Err(IrohaZipError::Policy(format!(
+            "archive member must be a relative path: {member:?}"
+        )));
+    }
+
+    let member = member.strip_suffix(['/', '\\']).unwrap_or(member);
+    if member.is_empty() {
+        return Err(IrohaZipError::Policy(
+            "archive root entry is rejected".to_owned(),
+        ));
+    }
+    let components = member.split(['/', '\\']).collect::<Vec<_>>();
+    if components.len() > limits.max_depth {
+        return Err(IrohaZipError::Policy(format!(
+            "archive member depth exceeds {}: {member:?}",
+            limits.max_depth
+        )));
+    }
+    if member.len().saturating_add(1) > limits.max_path_bytes {
+        return Err(IrohaZipError::Policy(format!(
+            "archive member exceeds {} UTF-8 bytes: {member:?}",
+            limits.max_path_bytes
+        )));
+    }
+    for component in components {
+        validate_component(OsStr::new(component))?;
+    }
+    Ok(())
+}
+
 pub fn validate_component(name: &OsStr) -> Result<()> {
     let text = name.to_str().ok_or_else(|| {
         IrohaZipError::Policy("non-Unicode filename component is rejected".to_owned())

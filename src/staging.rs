@@ -11,6 +11,9 @@ use crate::policy::AuditSummary;
 use crate::snapshot::AuditedFile;
 use crate::{monitor, policy, util};
 
+const MAX_ARCHIVE_LISTING_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_ARCHIVE_LISTING_STDERR_BYTES: u64 = 1024 * 1024;
+
 pub(crate) struct StagedArchive {
     sandbox: Sandbox,
     payload_root: PathBuf,
@@ -71,6 +74,45 @@ pub(crate) fn stage_archive(
 
         let stdout_log = workspace_root.join("bsdtar.stdout.log");
         let stderr_log = workspace_root.join("bsdtar.stderr.log");
+
+        let mut listing_args: Vec<OsString> =
+            ["-t", "-f"].into_iter().map(OsString::from).collect();
+        listing_args.push(sandbox_archive.as_os_str().to_owned());
+        if let Some(option) = encoding.bsdtar_option() {
+            listing_args.push(OsString::from("--options"));
+            listing_args.push(OsString::from(option));
+        }
+        let listing_baseline = policy::measure_tree(&workspace_root)?;
+        let listing_limits = monitor::limits_with_baseline(
+            &listing_baseline,
+            2,
+            0,
+            MAX_ARCHIVE_LISTING_BYTES + MAX_ARCHIVE_LISTING_STDERR_BYTES,
+            MAX_ARCHIVE_LISTING_BYTES,
+        )?;
+        let listing_result = sandbox.run(ProcessSpec {
+            program: sandbox_backend.clone(),
+            args: listing_args,
+            current_dir: workspace_root.clone(),
+            stdout_log: stdout_log.clone(),
+            stderr_log: stderr_log.clone(),
+            timeout: Duration::from_secs(config.sandbox.timeout_seconds),
+            monitor_root: Some(workspace_root.clone()),
+            limits: listing_limits,
+        })?;
+        if listing_result.exit_code != 0 {
+            let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
+            let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
+            return Err(IrohaZipError::Backend(format!(
+                "bsdtar listing exited with code {}. stderr={stderr:?}, stdout={stdout:?}",
+                listing_result.exit_code
+            )));
+        }
+        let listing = read_listing(&stdout_log)?;
+        policy::validate_archive_listing(&listing, &config.limits)?;
+        remove_process_log(&stdout_log)?;
+        remove_process_log(&stderr_log)?;
+
         let mut args: Vec<OsString> = ["-x", "-f"].into_iter().map(OsString::from).collect();
         args.push(sandbox_archive.as_os_str().to_owned());
         args.push(OsString::from("-C"));
@@ -157,6 +199,32 @@ pub(crate) fn stage_archive(
         }),
         Err(error) => sandbox.fail_after_cleanup(error),
     }
+}
+
+fn read_listing(path: &Path) -> Result<Vec<u8>> {
+    use std::io::Read as _;
+
+    let mut file = fs::File::open(path).map_err(|error| {
+        IrohaZipError::io_path("cannot open archive member listing", path, error)
+    })?;
+    let mut bytes = Vec::new();
+    file.by_ref()
+        .take(MAX_ARCHIVE_LISTING_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| {
+            IrohaZipError::io_path("cannot read archive member listing", path, error)
+        })?;
+    if bytes.len() as u64 > MAX_ARCHIVE_LISTING_BYTES {
+        return Err(IrohaZipError::Policy(format!(
+            "archive member listing exceeds {MAX_ARCHIVE_LISTING_BYTES} bytes"
+        )));
+    }
+    Ok(bytes)
+}
+
+fn remove_process_log(path: &Path) -> Result<()> {
+    fs::remove_file(path)
+        .map_err(|error| IrohaZipError::io_path("cannot remove archive preflight log", path, error))
 }
 
 fn choose_payload_root(output_root: &Path, archive: &Path) -> Result<PathBuf> {

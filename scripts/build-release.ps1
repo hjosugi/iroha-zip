@@ -142,6 +142,7 @@ try {
         "FUZZING.md",
         "ISSUE_BACKLOG.md",
         "LPAC_EVALUATION.md",
+        "MALICIOUS_CORPUS.md",
         "SETTINGS_ACCESSIBILITY.md",
         "THREAT_MODEL.md",
         "WINDOWS_E2E.md"
