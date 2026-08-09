@@ -47,8 +47,8 @@ pub struct ProcessResult {
 mod windows_impl;
 #[cfg(windows)]
 pub use windows_impl::{
-    AttachmentHandoffSession, ConfigSaveGuard, Sandbox, create_snapshot_target, file_identity,
-    file_identity_from_handle, lock_config_save, open_folder, open_snapshot_source,
+    AttachmentHandoffSession, ConfigSaveGuard, DirectorySnapshot, Sandbox, create_snapshot_target,
+    file_identity, file_identity_from_handle, lock_config_save, open_folder, open_snapshot_source,
     probe_staging_security_write_denials, read_mark_of_the_web, validate_directory_security,
     validate_extracted_entry_security, validate_open_snapshot_source,
     validate_post_handoff_entry_security, validate_regular_file_security, verify_mark_of_the_web,
@@ -59,8 +59,8 @@ pub use windows_impl::{
 mod generic;
 #[cfg(not(windows))]
 pub use generic::{
-    AttachmentHandoffSession, ConfigSaveGuard, Sandbox, create_snapshot_target, file_identity,
-    file_identity_from_handle, lock_config_save, open_folder, open_snapshot_source,
+    AttachmentHandoffSession, ConfigSaveGuard, DirectorySnapshot, Sandbox, create_snapshot_target,
+    file_identity, file_identity_from_handle, lock_config_save, open_folder, open_snapshot_source,
     probe_staging_security_write_denials, read_mark_of_the_web, validate_directory_security,
     validate_extracted_entry_security, validate_open_snapshot_source,
     validate_post_handoff_entry_security, validate_regular_file_security, verify_mark_of_the_web,

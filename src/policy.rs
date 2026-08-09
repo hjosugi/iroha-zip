@@ -82,10 +82,13 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
         .map_err(|error| IrohaZipError::io_path("cannot inspect extraction root", root, error))?;
     platform::validate_directory_security(&root)?;
     let mut summary = AuditSummary::default();
-    let mut stack = vec![(root.clone(), 0usize)];
+    let max_entries = limits.max_files.saturating_add(limits.max_directories);
+    let root_snapshot = platform::DirectorySnapshot::open(&root)?;
+    let mut stack = vec![(root_snapshot, 0usize)];
     let mut seen_file_ids = HashSet::new();
 
-    while let Some((directory, depth)) = stack.pop() {
+    while let Some((directory_snapshot, depth)) = stack.pop() {
+        let directory = directory_snapshot.path();
         if depth > limits.max_depth {
             return Err(IrohaZipError::Policy(format!(
                 "directory depth exceeds {} at {}",
@@ -94,15 +97,9 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
             )));
         }
 
-        let entries = fs::read_dir(&directory).map_err(|error| {
-            IrohaZipError::io_path("cannot read extracted directory", &directory, error)
-        })?;
-
-        for entry in entries {
-            let entry = entry.map_err(|error| {
-                IrohaZipError::io_path("cannot read extracted directory entry", &directory, error)
-            })?;
-            let path = entry.path();
+        for name in directory_snapshot.entries(max_entries)? {
+            validate_component(&name)?;
+            let path = directory.join(name);
             let relative = path.strip_prefix(&root).map_err(|_| {
                 IrohaZipError::Policy(format!(
                     "extracted path escaped the staging root: {}",
@@ -134,7 +131,7 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
                         limits.max_directories
                     )));
                 }
-                stack.push((path, depth + 1));
+                stack.push((platform::DirectorySnapshot::open(&path)?, depth + 1));
             } else if metadata.is_file() {
                 summary.files = checked_add(summary.files, 1, "file count")?;
                 if summary.files > limits.max_files {

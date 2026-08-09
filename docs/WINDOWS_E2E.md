@@ -44,6 +44,7 @@ The archive harness fails the job unless all of these checks pass:
 | Create/read | ZIP, 7z, TAR, and TAR.GZ are internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. |
 | Additional read filters | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures; iroha-zip previews and extracts them to the same tree hash. |
 | Paths | The source includes Japanese names, an empty directory, deterministic binary data, and a relative path longer than 260 characters. |
+| Directory handles | Windows unit tests enumerate Unicode names through a bounded directory handle, reject an undersized entry budget, and require the retained handle to block directory rename. The archive matrix then exercises the same enumeration path over nested and long-path trees. |
 | Failure | A deliberately invalid ZIP exits nonzero, publishes no destination, and takes the cleanup-required backend-failure path. |
 | Malicious corpus | One control extracts, 18 generated hostile archives fail before destination publication, hardlink/ADS/junction fixtures return policy errors, and the temporary root is removed. |
 | Shell | `iroha-zip-shell.exe` uses an isolated `%LOCALAPPDATA%` configuration and produces a hash-identical sibling tree. |

@@ -17,6 +17,98 @@ pub struct Sandbox {
     root: PathBuf,
 }
 
+pub struct DirectorySnapshot {
+    path: PathBuf,
+    file: File,
+    identity: Option<FileIdentity>,
+}
+
+impl DirectorySnapshot {
+    pub fn open(path: &Path) -> Result<Self> {
+        validate_directory_security(path)?;
+        let path = fs::canonicalize(path).map_err(|error| {
+            IrohaZipError::io_path("cannot resolve directory snapshot", path, error)
+        })?;
+        validate_directory_security(&path)?;
+        let file = File::open(&path).map_err(|error| {
+            IrohaZipError::io_path("cannot open directory snapshot", &path, error)
+        })?;
+        let metadata = file.metadata().map_err(|error| {
+            IrohaZipError::io_path("cannot inspect directory snapshot handle", &path, error)
+        })?;
+        if !metadata.is_dir() {
+            return Err(IrohaZipError::Policy(format!(
+                "directory snapshot is not a directory: {}",
+                path.display()
+            )));
+        }
+        let identity = file_identity_from_handle(&path, &file)?;
+        let snapshot = Self {
+            path,
+            file,
+            identity,
+        };
+        snapshot.verify_unchanged()?;
+        Ok(snapshot)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn identity(&self) -> Option<&FileIdentity> {
+        self.identity.as_ref()
+    }
+
+    pub fn entries(&self, max_entries: u64) -> Result<Vec<OsString>> {
+        self.verify_unchanged()?;
+        let mut names = Vec::new();
+        for entry in fs::read_dir(&self.path).map_err(|error| {
+            IrohaZipError::io_path("cannot enumerate directory snapshot", &self.path, error)
+        })? {
+            let entry = entry.map_err(|error| {
+                IrohaZipError::io_path("cannot read directory snapshot entry", &self.path, error)
+            })?;
+            if u64::try_from(names.len()).unwrap_or(u64::MAX) >= max_entries {
+                return Err(IrohaZipError::Policy(format!(
+                    "directory contains more than {max_entries} entries: {}",
+                    self.path.display()
+                )));
+            }
+            names.push(entry.file_name());
+        }
+        names.sort();
+        self.verify_unchanged()?;
+        Ok(names)
+    }
+
+    fn verify_unchanged(&self) -> Result<()> {
+        validate_directory_security(&self.path)?;
+        let metadata = self.file.metadata().map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot inspect directory snapshot handle",
+                &self.path,
+                error,
+            )
+        })?;
+        if !metadata.is_dir() {
+            return Err(IrohaZipError::Policy(format!(
+                "directory snapshot changed type: {}",
+                self.path.display()
+            )));
+        }
+        let handle_identity = file_identity_from_handle(&self.path, &self.file)?;
+        let path_identity = file_identity(&self.path)?;
+        if handle_identity != self.identity || path_identity != self.identity {
+            return Err(IrohaZipError::Policy(format!(
+                "directory identity changed during enumeration: {}",
+                self.path.display()
+            )));
+        }
+        Ok(())
+    }
+}
+
 pub struct AttachmentHandoffSession;
 
 static CONFIG_SAVE_LOCK: Mutex<()> = Mutex::new(());
@@ -349,5 +441,31 @@ mod tests {
         fs::create_dir(&source).unwrap();
         assert!(!sandbox.seal_staged_source(&source).unwrap());
         assert!(sandbox.seal_staged_source(sandbox.root()).is_err());
+    }
+
+    #[test]
+    fn directory_snapshot_is_bounded_and_detects_path_replacement() {
+        let parent = std::env::temp_dir().join(format!(
+            "iroha-zip-directory-snapshot-{}",
+            util::unique_token()
+        ));
+        let source = parent.join("source");
+        let moved = parent.join("moved");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("one.txt"), b"one").unwrap();
+        fs::write(source.join("two.txt"), b"two").unwrap();
+
+        let snapshot = DirectorySnapshot::open(&source).unwrap();
+        assert!(snapshot.entries(1).is_err());
+        assert_eq!(
+            snapshot.entries(2).unwrap(),
+            [OsString::from("one.txt"), OsString::from("two.txt")]
+        );
+        fs::rename(&source, &moved).unwrap();
+        fs::create_dir(&source).unwrap();
+        assert!(snapshot.entries(2).is_err());
+
+        drop(snapshot);
+        fs::remove_dir_all(&parent).unwrap();
     }
 }

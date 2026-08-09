@@ -33,11 +33,13 @@ use windows::Win32::Security::{
     TokenCapabilities, TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
 };
 use windows::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, DELETE, FILE_APPEND_DATA, FILE_ATTRIBUTE_REPARSE_POINT,
-    FILE_DELETE_CHILD, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN, FILE_SHARE_READ,
-    FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, FindClose, FindFirstStreamW,
-    FindNextStreamW, FindStreamInfoStandard, GetFileInformationByHandle, WIN32_FIND_STREAM_DATA,
-    WRITE_DAC, WRITE_OWNER,
+    BY_HANDLE_FILE_INFORMATION, CreateFileW, DELETE, FILE_APPEND_DATA, FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_DELETE_CHILD, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN, FILE_ID_BOTH_DIR_INFO,
+    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA,
+    FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo, FindClose, FindFirstStreamW,
+    FindNextStreamW, FindStreamInfoStandard, GetFileInformationByHandle,
+    GetFileInformationByHandleEx, OPEN_EXISTING, WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
 };
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -167,6 +169,220 @@ pub struct Sandbox {
     root: PathBuf,
     memory_limit_bytes: usize,
     mode: Option<Mode>,
+}
+
+pub struct DirectorySnapshot {
+    path: PathBuf,
+    handle: OwnedHandle,
+    identity: FileIdentity,
+}
+
+impl DirectorySnapshot {
+    pub fn open(path: &Path) -> Result<Self> {
+        validate_directory_security(path)?;
+        let path = fs::canonicalize(path).map_err(|error| {
+            IrohaZipError::io_path("cannot resolve directory snapshot", path, error)
+        })?;
+        validate_directory_security(&path)?;
+        let handle = open_directory_handle(&path)?;
+        let info = file_information_from_raw_handle(&path, handle.handle())?;
+        if info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+            || info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY.0 == 0
+        {
+            return Err(IrohaZipError::Policy(format!(
+                "directory snapshot is not a real directory: {}",
+                path.display()
+            )));
+        }
+        let identity = identity_from_file_information(&info);
+        let snapshot = Self {
+            path,
+            handle,
+            identity,
+        };
+        snapshot.verify_unchanged()?;
+        Ok(snapshot)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn identity(&self) -> Option<&FileIdentity> {
+        Some(&self.identity)
+    }
+
+    pub fn entries(&self, max_entries: u64) -> Result<Vec<OsString>> {
+        self.verify_unchanged()?;
+        let mut storage = vec![0_u64; 8192];
+        let buffer_bytes = storage
+            .len()
+            .checked_mul(size_of::<u64>())
+            .ok_or_else(|| IrohaZipError::Policy("directory buffer size overflow".to_owned()))?;
+        let buffer_size = u32::try_from(buffer_bytes).map_err(|_| {
+            IrohaZipError::Policy("directory buffer does not fit the Windows API".to_owned())
+        })?;
+        let mut names = Vec::new();
+        let mut class = FileIdBothDirectoryRestartInfo;
+        loop {
+            match unsafe {
+                GetFileInformationByHandleEx(
+                    self.handle.handle(),
+                    class,
+                    storage.as_mut_ptr().cast::<c_void>(),
+                    buffer_size,
+                )
+            } {
+                Ok(()) => parse_directory_buffer(&self.path, &storage, max_entries, &mut names)?,
+                Err(error) if is_windows_error(&error, ERROR_NO_MORE_FILES.0) => break,
+                Err(error) => {
+                    return Err(windows_error_path(
+                        "GetFileInformationByHandleEx(directory)",
+                        &self.path,
+                        error,
+                    ));
+                }
+            }
+            class = FileIdBothDirectoryInfo;
+        }
+        names.sort();
+        self.verify_unchanged()?;
+        Ok(names)
+    }
+
+    fn verify_unchanged(&self) -> Result<()> {
+        validate_directory_security(&self.path)?;
+        let handle_info = file_information_from_raw_handle(&self.path, self.handle.handle())?;
+        if handle_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+            || handle_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY.0 == 0
+            || identity_from_file_information(&handle_info) != self.identity
+        {
+            return Err(IrohaZipError::Policy(format!(
+                "directory handle changed during enumeration: {}",
+                self.path.display()
+            )));
+        }
+        let comparison = open_directory_handle(&self.path)?;
+        let path_info = file_information_from_raw_handle(&self.path, comparison.handle())?;
+        if identity_from_file_information(&path_info) != self.identity {
+            return Err(IrohaZipError::Policy(format!(
+                "directory identity changed during enumeration: {}",
+                self.path.display()
+            )));
+        }
+        Ok(())
+    }
+}
+
+fn open_directory_handle(path: &Path) -> Result<OwnedHandle> {
+    let wide = wide_null(path.as_os_str());
+    let handle = unsafe {
+        CreateFileW(
+            PCWSTR(wide.as_ptr()),
+            FILE_LIST_DIRECTORY.0,
+            FILE_SHARE_READ,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+        )
+    }
+    .map_err(|error| windows_error_path("CreateFileW(directory snapshot)", path, error))?;
+    Ok(OwnedHandle::new(handle))
+}
+
+fn parse_directory_buffer(
+    path: &Path,
+    storage: &[u64],
+    max_entries: u64,
+    names: &mut Vec<OsString>,
+) -> Result<()> {
+    const NAME_OFFSET: usize = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
+
+    let buffer_bytes = storage
+        .len()
+        .checked_mul(size_of::<u64>())
+        .ok_or_else(|| IrohaZipError::Policy("directory buffer size overflow".to_owned()))?;
+    let mut offset = 0usize;
+    loop {
+        let header_end = offset.checked_add(NAME_OFFSET).ok_or_else(|| {
+            IrohaZipError::Policy(format!(
+                "directory entry offset overflow while enumerating {}",
+                path.display()
+            ))
+        })?;
+        if header_end > buffer_bytes {
+            return Err(invalid_directory_buffer(path));
+        }
+        let structure_end = offset
+            .checked_add(size_of::<FILE_ID_BOTH_DIR_INFO>())
+            .ok_or_else(|| invalid_directory_buffer(path))?;
+        if structure_end > buffer_bytes || header_end % size_of::<u16>() != 0 {
+            return Err(invalid_directory_buffer(path));
+        }
+        let info = unsafe {
+            &*storage
+                .as_ptr()
+                .add(offset / size_of::<u64>())
+                .cast::<FILE_ID_BOTH_DIR_INFO>()
+        };
+        let name_bytes =
+            usize::try_from(info.FileNameLength).map_err(|_| invalid_directory_buffer(path))?;
+        if name_bytes == 0 || name_bytes % size_of::<u16>() != 0 {
+            return Err(invalid_directory_buffer(path));
+        }
+        let name_end = header_end
+            .checked_add(name_bytes)
+            .ok_or_else(|| invalid_directory_buffer(path))?;
+        if name_end > buffer_bytes {
+            return Err(invalid_directory_buffer(path));
+        }
+        let name_units = unsafe {
+            std::slice::from_raw_parts(
+                storage
+                    .as_ptr()
+                    .cast::<u16>()
+                    .add(header_end / size_of::<u16>()),
+                name_bytes / size_of::<u16>(),
+            )
+        };
+        let name = OsString::from_wide(name_units);
+        if name != OsStr::new(".") && name != OsStr::new("..") {
+            if u64::try_from(names.len()).unwrap_or(u64::MAX) >= max_entries {
+                return Err(IrohaZipError::Policy(format!(
+                    "directory contains more than {max_entries} entries: {}",
+                    path.display()
+                )));
+            }
+            names.push(name);
+        }
+
+        let next =
+            usize::try_from(info.NextEntryOffset).map_err(|_| invalid_directory_buffer(path))?;
+        if next == 0 {
+            break;
+        }
+        if next % size_of::<u64>() != 0
+            || next < name_end.saturating_sub(offset)
+            || next < NAME_OFFSET + size_of::<u16>()
+        {
+            return Err(invalid_directory_buffer(path));
+        }
+        offset = offset
+            .checked_add(next)
+            .ok_or_else(|| invalid_directory_buffer(path))?;
+        if offset >= buffer_bytes {
+            return Err(invalid_directory_buffer(path));
+        }
+    }
+    Ok(())
+}
+
+fn invalid_directory_buffer(path: &Path) -> IrohaZipError {
+    IrohaZipError::Policy(format!(
+        "Windows returned a malformed directory enumeration buffer for {}",
+        path.display()
+    ))
 }
 
 enum Mode {
@@ -1083,20 +1299,20 @@ pub fn validate_post_handoff_entry_security(path: &Path, metadata: &Metadata) ->
 
 pub fn file_identity(path: &Path) -> Result<Option<FileIdentity>> {
     let info = file_information(path)?;
-    let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
-    Ok(Some(FileIdentity {
-        volume: u64::from(info.dwVolumeSerialNumber),
-        index,
-    }))
+    Ok(Some(identity_from_file_information(&info)))
 }
 
 pub fn file_identity_from_handle(path: &Path, file: &File) -> Result<Option<FileIdentity>> {
     let info = file_information_from_handle(path, file)?;
+    Ok(Some(identity_from_file_information(&info)))
+}
+
+fn identity_from_file_information(info: &BY_HANDLE_FILE_INFORMATION) -> FileIdentity {
     let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
-    Ok(Some(FileIdentity {
+    FileIdentity {
         volume: u64::from(info.dwVolumeSerialNumber),
         index,
-    }))
+    }
 }
 
 fn reject_reparse(path: &Path, metadata: &Metadata) -> Result<()> {
@@ -1117,8 +1333,15 @@ fn file_information(path: &Path) -> Result<BY_HANDLE_FILE_INFORMATION> {
 }
 
 fn file_information_from_handle(path: &Path, file: &File) -> Result<BY_HANDLE_FILE_INFORMATION> {
+    file_information_from_raw_handle(path, raw_handle(file))
+}
+
+fn file_information_from_raw_handle(
+    path: &Path,
+    handle: HANDLE,
+) -> Result<BY_HANDLE_FILE_INFORMATION> {
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
-    unsafe { GetFileInformationByHandle(raw_handle(file), &raw mut info) }
+    unsafe { GetFileInformationByHandle(handle, &raw mut info) }
         .map_err(|error| windows_error_path("GetFileInformationByHandle", path, error))?;
     Ok(info)
 }
@@ -1424,5 +1647,25 @@ mod tests {
         unexpected.push(":unexpected");
         fs::write(PathBuf::from(unexpected), b"untrusted").unwrap();
         assert!(validate_post_handoff_entry_security(&path, &metadata).is_err());
+    }
+
+    #[test]
+    fn directory_snapshot_enumerates_from_a_bounded_rename_blocking_handle() {
+        let directory = TestDirectory::new();
+        let source = directory.0.join("source");
+        let moved = directory.0.join("moved");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("one.txt"), b"one").unwrap();
+        fs::write(source.join("日本語.txt"), b"two").unwrap();
+
+        let snapshot = DirectorySnapshot::open(&source).unwrap();
+        assert!(snapshot.entries(1).is_err());
+        assert_eq!(
+            snapshot.entries(2).unwrap(),
+            [OsString::from("one.txt"), OsString::from("日本語.txt")]
+        );
+        assert!(fs::rename(&source, &moved).is_err());
+        drop(snapshot);
+        fs::rename(&source, &moved).unwrap();
     }
 }

@@ -141,7 +141,9 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 
 Windowsの作成経路では、backend起動前にstaging source rootの既存DACLへPackage SID専用の継承可能なdeny ACEを追加します。拒否対象はfile data／append／EA／attribute書込、child削除、delete、DACL変更、owner変更です。`SetNamedSecurityInfoW`の自動継承により既存の子へ伝播し、通常ユーザー側のallow ACEは維持するため親プロセスは監査とcleanupを続けられます。MicrosoftのAppContainer dual-principal modelどおり、ユーザー側が許可されていてもPackage SID側の拒否によりchildの実効書込権限を止めます。実行ファイルを同じAppContainerへbyte-identical copyしたprobeがroot／nested内容の読取成功と、overwrite、append、作成、rename、delete、attribute、DACL、owner各write accessの拒否を測定します。API根拠は[Automatic Propagation of Inheritable ACEs](https://learn.microsoft.com/en-us/windows/win32/secauthz/automatic-propagation-of-inheritable-aces)、[`SetEntriesInAclW`](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setentriesinaclw)、[Launch an AppContainer](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)です。明示的unsandboxed経路ではこのWindows DACL封印は適用されず、前後fingerprintによる検出だけです。
 
-ディレクトリ列挙そのものを親ディレクトリハンドル相対で固定する実装、およびWindows実機でのreparse point競合stress testは未完です。DACL封印はbackend自身によるstaging source変更を予防しますが、親の通常ユーザー権限は意図的に残すため、同一ユーザー権限をすでに持つ別プロセスとの全競合を排除したとは扱いません。事後fingerprintと別sandboxでの再展開照合は引き続き必要です。
+Windowsのtree member列挙は、`FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT`かつread共有だけで開いたdirectory handleに対し、`GetFileInformationByHandleEx(FileIdBothDirectoryInfo)`を使用します。固定64 KiB bufferを検査し、設定のfile＋directory上限を超えて名前を蓄積しません。handleと現在pathのvolume serial／file indexを列挙前後で照合し、各directory identityを初回監査と実コピーの間でも比較します。これにより列挙対象directory自身のrename／deleteと同名の空directory差替えを検出します。根拠は[`FILE_ID_BOTH_DIR_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info)、[`GetFileInformationByHandle`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle)、[`CreateFileW`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)です。非Windowsの明示的検証経路はdirectory handleとidentityを保持・照合しますが、member名の取得自体は`read_dir`です。
+
+child file／directoryを開く操作自体はWin32 path APIを使うため、親handleをrootにしたnative relative openではありません。開いたchild handleのidentity、reparse状態、内容と、最終tree fingerprintでfail closedにしますが、Windows実機でのreparse point競合stress testは未完です。DACL封印はbackend自身によるstaging source変更を予防しますが、親の通常ユーザー権限は意図的に残すため、同一ユーザー権限をすでに持つ別プロセスとの全競合を排除したとは扱いません。事後fingerprintと別sandboxでの再展開照合は引き続き必要です。
 
 ### 暗号化書庫
 
@@ -156,6 +158,6 @@ Windowsの作成経路では、backend起動前にstaging source rootの既存DA
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
-- 親ディレクトリハンドル相対の列挙、Windows staging DACL probeの初回実機証跡、Windows reparse競合stress test
+- 親handleをrootにしたnative child open、Windows staging DACL probe／handle列挙の初回実機証跡、Windows reparse競合stress test
 - first passing review of the generated malicious corpus plus its remaining format/control-byte/CPU-bomb/crash/race matrix described in [`MALICIOUS_CORPUS.md`](MALICIOUS_CORPUS.md), and the Windows 10/11, LPAC, read-format, denial, crash, and race matrix in [`WINDOWS_E2E.md`](WINDOWS_E2E.md)
 - MSYS2 package key rotation、過去archive availability、生成済みbackend SBOM/license証跡の独立レビュー

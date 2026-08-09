@@ -20,6 +20,7 @@ pub struct TreeFingerprint {
 struct TreeAudit {
     fingerprint: TreeFingerprint,
     files: BTreeMap<PathBuf, FileFingerprint>,
+    directories: BTreeMap<PathBuf, Option<platform::FileIdentity>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -194,7 +195,13 @@ where
         IrohaZipError::io_path("cannot create staged output directory", target_root, error)
     })?;
 
-    let copy_result = copy_tree(source_root, target_root, limits, &expected.files);
+    let copy_result = copy_tree(
+        source_root,
+        target_root,
+        limits,
+        &expected.files,
+        &expected.directories,
+    );
     if let Err(error) = copy_result {
         let _ = fs::remove_dir_all(target_root);
         return Err(error);
@@ -238,27 +245,23 @@ fn build_tree_audit_with(
         .map_err(|error| IrohaZipError::io_path("cannot resolve audited tree", root, error))?;
     platform::validate_directory_security(&root)?;
 
+    let max_entries = tree_entry_limit(limits);
+    let root_snapshot = platform::DirectorySnapshot::open(&root)?;
+    let mut directories = BTreeMap::new();
+    directories.insert(PathBuf::new(), root_snapshot.identity().cloned());
     let mut relative_paths = BTreeSet::new();
-    let mut stack = vec![root.clone()];
-    while let Some(directory) = stack.pop() {
-        platform::validate_directory_security(&directory)?;
-        let directory = fs::canonicalize(&directory).map_err(|error| {
-            IrohaZipError::io_path("cannot resolve audited tree directory", &directory, error)
-        })?;
+    let mut stack = vec![root_snapshot];
+    while let Some(directory_snapshot) = stack.pop() {
+        let directory = directory_snapshot.path();
         if !directory.starts_with(&root) {
             return Err(IrohaZipError::Policy(format!(
                 "audited directory escaped its root: {}",
                 directory.display()
             )));
         }
-        platform::validate_directory_security(&directory)?;
-        for entry in fs::read_dir(&directory).map_err(|error| {
-            IrohaZipError::io_path("cannot read audited tree", &directory, error)
-        })? {
-            let entry = entry.map_err(|error| {
-                IrohaZipError::io_path("cannot read audited tree entry", &directory, error)
-            })?;
-            let path = entry.path();
+        for name in directory_snapshot.entries(max_entries)? {
+            policy::validate_component(&name)?;
+            let path = directory.join(name);
             let relative = path.strip_prefix(&root).map_err(|_| {
                 IrohaZipError::Policy(format!("audited path escaped its root: {}", path.display()))
             })?;
@@ -281,7 +284,9 @@ fn build_tree_audit_with(
             }
             validate_entry(&path, &metadata)?;
             if metadata.is_dir() {
-                stack.push(path);
+                let child = platform::DirectorySnapshot::open(&path)?;
+                directories.insert(relative.to_path_buf(), child.identity().cloned());
+                stack.push(child);
             } else if !metadata.is_file() {
                 return Err(IrohaZipError::Policy(format!(
                     "special files are not allowed: {}",
@@ -308,6 +313,19 @@ fn build_tree_audit_with(
         })?;
         validate_entry(&path, &metadata)?;
         if metadata.is_dir() {
+            let expected_identity = directories.get(&relative).ok_or_else(|| {
+                IrohaZipError::Policy(format!(
+                    "directory appeared after tree enumeration: {}",
+                    relative.display()
+                ))
+            })?;
+            let observed = platform::DirectorySnapshot::open(&path)?;
+            if observed.identity() != expected_identity.as_ref() {
+                return Err(IrohaZipError::Policy(format!(
+                    "directory identity changed while fingerprinting: {}",
+                    relative.display()
+                )));
+            }
             summary.directories = checked_increment(summary.directories, "directory count")?;
             if summary.directories > limits.max_directories {
                 return Err(IrohaZipError::Policy(format!(
@@ -359,6 +377,7 @@ fn build_tree_audit_with(
             sha256: hasher.finalize().into(),
         },
         files,
+        directories,
     })
 }
 
@@ -457,6 +476,7 @@ fn copy_tree(
     target_root: &Path,
     limits: &Limits,
     expected_files: &BTreeMap<PathBuf, FileFingerprint>,
+    expected_directories: &BTreeMap<PathBuf, Option<platform::FileIdentity>>,
 ) -> Result<()> {
     platform::validate_directory_security(source_root)?;
     platform::validate_directory_security(target_root)?;
@@ -466,18 +486,15 @@ fn copy_tree(
     let target_root = fs::canonicalize(target_root).map_err(|error| {
         IrohaZipError::io_path("cannot resolve copy target root", target_root, error)
     })?;
-    let mut stack = vec![(source_root.clone(), target_root.clone())];
+    let root_snapshot = platform::DirectorySnapshot::open(&source_root)?;
+    require_expected_directory(&root_snapshot, Path::new(""), expected_directories)?;
+    let max_entries = tree_entry_limit(limits);
+    let mut stack = vec![(root_snapshot, target_root.clone(), PathBuf::new())];
     let mut copied_files = BTreeSet::new();
-    while let Some((source_dir, target_dir)) = stack.pop() {
-        platform::validate_directory_security(&source_dir)?;
+    let mut copied_directories = BTreeSet::from([PathBuf::new()]);
+    while let Some((source_snapshot, target_dir, relative_dir)) = stack.pop() {
+        let source_dir = source_snapshot.path();
         platform::validate_directory_security(&target_dir)?;
-        let source_dir = fs::canonicalize(&source_dir).map_err(|error| {
-            IrohaZipError::io_path(
-                "cannot resolve audited source directory",
-                &source_dir,
-                error,
-            )
-        })?;
         let target_dir = fs::canonicalize(&target_dir).map_err(|error| {
             IrohaZipError::io_path("cannot resolve staged target directory", &target_dir, error)
         })?;
@@ -486,17 +503,13 @@ fn copy_tree(
                 "source or target directory escaped its audited root".to_owned(),
             ));
         }
-        platform::validate_directory_security(&source_dir)?;
         platform::validate_directory_security(&target_dir)?;
-        for entry in fs::read_dir(&source_dir).map_err(|error| {
-            IrohaZipError::io_path("cannot read audited source tree", &source_dir, error)
-        })? {
-            let entry = entry.map_err(|error| {
-                IrohaZipError::io_path("cannot read audited source entry", &source_dir, error)
-            })?;
-            policy::validate_component(&entry.file_name())?;
-            let source = entry.path();
-            let target = target_dir.join(entry.file_name());
+        for name in source_snapshot.entries(max_entries)? {
+            policy::validate_component(&name)?;
+            let source = source_dir.join(&name);
+            let target = target_dir.join(&name);
+            let relative = relative_dir.join(&name);
+            policy::validate_relative_path(&relative, limits)?;
             let metadata = fs::symlink_metadata(&source).map_err(|error| {
                 IrohaZipError::io_path("cannot inspect audited source", &source, error)
             })?;
@@ -509,10 +522,13 @@ fn copy_tree(
             platform::validate_extracted_entry_security(&source, &metadata)?;
 
             if metadata.is_dir() {
+                let child = platform::DirectorySnapshot::open(&source)?;
+                require_expected_directory(&child, &relative, expected_directories)?;
                 fs::create_dir(&target).map_err(|error| {
                     IrohaZipError::io_path("cannot create staged directory", &target, error)
                 })?;
-                stack.push((source, target));
+                copied_directories.insert(relative.clone());
+                stack.push((child, target, relative));
             } else if metadata.is_file() {
                 let mut snapshot = AuditedFile::open(&source, limits.max_single_file_bytes)?;
                 if !snapshot.path().starts_with(&source_root) {
@@ -521,13 +537,7 @@ fn copy_tree(
                         source.display()
                     )));
                 }
-                let relative = source.strip_prefix(&source_root).map_err(|_| {
-                    IrohaZipError::Policy(format!(
-                        "copy source escaped its audited root: {}",
-                        source.display()
-                    ))
-                })?;
-                let expected = expected_files.get(relative).ok_or_else(|| {
+                let expected = expected_files.get(&relative).ok_or_else(|| {
                     IrohaZipError::Policy(format!(
                         "file appeared after source audit: {}",
                         relative.display()
@@ -540,7 +550,7 @@ fn copy_tree(
                     )));
                 }
                 snapshot.copy_to_new(&target)?;
-                copied_files.insert(relative.to_path_buf());
+                copied_files.insert(relative);
                 let copied_metadata = fs::symlink_metadata(&target).map_err(|error| {
                     IrohaZipError::io_path("cannot inspect staged file", &target, error)
                 })?;
@@ -558,7 +568,40 @@ fn copy_tree(
             "one or more files disappeared after source audit".to_owned(),
         ));
     }
+    if copied_directories.len() != expected_directories.len()
+        || copied_directories
+            .iter()
+            .any(|relative| !expected_directories.contains_key(relative))
+    {
+        return Err(IrohaZipError::Policy(
+            "one or more directories disappeared after source audit".to_owned(),
+        ));
+    }
     Ok(())
+}
+
+fn require_expected_directory(
+    snapshot: &platform::DirectorySnapshot,
+    relative: &Path,
+    expected_directories: &BTreeMap<PathBuf, Option<platform::FileIdentity>>,
+) -> Result<()> {
+    let expected = expected_directories.get(relative).ok_or_else(|| {
+        IrohaZipError::Policy(format!(
+            "directory appeared after source audit: {}",
+            relative.display()
+        ))
+    })?;
+    if snapshot.identity() != expected.as_ref() {
+        return Err(IrohaZipError::Policy(format!(
+            "directory identity changed after source audit: {}",
+            relative.display()
+        )));
+    }
+    Ok(())
+}
+
+fn tree_entry_limit(limits: &Limits) -> u64 {
+    limits.max_files.saturating_add(limits.max_directories)
 }
 
 fn apply_motw_tree(root: &Path, zone: &[u8]) -> Result<()> {
@@ -660,6 +703,34 @@ mod tests {
         });
 
         assert!(result.is_err());
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn audited_tree_copy_rejects_empty_directory_identity_replacement() {
+        let directory = TestDirectory::new();
+        let source = directory.0.join("source");
+        let target = directory.0.join("target");
+        let empty = source.join("empty");
+        let moved = source.join("moved");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(&empty).unwrap();
+
+        let result = copy_audited_tree_inner(&source, &target, &Limits::default(), || {
+            fs::rename(&empty, &moved)
+                .and_then(|()| fs::create_dir(&empty))
+                .and_then(|()| fs::remove_dir(&moved))
+                .map_err(|error| {
+                    IrohaZipError::io_path("cannot replace race-test directory", &empty, error)
+                })
+        });
+
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("directory identity changed")
+        );
         assert!(!target.exists());
     }
 
