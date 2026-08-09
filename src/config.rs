@@ -208,28 +208,7 @@ impl Config {
         }
         drop(file);
 
-        let had_previous = path.exists();
-        if had_previous {
-            fs::rename(path, &backup).map_err(|error| {
-                let _ = fs::remove_file(&temporary);
-                IrohaZipError::io_path("cannot back up configuration", path, error)
-            })?;
-        }
-        if let Err(error) = fs::rename(&temporary, path) {
-            if had_previous {
-                let _ = fs::rename(&backup, path);
-            }
-            let _ = fs::remove_file(&temporary);
-            return Err(IrohaZipError::io_path(
-                "cannot replace configuration",
-                path,
-                error,
-            ));
-        }
-        if had_previous {
-            let _ = fs::remove_file(backup);
-        }
-        Ok(())
+        replace_configuration(path, &temporary, &backup, |from, to| fs::rename(from, to))
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -330,6 +309,45 @@ fn configuration_parent(path: &Path) -> &Path {
         .unwrap_or_else(|| Path::new("."))
 }
 
+fn replace_configuration(
+    path: &Path,
+    temporary: &Path,
+    backup: &Path,
+    mut rename: impl FnMut(&Path, &Path) -> std::io::Result<()>,
+) -> Result<()> {
+    let had_previous = path.exists();
+    if had_previous && let Err(error) = rename(path, backup) {
+        let _ = fs::remove_file(temporary);
+        return Err(IrohaZipError::io_path(
+            "cannot back up configuration",
+            path,
+            error,
+        ));
+    }
+
+    if let Err(replace_error) = rename(temporary, path) {
+        if had_previous && let Err(restore_error) = rename(backup, path) {
+            let _ = fs::remove_file(temporary);
+            return Err(IrohaZipError::Config(format!(
+                "cannot replace {}; previous configuration could not be restored from {} and the recovery backup was preserved: replace failed: {replace_error}; restore failed: {restore_error}",
+                path.display(),
+                backup.display()
+            )));
+        }
+        let _ = fs::remove_file(temporary);
+        return Err(IrohaZipError::io_path(
+            "cannot replace configuration",
+            path,
+            replace_error,
+        ));
+    }
+
+    if had_previous {
+        let _ = fs::remove_file(backup);
+    }
+    Ok(())
+}
+
 pub fn default_config_path() -> Result<PathBuf> {
     if cfg!(windows) {
         let base = env::var_os("LOCALAPPDATA")
@@ -346,4 +364,85 @@ pub fn default_config_path() -> Result<PathBuf> {
         .join(".config")
         .join("iroha-zip")
         .join("config.toml"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "iroha-zip-config-rollback-{}",
+                util::unique_token()
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn replacement_failure_restores_the_previous_configuration() {
+        let directory = TestDirectory::new();
+        let path = directory.0.join("config.toml");
+        let temporary = directory.0.join("staged.tmp");
+        let backup = directory.0.join("recovery.bak");
+        fs::write(&path, b"previous").unwrap();
+        fs::write(&temporary, b"replacement").unwrap();
+        let mut calls = 0;
+
+        let error = replace_configuration(&path, &temporary, &backup, |from, to| {
+            calls += 1;
+            if calls == 2 {
+                Err(std::io::Error::other("injected replacement failure"))
+            } else {
+                fs::rename(from, to)
+            }
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("cannot replace configuration"));
+        assert_eq!(fs::read(&path).unwrap(), b"previous");
+        assert!(!temporary.exists());
+        assert!(!backup.exists());
+    }
+
+    #[test]
+    fn restoration_failure_preserves_a_named_recovery_backup() {
+        let directory = TestDirectory::new();
+        let path = directory.0.join("config.toml");
+        let temporary = directory.0.join("staged.tmp");
+        let backup = directory.0.join("recovery.bak");
+        fs::write(&path, b"previous").unwrap();
+        fs::write(&temporary, b"replacement").unwrap();
+        let mut calls = 0;
+
+        let error = replace_configuration(&path, &temporary, &backup, |from, to| {
+            calls += 1;
+            if calls >= 2 {
+                Err(std::io::Error::other(format!(
+                    "injected rename failure {calls}"
+                )))
+            } else {
+                fs::rename(from, to)
+            }
+        })
+        .unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("could not be restored"));
+        assert!(message.contains(&backup.display().to_string()));
+        assert!(message.contains("recovery backup was preserved"));
+        assert_eq!(fs::read(&backup).unwrap(), b"previous");
+        assert!(!temporary.exists());
+        assert!(!path.exists());
+    }
 }

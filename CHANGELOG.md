@@ -7,6 +7,7 @@
 - Enumerate Windows tree members through bounded directory handles, compare directory identities before/after enumeration and between audit/copy, and reject same-name empty-directory replacement.
 - Serialize initial configuration creation under the same save lock and exercise simultaneous non-ASCII-path saves from independent Windows processes.
 - Verify that the Windows configuration-save mutex fails closed on timeout and recovers after an owning thread exits without releasing it.
+- Restore the previous configuration after a replacement failure and preserve/report its named recovery backup if restoration itself fails.
 - Split formal Windows releases into validated build, Azure OIDC Authenticode signing, fail-closed publisher/EKU/timestamp verification, and packaging phases; attach signature evidence and offline-verifiable SLSA provenance only through an immutable-release gate.
 
 - Added a deterministic, source-generated malicious ZIP/TAR corpus with 18 reject cases, one benign control, native Windows hardlink/ADS/junction fixtures, JSON-only evidence, and mandatory temporary-root cleanup.

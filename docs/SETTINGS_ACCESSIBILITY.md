@@ -72,6 +72,13 @@ require a bounded wait to fail closed, verify a normal acquisition after release
 `WAIT_ABANDONED` after an owning thread exits without release. These Windows-only tests still need
 their first passing CI evidence.
 
+The replacement transaction writes and flushes a unique temporary file, renames the prior file to
+a unique backup, and only then moves the new file into place. A deterministic injected-failure test
+requires a failed final rename to restore the byte-identical prior file and remove both staging
+artifacts. A second test forces both replacement and restoration to fail; the returned error then
+includes the exact recovery-backup path, and that backup must retain the prior bytes instead of
+being silently deleted.
+
 ## Real-Windows evidence still required
 
 UX-001 stays open until disposable Windows 10 and 11 systems record:

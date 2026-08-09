@@ -25,6 +25,7 @@ Updated: 2026-08-10
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Serialized initial configuration creation plus a Windows-only independent-process, non-ASCII-path save regression
 - Windows named-mutex timeout, post-release recovery, and abandoned-owner recovery unit tests
+- Deterministic configuration replacement/restore failure injection with preserved recovery evidence
 - Normal-AppContainer/LPAC configuration round trips and Windows LPAC process/token API type-check
 - Machine-readable AppContainer token/capability, loopback-denial, timeout, memory-limit, staging-source read/write ACL, and explicit four-profile/root-cleanup probe type-check
 - Fixed-label Windows Server 2022/2025 archive, shell, settings-setup, and isolation E2E workflow parsing
@@ -36,7 +37,7 @@ Updated: 2026-08-10
 - Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
 - Split build/sign/package release boundary, strict three-EXE Authenticode publisher/EKU/timestamp verification, deterministic signature evidence, pinned SLSA provenance generation, and fail-closed immutable-release workflow parsing
 
-The current Linux suite contains 89 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate (90 with all features). Windows CI additionally runs source-file and directory-handle sharing tests that verify open snapshots block writes and renames, plus two independent processes saving one configuration path.
+The current Linux suite contains 91 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate (92 with all features). Windows CI additionally runs source-file and directory-handle sharing tests that verify open snapshots block writes and renames, plus two independent processes saving one configuration path.
 
 ## Performed by GitHub Actions
 
