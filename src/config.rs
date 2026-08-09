@@ -154,6 +154,7 @@ impl Config {
     }
 
     pub fn write_default(path: &Path) -> Result<bool> {
+        let _save_guard = crate::platform::lock_config_save()?;
         if path.exists() {
             return Ok(false);
         }

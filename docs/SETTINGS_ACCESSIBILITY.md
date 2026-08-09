@@ -59,11 +59,16 @@ be exercised only on a disposable Windows worker.
 Configuration replacement remains validate-before-write and rollback-safe. Saves now acquire a
 process-wide guard on non-Windows systems and a named `Local\iroha-zip.ConfigSave.v1` mutex on
 Windows, with a 30-second fail-closed timeout. This serializes settings, CLI, and import saves in
-the same Windows session before any temporary or backup file is created.
+the same Windows session before any temporary or backup file is created. Initial default-file
+creation now acquires the same lock before checking for or creating the file, so simultaneous first
+runs report exactly one creator rather than exposing a check-then-create race.
 
-A deterministic two-thread regression test starts both saves together and verifies that the final
-file is exactly one complete configuration and that no staging artifact remains. A two-process
-Windows test, abandoned-owner test, and timeout test remain open.
+Deterministic thread tests start simultaneous default creation and replacement saves, then verify
+that the final file is one complete valid configuration and no staging artifact remains. A
+Windows-only integration test starts two independent copies of the test executable, releases both
+through one file barrier against the same non-ASCII configuration path, and requires one complete
+configuration plus zero temporary/backup artifacts. Abandoned-owner and timeout tests remain open;
+the independent-process test still needs its first passing Windows CI evidence.
 
 ## Real-Windows evidence still required
 
@@ -74,8 +79,9 @@ UX-001 stays open until disposable Windows 10 and 11 systems record:
 3. Narrator and at least one independent screen reader;
 4. Japanese and English Windows with long and non-ASCII paths;
 5. every external-state action, confirmation, progress indication, failure, and rollback;
-6. concurrent saves from two independent processes;
-7. a passing Windows CI execution of both native UI Automation phases for the current branch.
+6. mutex abandoned-owner and timeout behavior;
+7. a passing Windows CI execution of the independent-process save test and both native UI
+   Automation phases for the current branch.
 
 Primary implementation references:
 

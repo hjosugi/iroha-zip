@@ -1,5 +1,9 @@
 use std::fs;
+#[cfg(windows)]
+use std::process::{Child, Command, ExitStatus};
 use std::sync::{Arc, Barrier};
+#[cfg(windows)]
+use std::time::{Duration, Instant};
 
 use iroha_zip::config::{AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode};
 use iroha_zip::util;
@@ -234,4 +238,176 @@ fn concurrent_saves_leave_one_complete_configuration_and_no_staging_files() {
             .all(|entry| entry.unwrap().file_name() == "config.toml")
     );
     fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn concurrent_default_creation_reports_exactly_one_creator() {
+    let directory =
+        std::env::temp_dir().join(format!("iroha-zip-default-config-{}", util::unique_token()));
+    let path = directory.join("config.toml");
+    let barrier = Arc::new(Barrier::new(9));
+    let handles: Vec<_> = (0..8)
+        .map(|_| {
+            let path = path.clone();
+            let barrier = Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                barrier.wait();
+                Config::write_default(&path)
+            })
+        })
+        .collect();
+    barrier.wait();
+
+    let outcomes: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap().unwrap())
+        .collect();
+    assert_eq!(outcomes.iter().filter(|created| **created).count(), 1);
+    assert_eq!(Config::load(&path).unwrap(), Config::default());
+    assert!(
+        fs::read_dir(&directory)
+            .unwrap()
+            .all(|entry| entry.unwrap().file_name() == "config.toml")
+    );
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn independent_process_saves_leave_one_complete_configuration() {
+    let directory = std::env::temp_dir().join(format!(
+        "iroha-zip-process-config-日本語-{}",
+        util::unique_token()
+    ));
+    fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("設定.toml");
+    let start = directory.join("start");
+    let ready = [directory.join("ready-101"), directory.join("ready-202")];
+    let mut children = [
+        spawn_config_save_helper(&path, &start, &ready[0], 101),
+        spawn_config_save_helper(&path, &start, &ready[1], 202),
+    ];
+
+    wait_for_paths(&ready, &mut children);
+    fs::write(&start, b"start").unwrap();
+    let statuses = children
+        .iter_mut()
+        .map(|child| wait_for_child(child, Duration::from_secs(30)))
+        .collect::<Vec<_>>();
+    assert!(
+        statuses.iter().all(ExitStatus::success),
+        "one or more config save helpers failed: {statuses:?}"
+    );
+
+    let saved = Config::load(&path).unwrap();
+    assert!([101, 202].contains(&saved.sandbox.timeout_seconds));
+    for coordination_file in ready.into_iter().chain([start]) {
+        fs::remove_file(coordination_file).unwrap();
+    }
+    assert!(
+        fs::read_dir(&directory)
+            .unwrap()
+            .all(|entry| entry.unwrap().file_name() == "設定.toml")
+    );
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn config_save_subprocess_helper() {
+    let Some(path) = std::env::var_os("IROHA_ZIP_TEST_CONFIG_PATH") else {
+        return;
+    };
+    let start = std::path::PathBuf::from(
+        std::env::var_os("IROHA_ZIP_TEST_CONFIG_START").expect("missing helper start path"),
+    );
+    let ready = std::path::PathBuf::from(
+        std::env::var_os("IROHA_ZIP_TEST_CONFIG_READY").expect("missing helper ready path"),
+    );
+    let timeout_seconds = std::env::var("IROHA_ZIP_TEST_CONFIG_TIMEOUT")
+        .expect("missing helper timeout")
+        .parse()
+        .expect("invalid helper timeout");
+
+    fs::write(&ready, b"ready").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while !start.is_file() {
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for parent start signal"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let mut config = Config::default();
+    config.sandbox.timeout_seconds = timeout_seconds;
+    config.save(std::path::Path::new(&path)).unwrap();
+}
+
+#[cfg(windows)]
+fn spawn_config_save_helper(
+    path: &std::path::Path,
+    start: &std::path::Path,
+    ready: &std::path::Path,
+    timeout_seconds: u64,
+) -> Child {
+    Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("config_save_subprocess_helper")
+        .arg("--nocapture")
+        .env("IROHA_ZIP_TEST_CONFIG_PATH", path)
+        .env("IROHA_ZIP_TEST_CONFIG_START", start)
+        .env("IROHA_ZIP_TEST_CONFIG_READY", ready)
+        .env("IROHA_ZIP_TEST_CONFIG_TIMEOUT", timeout_seconds.to_string())
+        .spawn()
+        .unwrap()
+}
+
+#[cfg(windows)]
+fn wait_for_paths(paths: &[std::path::PathBuf], children: &mut [Child]) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while paths.iter().any(|path| !path.is_file()) {
+        let mut early_exit = None;
+        for child in &mut *children {
+            if let Some(status) = child.try_wait().unwrap() {
+                early_exit = Some(status);
+                break;
+            }
+        }
+        if let Some(status) = early_exit {
+            terminate_children(children);
+            panic!("config save helper exited before the start signal: {status}");
+        }
+        if Instant::now() >= deadline {
+            terminate_children(children);
+            panic!("timed out waiting for config save helpers");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[cfg(windows)]
+fn wait_for_child(child: &mut Child, timeout: Duration) -> ExitStatus {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            return status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("timed out waiting for config save helper");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[cfg(windows)]
+fn terminate_children(children: &mut [Child]) {
+    for child in children {
+        if child.try_wait().ok().flatten().is_none() {
+            let _ = child.kill();
+        }
+        let _ = child.wait();
+    }
 }
