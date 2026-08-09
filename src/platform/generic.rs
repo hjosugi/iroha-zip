@@ -136,6 +136,20 @@ impl Sandbox {
         }
     }
 
+    pub fn seal_staged_source(&self, path: &Path) -> Result<bool> {
+        let resolved = fs::canonicalize(path).map_err(|error| {
+            IrohaZipError::io_path("cannot resolve staged source before sealing", path, error)
+        })?;
+        validate_directory_security(&resolved)?;
+        if resolved == self.root || !resolved.starts_with(&self.root) {
+            return Err(IrohaZipError::Sandbox(format!(
+                "refusing to change staging permissions outside a sandbox child: {}",
+                resolved.display()
+            )));
+        }
+        Ok(false)
+    }
+
     pub fn cleanup(self) -> Result<()> {
         match fs::remove_dir_all(&self.root) {
             Ok(()) => Ok(()),
@@ -175,6 +189,10 @@ pub fn validate_directory_security(path: &Path) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+pub fn probe_staging_security_write_denials(_path: &Path) -> Result<(bool, bool)> {
+    Ok((false, false))
 }
 
 pub fn validate_regular_file_security(path: &Path) -> Result<()> {
@@ -322,5 +340,14 @@ mod tests {
         let result: Result<()> = sandbox.fail_after_cleanup(IrohaZipError::Usage("probe".into()));
         assert!(matches!(result, Err(IrohaZipError::Usage(message)) if message == "probe"));
         assert!(!root.exists());
+    }
+
+    #[test]
+    fn unsandboxed_staging_seal_is_explicitly_detection_only_and_scoped() {
+        let sandbox = Sandbox::new(64, true, IsolationMode::AppContainer).unwrap();
+        let source = sandbox.root().join("source");
+        fs::create_dir(&source).unwrap();
+        assert!(!sandbox.seal_staged_source(&source).unwrap());
+        assert!(sandbox.seal_staged_source(sandbox.root()).is_err());
     }
 }

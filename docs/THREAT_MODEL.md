@@ -139,7 +139,9 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 
 作成backend終了後もstaging source fingerprintを維持していることを確認し、生成書庫はhandleから別sandboxへ渡します。作成時に先頭`./`を除去し、作成物だけに残る単一の`./` root marker以外は通常のraw member policyを緩めません。再展開した完全rootがsourceと一致し、さらに書庫identity・時刻・長さ・SHA-256が検証時と一致するhandleからだけ最終出力へcopyします。内容不一致、同一サイズ改変、identity置換、危険なlistingはいずれも出力前にfail closedになります。
 
-ディレクトリ列挙そのものを親ディレクトリハンドル相対で固定する実装、ACL／handleによるstaging treeの書込禁止、およびWindows実機でのreparse point競合stress testは未完です。事後fingerprintは変更を検出しますが、同一ユーザー権限をすでに持つ能動的攻撃者との全競合を排除したとは扱いません。
+Windowsの作成経路では、backend起動前にstaging source rootの既存DACLへPackage SID専用の継承可能なdeny ACEを追加します。拒否対象はfile data／append／EA／attribute書込、child削除、delete、DACL変更、owner変更です。`SetNamedSecurityInfoW`の自動継承により既存の子へ伝播し、通常ユーザー側のallow ACEは維持するため親プロセスは監査とcleanupを続けられます。MicrosoftのAppContainer dual-principal modelどおり、ユーザー側が許可されていてもPackage SID側の拒否によりchildの実効書込権限を止めます。実行ファイルを同じAppContainerへbyte-identical copyしたprobeがroot／nested内容の読取成功と、overwrite、append、作成、rename、delete、attribute、DACL、owner各write accessの拒否を測定します。API根拠は[Automatic Propagation of Inheritable ACEs](https://learn.microsoft.com/en-us/windows/win32/secauthz/automatic-propagation-of-inheritable-aces)、[`SetEntriesInAclW`](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setentriesinaclw)、[Launch an AppContainer](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)です。明示的unsandboxed経路ではこのWindows DACL封印は適用されず、前後fingerprintによる検出だけです。
+
+ディレクトリ列挙そのものを親ディレクトリハンドル相対で固定する実装、およびWindows実機でのreparse point競合stress testは未完です。DACL封印はbackend自身によるstaging source変更を予防しますが、親の通常ユーザー権限は意図的に残すため、同一ユーザー権限をすでに持つ別プロセスとの全競合を排除したとは扱いません。事後fingerprintと別sandboxでの再展開照合は引き続き必要です。
 
 ### 暗号化書庫
 
@@ -154,6 +156,6 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
-- 親ディレクトリハンドル相対の列挙、ACL／handleによるstaging tree封印、Windows reparse競合stress test
+- 親ディレクトリハンドル相対の列挙、Windows staging DACL probeの初回実機証跡、Windows reparse競合stress test
 - first passing review of the generated malicious corpus plus its remaining format/control-byte/CPU-bomb/crash/race matrix described in [`MALICIOUS_CORPUS.md`](MALICIOUS_CORPUS.md), and the Windows 10/11, LPAC, read-format, denial, crash, and race matrix in [`WINDOWS_E2E.md`](WINDOWS_E2E.md)
 - MSYS2 package key rotation、過去archive availability、生成済みbackend SBOM/license証跡の独立レビュー

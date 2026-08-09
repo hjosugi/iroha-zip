@@ -16,21 +16,28 @@ use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_HANDLE_EOF, ERROR_INVALID_PARAMETER,
-    ERROR_NO_MORE_FILES, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS, HLOCAL, LocalFree,
-    SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    ERROR_NO_MORE_FILES, ERROR_SUCCESS, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS, HLOCAL,
+    LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
-use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
+use windows::Win32::Security::Authorization::{
+    ConvertSidToStringSidW, DENY_ACCESS, EXPLICIT_ACCESS_W, GetNamedSecurityInfoW,
+    NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, SetEntriesInAclW, SetNamedSecurityInfoW, TRUSTEE_IS_SID,
+    TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+};
 use windows::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeleteAppContainerProfile, GetAppContainerFolderPath,
 };
 use windows::Win32::Security::{
-    FreeSid, GetTokenInformation, PSID, SECURITY_CAPABILITIES, TOKEN_GROUPS, TOKEN_QUERY,
+    ACL, DACL_SECURITY_INFORMATION, FreeSid, GetTokenInformation, PSECURITY_DESCRIPTOR, PSID,
+    SECURITY_CAPABILITIES, SUB_CONTAINERS_AND_OBJECTS_INHERIT, TOKEN_GROUPS, TOKEN_QUERY,
     TokenCapabilities, TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
 };
 use windows::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_FLAG_SEQUENTIAL_SCAN, FILE_SHARE_READ, FindClose, FindFirstStreamW, FindNextStreamW,
-    FindStreamInfoStandard, GetFileInformationByHandle, WIN32_FIND_STREAM_DATA,
+    BY_HANDLE_FILE_INFORMATION, DELETE, FILE_APPEND_DATA, FILE_ATTRIBUTE_REPARSE_POINT,
+    FILE_DELETE_CHILD, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN, FILE_SHARE_READ,
+    FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, FindClose, FindFirstStreamW,
+    FindNextStreamW, FindStreamInfoStandard, GetFileInformationByHandle, WIN32_FIND_STREAM_DATA,
+    WRITE_DAC, WRITE_OWNER,
 };
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -225,15 +232,38 @@ impl Sandbox {
     }
 
     pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult> {
-        match self
-            .mode
-            .as_ref()
-            .expect("live sandbox must retain its cleanup state")
-        {
+        let mode = self.mode.as_ref().ok_or_else(|| {
+            IrohaZipError::Sandbox("cannot run a process after sandbox cleanup".to_owned())
+        })?;
+        match mode {
             Mode::AppContainer { sid, isolation, .. } => {
                 run_in_appcontainer(*sid, *isolation, self.memory_limit_bytes, spec)
             }
             Mode::Unsandboxed => run_unsandboxed(spec),
+        }
+    }
+
+    pub fn seal_staged_source(&self, path: &Path) -> Result<bool> {
+        let resolved = fs::canonicalize(path).map_err(|error| {
+            IrohaZipError::io_path("cannot resolve staged source before sealing", path, error)
+        })?;
+        validate_directory_security(&resolved)?;
+        if resolved == self.root || !resolved.starts_with(&self.root) {
+            return Err(IrohaZipError::Sandbox(format!(
+                "refusing to change a staging ACL outside a sandbox child: {}",
+                resolved.display()
+            )));
+        }
+
+        let mode = self.mode.as_ref().ok_or_else(|| {
+            IrohaZipError::Sandbox("cannot seal staging after sandbox cleanup".to_owned())
+        })?;
+        match mode {
+            Mode::AppContainer { sid, .. } => {
+                deny_appcontainer_tree_mutation(&resolved, *sid)?;
+                Ok(true)
+            }
+            Mode::Unsandboxed => Ok(false),
         }
     }
 
@@ -294,6 +324,134 @@ impl Sandbox {
             )));
         }
         failure.map_or(Ok(()), Err)
+    }
+}
+
+fn deny_appcontainer_tree_mutation(path: &Path, sid: PSID) -> Result<()> {
+    let wide_path = wide_null(path.as_os_str());
+    let mut existing_acl: *mut ACL = null_mut();
+    let mut security_descriptor = PSECURITY_DESCRIPTOR::default();
+    let get_status = unsafe {
+        GetNamedSecurityInfoW(
+            PCWSTR(wide_path.as_ptr()),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            Some(&raw mut existing_acl),
+            None,
+            &raw mut security_descriptor,
+        )
+    };
+    if get_status != ERROR_SUCCESS {
+        return Err(windows_status_error_path(
+            "GetNamedSecurityInfoW(staged source)",
+            path,
+            get_status.0,
+        ));
+    }
+
+    let operation = (|| {
+        if existing_acl.is_null() {
+            return Err(IrohaZipError::Sandbox(format!(
+                "staged source unexpectedly has a null DACL: {}",
+                path.display()
+            )));
+        }
+
+        let denied = FILE_WRITE_DATA.0
+            | FILE_APPEND_DATA.0
+            | FILE_WRITE_EA.0
+            | FILE_DELETE_CHILD.0
+            | FILE_WRITE_ATTRIBUTES.0
+            | DELETE.0
+            | WRITE_DAC.0
+            | WRITE_OWNER.0;
+        let entry = EXPLICIT_ACCESS_W {
+            grfAccessPermissions: denied,
+            grfAccessMode: DENY_ACCESS,
+            grfInheritance: SUB_CONTAINERS_AND_OBJECTS_INHERIT,
+            Trustee: TRUSTEE_W {
+                pMultipleTrustee: null_mut(),
+                MultipleTrusteeOperation: NO_MULTIPLE_TRUSTEE,
+                TrusteeForm: TRUSTEE_IS_SID,
+                TrusteeType: TRUSTEE_IS_UNKNOWN,
+                ptstrName: PWSTR(sid.0.cast::<u16>()),
+            },
+        };
+        let mut sealed_acl: *mut ACL = null_mut();
+        let merge_status = unsafe {
+            SetEntriesInAclW(
+                Some(std::slice::from_ref(&entry)),
+                Some(existing_acl),
+                &raw mut sealed_acl,
+            )
+        };
+        if merge_status != ERROR_SUCCESS {
+            return Err(windows_status_error_path(
+                "SetEntriesInAclW(staged source)",
+                path,
+                merge_status.0,
+            ));
+        }
+        if sealed_acl.is_null() {
+            return Err(IrohaZipError::Sandbox(format!(
+                "SetEntriesInAclW returned a null DACL for {}",
+                path.display()
+            )));
+        }
+
+        let set_status = unsafe {
+            SetNamedSecurityInfoW(
+                PCWSTR(wide_path.as_ptr()),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                Some(sealed_acl),
+                None,
+            )
+        };
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(sealed_acl.cast::<c_void>())));
+        }
+        if set_status != ERROR_SUCCESS {
+            return Err(windows_status_error_path(
+                "SetNamedSecurityInfoW(staged source)",
+                path,
+                set_status.0,
+            ));
+        }
+        Ok(())
+    })();
+
+    unsafe {
+        let _ = LocalFree(Some(HLOCAL(security_descriptor.0)));
+    }
+    operation
+}
+
+pub fn probe_staging_security_write_denials(path: &Path) -> Result<(bool, bool)> {
+    Ok((
+        access_mask_is_denied(path, WRITE_DAC.0)?,
+        access_mask_is_denied(path, WRITE_OWNER.0)?,
+    ))
+}
+
+fn access_mask_is_denied(path: &Path, access_mask: u32) -> Result<bool> {
+    let mut options = OpenOptions::new();
+    options.access_mode(access_mask);
+    match options.open(path) {
+        Ok(file) => {
+            drop(file);
+            Ok(false)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => Ok(true),
+        Err(error) => Err(IrohaZipError::io_path(
+            "staging security access probe failed unexpectedly",
+            path,
+            error,
+        )),
     }
 }
 
@@ -1203,6 +1361,14 @@ fn windows_error_path(operation: &str, path: &Path, error: WindowsError) -> Iroh
         "{operation} failed for {}: {error}",
         path.display()
     ))
+}
+
+fn windows_status_error_path(operation: &str, path: &Path, status: u32) -> IrohaZipError {
+    windows_error_path(
+        operation,
+        path,
+        WindowsError::from_hresult(HRESULT::from_win32(status)),
+    )
 }
 
 fn is_windows_error(error: &WindowsError, code: u32) -> bool {

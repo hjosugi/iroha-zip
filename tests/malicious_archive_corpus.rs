@@ -738,9 +738,10 @@ mod windows_e2e {
     }
 
     fn required_path(name: &str) -> PathBuf {
-        env::var_os(name)
-            .map(PathBuf::from)
-            .unwrap_or_else(|| panic!("{name} must be set for the ignored Windows corpus test"))
+        env::var_os(name).map_or_else(
+            || panic!("{name} must be set for the ignored Windows corpus test"),
+            PathBuf::from,
+        )
     }
 
     fn file_sha256(path: &Path) -> String {

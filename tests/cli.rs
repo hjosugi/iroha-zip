@@ -100,6 +100,13 @@ fn internal_failure_probes_are_hidden_but_parseable() {
         memory.command,
         Command::InternalMemoryProbe { bytes: 268_435_456 }
     ));
+
+    let staging =
+        Cli::try_parse_from(["iroha-zip", "internal-staging-write-probe", "source"]).unwrap();
+    assert!(matches!(
+        staging.command,
+        Command::InternalStagingWriteProbe { root } if root == std::path::Path::new("source")
+    ));
 }
 
 #[test]

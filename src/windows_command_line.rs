@@ -43,6 +43,7 @@ pub(crate) fn encode(
     Ok(output)
 }
 
+#[cfg(any(test, feature = "fuzzing"))]
 pub(crate) fn quote(argument: &[u16]) -> Result<Vec<u16>, CommandLineError> {
     let mut output = Vec::new();
     append_quoted_argument(&mut output, argument)?;

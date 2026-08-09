@@ -272,17 +272,40 @@ try {
         "--config", $configPath, "isolation-report"
     )
     $isolation = $isolationRun.stdout | ConvertFrom-Json -Depth 20
-    if ($isolation.schemaVersion -ne 1 -or
+    if ($isolation.schemaVersion -ne 2 -or
         -not $isolation.token.isAppContainer -or
         $isolation.token.isLessPrivilegedAppContainer -or
         $isolation.token.capabilityCount -ne 0 -or
         -not $isolation.network.denied -or
         -not $isolation.timeout.rejected -or
-        -not $isolation.memory.rejected) {
+        -not $isolation.memory.rejected -or
+        -not $isolation.stagingWriteSeal.aclApplied) {
         throw "Isolation evidence did not satisfy the zero-capability AppContainer contract."
     }
+    $expectedReadablePaths = @("root-file", "nested-file")
+    $expectedDeniedOperations = @(
+        "overwrite-existing-file",
+        "append-existing-file",
+        "create-root-file",
+        "create-root-directory",
+        "overwrite-nested-file",
+        "create-nested-file",
+        "rename-file",
+        "delete-file",
+        "change-file-attributes",
+        "open-dacl-for-write",
+        "open-owner-for-write"
+    )
+    $actualReadableJson = ConvertTo-Json -InputObject @($isolation.stagingWriteSeal.readablePaths) -Compress
+    $expectedReadableJson = ConvertTo-Json -InputObject $expectedReadablePaths -Compress
+    $actualDeniedJson = ConvertTo-Json -InputObject @($isolation.stagingWriteSeal.deniedOperations) -Compress
+    $expectedDeniedJson = ConvertTo-Json -InputObject $expectedDeniedOperations -Compress
+    if ($actualReadableJson -cne $expectedReadableJson -or
+        $actualDeniedJson -cne $expectedDeniedJson) {
+        throw "Staging-source ACL evidence did not match the exact read/write contract."
+    }
     $cleanupRecords = @($isolation.cleanup)
-    if ($cleanupRecords.Count -ne 3 -or
+    if ($cleanupRecords.Count -ne 4 -or
         @($cleanupRecords | Where-Object {
             -not $_.profileDeleteSucceeded -or -not $_.temporaryRootRemoved
         }).Count -ne 0) {

@@ -59,6 +59,7 @@ pub fn create_archive(
         let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
         let expected_source =
             transfer::copy_audited_tree_fingerprint(&source, &source_dir, &config.limits)?;
+        let _source_write_sealed = sandbox.seal_staged_source(&source_dir)?;
 
         let sandbox_archive = output_dir.join("archive.bin");
         let stdout_log = sandbox.root().join("bsdtar.stdout.log");

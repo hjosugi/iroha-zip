@@ -1,9 +1,29 @@
 use std::net::{SocketAddr, TcpStream};
+use std::path::Path;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{IrohaZipError, Result};
+
+#[cfg(windows)]
+const TIMEOUT_MILLISECONDS: u64 = 250;
+#[cfg(windows)]
+const SLEEP_MILLISECONDS: u64 = 5_000;
+#[cfg(windows)]
+const MEMORY_LIMIT_MIB: u64 = 64;
+#[cfg(windows)]
+const REQUESTED_MEMORY_MIB: u64 = 256;
+#[cfg(windows)]
+const STAGING_FIXTURES: [&str; 7] = [
+    "read.txt",
+    "overwrite.txt",
+    "append.txt",
+    "rename.txt",
+    "delete.txt",
+    "permissions.txt",
+    "nested.txt",
+];
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -56,6 +76,130 @@ pub fn memory_probe(bytes: u64) -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StagingWriteProbeResult {
+    pub schema_version: u32,
+    pub readable_paths: Vec<String>,
+    pub denied_operations: Vec<String>,
+}
+
+pub fn staging_write_probe(root: &Path) -> Result<StagingWriteProbeResult> {
+    use std::fs::{self, OpenOptions};
+
+    let expected = b"sealed staging source\n";
+    let mut readable_paths = Vec::new();
+    if fs::read(root.join("read.txt"))
+        .map_err(|error| IrohaZipError::io("cannot read staging-write probe fixture", error))?
+        == expected
+    {
+        readable_paths.push("root-file".to_owned());
+    }
+    if fs::read(root.join("nested").join("nested.txt"))
+        .map_err(|error| IrohaZipError::io("cannot read nested staging-write fixture", error))?
+        == expected
+    {
+        readable_paths.push("nested-file".to_owned());
+    }
+
+    let mut denied_operations = Vec::new();
+    record_denial(
+        &mut denied_operations,
+        "overwrite-existing-file",
+        OpenOptions::new()
+            .write(true)
+            .open(root.join("overwrite.txt")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "append-existing-file",
+        OpenOptions::new()
+            .append(true)
+            .open(root.join("append.txt")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "create-root-file",
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(root.join("created.txt")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "create-root-directory",
+        fs::create_dir(root.join("created-directory")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "overwrite-nested-file",
+        OpenOptions::new()
+            .write(true)
+            .open(root.join("nested").join("nested.txt")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "create-nested-file",
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(root.join("nested").join("created.txt")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "rename-file",
+        fs::rename(root.join("rename.txt"), root.join("renamed.txt")),
+    )?;
+    record_denial(
+        &mut denied_operations,
+        "delete-file",
+        fs::remove_file(root.join("delete.txt")),
+    )?;
+    let mut permissions = fs::metadata(root.join("permissions.txt"))
+        .map_err(|error| IrohaZipError::io("cannot inspect staging-write probe fixture", error))?
+        .permissions();
+    permissions.set_readonly(true);
+    record_denial(
+        &mut denied_operations,
+        "change-file-attributes",
+        fs::set_permissions(root.join("permissions.txt"), permissions),
+    )?;
+    let (dacl_change_denied, owner_change_denied) =
+        crate::platform::probe_staging_security_write_denials(&root.join("permissions.txt"))?;
+    if dacl_change_denied {
+        denied_operations.push("open-dacl-for-write".to_owned());
+    }
+    if owner_change_denied {
+        denied_operations.push("open-owner-for-write".to_owned());
+    }
+
+    Ok(StagingWriteProbeResult {
+        schema_version: 1,
+        readable_paths,
+        denied_operations,
+    })
+}
+
+fn record_denial<T>(
+    operations: &mut Vec<String>,
+    name: &str,
+    result: std::io::Result<T>,
+) -> Result<()> {
+    match result {
+        Ok(value) => {
+            drop(value);
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            operations.push(name.to_owned());
+            Ok(())
+        }
+        Err(error) => Err(IrohaZipError::Sandbox(format!(
+            "staging-write probe failed for an unexpected reason: {error}"
+        ))),
+    }
+}
+
 #[cfg(windows)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -97,6 +241,15 @@ struct MemoryIsolationReport {
 #[cfg(windows)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct StagingWriteIsolationReport {
+    acl_applied: bool,
+    readable_paths: Vec<String>,
+    denied_operations: Vec<String>,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct CleanupReport {
     profile_name: String,
     profile_delete_succeeded: bool,
@@ -114,6 +267,7 @@ pub struct IsolationReport {
     network: NetworkIsolationReport,
     timeout: TimeoutIsolationReport,
     memory: MemoryIsolationReport,
+    staging_write_seal: StagingWriteIsolationReport,
     cleanup: Vec<CleanupReport>,
 }
 
@@ -178,8 +332,6 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
     let ((network_result, network_error_kind), network_cleanup) =
         finish_probe(network_probe, operation)?;
 
-    const TIMEOUT_MILLISECONDS: u64 = 250;
-    const SLEEP_MILLISECONDS: u64 = 5_000;
     let timeout_probe = PreparedProbe::new(config, config.sandbox.memory_limit_mib, "timeout")?;
     let timeout_operation = match timeout_probe.sandbox.run(ProcessSpec {
         program: timeout_probe.executable.clone(),
@@ -212,8 +364,6 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
     };
     let (timeout, timeout_cleanup) = finish_probe(timeout_probe, timeout_operation)?;
 
-    const MEMORY_LIMIT_MIB: u64 = 64;
-    const REQUESTED_MEMORY_MIB: u64 = 256;
     let memory_probe = PreparedProbe::new(config, MEMORY_LIMIT_MIB, "memory")?;
     let memory_result = memory_probe.sandbox.run(ProcessSpec {
         program: memory_probe.executable.clone(),
@@ -252,8 +402,90 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
         ));
     }
 
+    let staging_probe =
+        PreparedProbe::new(config, config.sandbox.memory_limit_mib, "staging-write")?;
+    let staging_operation = (|| {
+        let staging_root = staging_probe.root.join("staging-source");
+        std::fs::create_dir(&staging_root).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot create staging-write probe directory",
+                &staging_root,
+                error,
+            )
+        })?;
+        for name in STAGING_FIXTURES {
+            let path = staging_root.join(name);
+            std::fs::write(&path, b"sealed staging source\n").map_err(|error| {
+                IrohaZipError::io_path("cannot create staging-write probe fixture", &path, error)
+            })?;
+        }
+        let nested = staging_root.join("nested");
+        std::fs::create_dir(&nested).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot create nested staging-write probe directory",
+                &nested,
+                error,
+            )
+        })?;
+        std::fs::rename(staging_root.join("nested.txt"), nested.join("nested.txt")).map_err(
+            |error| {
+                IrohaZipError::io_path(
+                    "cannot place nested staging-write probe fixture",
+                    &nested,
+                    error,
+                )
+            },
+        )?;
+        let acl_applied = staging_probe.sandbox.seal_staged_source(&staging_root)?;
+        if !acl_applied {
+            return Err(IrohaZipError::Sandbox(
+                "staging-write probe did not receive an AppContainer ACL".to_owned(),
+            ));
+        }
+        let staging_stdout = staging_probe.root.join("staging-write-probe.stdout.json");
+        let staging_stderr = staging_probe.root.join("staging-write-probe.stderr.log");
+        let result = staging_probe.sandbox.run(ProcessSpec {
+            program: staging_probe.executable.clone(),
+            args: vec![
+                OsString::from("internal-staging-write-probe"),
+                staging_root.as_os_str().to_owned(),
+            ],
+            current_dir: staging_probe.root.clone(),
+            stdout_log: staging_stdout.clone(),
+            stderr_log: staging_stderr.clone(),
+            timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 10)),
+            monitor_root: None,
+            limits: config.limits.clone(),
+        })?;
+        if result.exit_code != 0 {
+            return Err(IrohaZipError::Sandbox(format!(
+                "staging-write probe exited with code {}: {}",
+                result.exit_code,
+                util::read_limited(&staging_stderr, 16 * 1024)?
+            )));
+        }
+        let raw = util::read_limited(&staging_stdout, 16 * 1024)?;
+        let observed: StagingWriteProbeResult = serde_json::from_str(&raw).map_err(|error| {
+            IrohaZipError::Sandbox(format!("cannot parse staging-write probe result: {error}"))
+        })?;
+        let expected = expected_staging_write_probe();
+        if observed != expected {
+            return Err(IrohaZipError::Sandbox(format!(
+                "staging-write ACL did not satisfy the read-only contract: {observed:?}"
+            )));
+        }
+        Ok((acl_applied, observed, result.isolation))
+    })();
+    let ((acl_applied, staging, staging_isolation), staging_cleanup) =
+        finish_probe(staging_probe, staging_operation)?;
+    if staging_isolation != network_result.isolation {
+        return Err(IrohaZipError::Sandbox(
+            "isolation token evidence changed during the staging-write probe".to_owned(),
+        ));
+    }
+
     Ok(IsolationReport {
-        schema_version: 1,
+        schema_version: 2,
         requested_mode: if config.sandbox.isolation.is_lpac() {
             "lpac"
         } else {
@@ -275,8 +507,41 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
         },
         timeout,
         memory,
-        cleanup: vec![network_cleanup, timeout_cleanup, memory_cleanup],
+        staging_write_seal: StagingWriteIsolationReport {
+            acl_applied,
+            readable_paths: staging.readable_paths,
+            denied_operations: staging.denied_operations,
+        },
+        cleanup: vec![
+            network_cleanup,
+            timeout_cleanup,
+            memory_cleanup,
+            staging_cleanup,
+        ],
     })
+}
+
+#[cfg(windows)]
+fn expected_staging_write_probe() -> StagingWriteProbeResult {
+    StagingWriteProbeResult {
+        schema_version: 1,
+        readable_paths: ["root-file", "nested-file"].map(str::to_owned).to_vec(),
+        denied_operations: [
+            "overwrite-existing-file",
+            "append-existing-file",
+            "create-root-file",
+            "create-root-directory",
+            "overwrite-nested-file",
+            "create-nested-file",
+            "rename-file",
+            "delete-file",
+            "change-file-attributes",
+            "open-dacl-for-write",
+            "open-owner-for-write",
+        ]
+        .map(str::to_owned)
+        .to_vec(),
+    }
 }
 
 #[cfg(windows)]

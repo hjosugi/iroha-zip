@@ -38,7 +38,8 @@ The archive harness fails the job unless all of these checks pass:
 | Network | A copied, byte-identical probe cannot connect to an active parent-owned loopback listener. |
 | Timeout | A 5-second child is terminated by a 250-millisecond sandbox timeout. |
 | Memory | A child requesting and touching 256 MiB fails inside a Job Object limited to 64 MiB. |
-| Cleanup | All three probe profiles are deleted and all three temporary roots are absent after explicit cleanup. |
+| Staging source | An inheritable deny ACE is applied to the AppContainer Package SID. A byte-identical child can read nested staged data but cannot overwrite, append, create, rename, delete, change file attributes, open the DACL for writing, or open the owner for writing. |
+| Cleanup | All four probe profiles are deleted and all four temporary roots are absent after explicit cleanup. |
 | Doctor | A real `bsdtar --version` run reports measured AppContainer and zero-capability evidence. |
 | Create/read | ZIP, 7z, TAR, and TAR.GZ are internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. |
 | Additional read filters | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures; iroha-zip previews and extracts them to the same tree hash. |
@@ -52,11 +53,11 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 
 ## Evidence format
 
-`windows-e2e.json` is UTF-8 JSON with `schemaVersion: 1`. It records:
+`windows-e2e.json` is UTF-8 JSON with `schemaVersion: 1`. Its nested isolation report uses `schemaVersion: 2`. It records:
 
 - runner OS/image identity and executable/backend-manifest SHA-256 values;
 - source-tree counts, byte total, manifest hash, and longest path length;
-- token, network, timeout, memory, profile deletion, and root deletion evidence;
+- token, network, timeout, memory, staging-source read/write ACL, profile deletion, and root deletion evidence;
 - per-format archive size/hash, tree-manifest hash, operation durations, and controlled additional read-filter fixtures;
 - invalid-input publication result and shell extraction result;
 - final harness-root cleanup and any failure message.

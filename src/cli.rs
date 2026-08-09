@@ -107,6 +107,9 @@ pub enum Command {
     #[command(hide = true)]
     InternalMemoryProbe { bytes: u64 },
 
+    #[command(hide = true)]
+    InternalStagingWriteProbe { root: PathBuf },
+
     /// Write a default configuration file if one does not exist.
     InitConfig,
 

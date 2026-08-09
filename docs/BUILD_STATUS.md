@@ -23,7 +23,7 @@ Updated: 2026-08-10
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Normal-AppContainer/LPAC configuration round trips and Windows LPAC process/token API type-check
-- Machine-readable AppContainer token/capability, loopback-denial, timeout, memory-limit, and explicit profile/root-cleanup probe type-check
+- Machine-readable AppContainer token/capability, loopback-denial, timeout, memory-limit, staging-source read/write ACL, and explicit four-profile/root-cleanup probe type-check
 - Fixed-label Windows Server 2022/2025 archive, shell, settings-setup, and isolation E2E workflow parsing
 - Windows Attachment Services COM boundary type-check, three-policy configuration/settings round trips, fail-closed post-handoff fingerprint tests, and partial cleanup tests
 - TOML and GitHub Actions workflow parsing
@@ -33,7 +33,7 @@ Updated: 2026-08-10
 - Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
 - Split build/sign/package release boundary, strict three-EXE Authenticode publisher/EKU/timestamp verification, deterministic signature evidence, pinned SLSA provenance generation, and fail-closed immutable-release workflow parsing
 
-The current Linux suite contains 85 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate. Windows CI additionally runs the source-handle sharing test that verifies open snapshots block writes and renames.
+The current Linux suite contains 86 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate (87 with all features). Windows CI additionally runs the source-handle sharing test that verifies open snapshots block writes and renames.
 
 ## Performed by GitHub Actions
 
@@ -54,7 +54,7 @@ A `v*` tag whose value matches `Cargo.toml` and points to the current `main` com
 - First passing and reviewed malicious-corpus JSON from both Server jobs, then broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring
-- Real-Windows reparse point race stress tests, parent-directory handle-relative source enumeration, write-denying staging-tree ACL/handle sealing, and first Windows evidence for internal created-archive re-extraction
+- Real-Windows reparse point race stress tests, parent-directory handle-relative source enumeration, and first Windows evidence for the staging-tree DACL seal and internal created-archive re-extraction
 - Attachment Services with Defender enabled/disabled/unavailable, third-party providers, quarantine/deletion, ADS inventory, and MotW preservation across publication
 - First successful reviewed Authenticode/SLSA/immutable release after owner-managed Azure identity validation and repository settings, plus independent security review
 
