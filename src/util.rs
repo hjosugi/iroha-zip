@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -18,14 +18,14 @@ pub fn unique_token() -> String {
 
 pub fn create_unique_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
     fs::create_dir_all(parent)
-        .map_err(|error| SafeArcError::io_path("cannot create parent directory", parent, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot create parent directory", parent, error))?;
     for _ in 0..128 {
         let path = parent.join(format!("{prefix}{}", unique_token()));
         match fs::create_dir(&path) {
             Ok(()) => return Ok(path),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => {
-                return Err(SafeArcError::io_path(
+                return Err(IrohaZipError::io_path(
                     "cannot create unique directory",
                     &path,
                     error,
@@ -33,7 +33,7 @@ pub fn create_unique_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
             }
         }
     }
-    Err(SafeArcError::Io {
+    Err(IrohaZipError::Io {
         context: format!(
             "cannot allocate a unique directory under {}",
             parent.display()
@@ -47,12 +47,12 @@ pub fn create_unique_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
 
 pub fn smart_destination(archive: &Path) -> Result<PathBuf> {
     let parent = archive.parent().ok_or_else(|| {
-        SafeArcError::Usage(format!("archive has no parent: {}", archive.display()))
+        IrohaZipError::Usage(format!("archive has no parent: {}", archive.display()))
     })?;
     let filename = archive
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| SafeArcError::Usage("archive filename must be Unicode".to_owned()))?;
+        .ok_or_else(|| IrohaZipError::Usage("archive filename must be Unicode".to_owned()))?;
     let base = archive_base_name(filename);
 
     for index in 0..10_000u32 {
@@ -65,7 +65,7 @@ pub fn smart_destination(archive: &Path) -> Result<PathBuf> {
             return Ok(candidate);
         }
     }
-    Err(SafeArcError::Usage(format!(
+    Err(IrohaZipError::Usage(format!(
         "cannot find a free destination name beside {}",
         archive.display()
     )))
@@ -105,12 +105,12 @@ pub fn archive_base_name(filename: &str) -> String {
 
 pub fn copy_file_new_limited(source: &Path, target: &Path, max_bytes: u64) -> Result<u64> {
     let mut input = File::open(source)
-        .map_err(|error| SafeArcError::io_path("cannot open source file", source, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot open source file", source, error))?;
     let mut output = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(target)
-        .map_err(|error| SafeArcError::io_path("cannot create target file", target, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot create target file", target, error))?;
 
     let read_limit = max_bytes.saturating_add(1);
     let copied_result = std::io::copy(
@@ -122,13 +122,13 @@ pub fn copy_file_new_limited(source: &Path, target: &Path, max_bytes: u64) -> Re
         Err(error) => {
             drop(output);
             let _ = fs::remove_file(target);
-            return Err(SafeArcError::io_path("cannot copy file", target, error));
+            return Err(IrohaZipError::io_path("cannot copy file", target, error));
         }
     };
     if copied > max_bytes {
         drop(output);
         let _ = fs::remove_file(target);
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "file grew beyond the {} byte copy limit: {}",
             max_bytes,
             source.display()
@@ -137,7 +137,7 @@ pub fn copy_file_new_limited(source: &Path, target: &Path, max_bytes: u64) -> Re
     if let Err(error) = output.sync_all() {
         drop(output);
         let _ = fs::remove_file(target);
-        return Err(SafeArcError::io_path("cannot flush file", target, error));
+        return Err(IrohaZipError::io_path("cannot flush file", target, error));
     }
     Ok(copied)
 }
@@ -146,7 +146,7 @@ pub fn copy_file_new_exact(source: &Path, target: &Path, expected_bytes: u64) ->
     let copied = copy_file_new_limited(source, target, expected_bytes)?;
     if copied != expected_bytes {
         let _ = fs::remove_file(target);
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "file size changed while being copied: {}",
             source.display()
         )));
@@ -159,7 +159,7 @@ pub fn read_limited(path: &Path, max_bytes: u64) -> Result<String> {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(String::new()),
         Err(error) => {
-            return Err(SafeArcError::io_path(
+            return Err(IrohaZipError::io_path(
                 "cannot read process log",
                 path,
                 error,
@@ -169,7 +169,7 @@ pub fn read_limited(path: &Path, max_bytes: u64) -> Result<String> {
     let mut bytes = Vec::new();
     file.take(max_bytes)
         .read_to_end(&mut bytes)
-        .map_err(|error| SafeArcError::io_path("cannot read process log", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot read process log", path, error))?;
     Ok(String::from_utf8_lossy(&bytes).trim().to_owned())
 }
 
@@ -178,10 +178,10 @@ pub fn write_all_new(path: &Path, data: &[u8]) -> Result<()> {
         .write(true)
         .create_new(true)
         .open(path)
-        .map_err(|error| SafeArcError::io_path("cannot create file", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot create file", path, error))?;
     file.write_all(data)
-        .map_err(|error| SafeArcError::io_path("cannot write file", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot write file", path, error))?;
     file.sync_all()
-        .map_err(|error| SafeArcError::io_path("cannot flush file", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot flush file", path, error))?;
     Ok(())
 }

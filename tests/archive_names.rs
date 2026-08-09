@@ -1,4 +1,4 @@
-use safearc::util::archive_base_name;
+use iroha_zip::util::archive_base_name;
 
 #[test]
 fn strips_compound_archive_extensions_case_insensitively() {

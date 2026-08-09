@@ -5,7 +5,7 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 use crate::platform;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -51,21 +51,22 @@ pub struct AuditSummary {
 pub fn validate_input_archive(path: &Path, limits: &Limits) -> Result<PathBuf> {
     platform::validate_regular_file_security(path)?;
     let original_metadata = fs::symlink_metadata(path)
-        .map_err(|error| SafeArcError::io_path("cannot inspect input archive", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot inspect input archive", path, error))?;
     check_archive_size(original_metadata.len(), limits)?;
 
     let absolute = fs::canonicalize(path)
-        .map_err(|error| SafeArcError::io_path("cannot open input archive", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot open input archive", path, error))?;
     platform::validate_regular_file_security(&absolute)?;
-    let metadata = fs::symlink_metadata(&absolute)
-        .map_err(|error| SafeArcError::io_path("cannot inspect input archive", &absolute, error))?;
+    let metadata = fs::symlink_metadata(&absolute).map_err(|error| {
+        IrohaZipError::io_path("cannot inspect input archive", &absolute, error)
+    })?;
     check_archive_size(metadata.len(), limits)?;
     Ok(absolute)
 }
 
 fn check_archive_size(size: u64, limits: &Limits) -> Result<()> {
     if size > limits.max_archive_bytes {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "input archive is {size} bytes; limit is {} bytes",
             limits.max_archive_bytes
         )));
@@ -89,7 +90,7 @@ pub fn measure_tree(root: &Path) -> Result<AuditSummary> {
 pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
     platform::validate_directory_security(root)?;
     let root = fs::canonicalize(root)
-        .map_err(|error| SafeArcError::io_path("cannot inspect extraction root", root, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot inspect extraction root", root, error))?;
     platform::validate_directory_security(&root)?;
     let mut summary = AuditSummary::default();
     let mut stack = vec![(root.clone(), 0usize)];
@@ -97,7 +98,7 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
 
     while let Some((directory, depth)) = stack.pop() {
         if depth > limits.max_depth {
-            return Err(SafeArcError::Policy(format!(
+            return Err(IrohaZipError::Policy(format!(
                 "directory depth exceeds {} at {}",
                 limits.max_depth,
                 directory.display()
@@ -105,16 +106,16 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
         }
 
         let entries = fs::read_dir(&directory).map_err(|error| {
-            SafeArcError::io_path("cannot read extracted directory", &directory, error)
+            IrohaZipError::io_path("cannot read extracted directory", &directory, error)
         })?;
 
         for entry in entries {
             let entry = entry.map_err(|error| {
-                SafeArcError::io_path("cannot read extracted directory entry", &directory, error)
+                IrohaZipError::io_path("cannot read extracted directory entry", &directory, error)
             })?;
             let path = entry.path();
             let relative = path.strip_prefix(&root).map_err(|_| {
-                SafeArcError::Policy(format!(
+                IrohaZipError::Policy(format!(
                     "extracted path escaped the staging root: {}",
                     path.display()
                 ))
@@ -123,12 +124,12 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
             validate_relative_path(relative, limits)?;
 
             let metadata = fs::symlink_metadata(&path).map_err(|error| {
-                SafeArcError::io_path("cannot inspect extracted entry", &path, error)
+                IrohaZipError::io_path("cannot inspect extracted entry", &path, error)
             })?;
             let file_type = metadata.file_type();
 
             if file_type.is_symlink() {
-                return Err(SafeArcError::Policy(format!(
+                return Err(IrohaZipError::Policy(format!(
                     "symbolic links are not allowed: {}",
                     relative.display()
                 )));
@@ -139,7 +140,7 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
             if metadata.is_dir() {
                 summary.directories = checked_add(summary.directories, 1, "directory count")?;
                 if summary.directories > limits.max_directories {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "directory count exceeds {}",
                         limits.max_directories
                     )));
@@ -148,7 +149,7 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
             } else if metadata.is_file() {
                 summary.files = checked_add(summary.files, 1, "file count")?;
                 if summary.files > limits.max_files {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "file count exceeds {}",
                         limits.max_files
                     )));
@@ -156,7 +157,7 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
 
                 let size = metadata.len();
                 if size > limits.max_single_file_bytes {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "single file exceeds {} bytes: {}",
                         limits.max_single_file_bytes,
                         relative.display()
@@ -164,7 +165,7 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
                 }
                 summary.total_bytes = checked_add(summary.total_bytes, size, "total size")?;
                 if summary.total_bytes > limits.max_total_bytes {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "expanded data exceeds {} bytes",
                         limits.max_total_bytes
                     )));
@@ -173,13 +174,13 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
                 if let Some(id) = platform::file_identity(&path)?
                     && !seen_file_ids.insert(id)
                 {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "hard-linked or duplicate file identity detected: {}",
                         relative.display()
                     )));
                 }
             } else {
-                return Err(SafeArcError::Policy(format!(
+                return Err(IrohaZipError::Policy(format!(
                     "special files are not allowed: {}",
                     relative.display()
                 )));
@@ -192,7 +193,7 @@ pub fn audit_tree(root: &Path, limits: &Limits) -> Result<AuditSummary> {
 
 pub fn validate_relative_path(path: &Path, limits: &Limits) -> Result<()> {
     if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "invalid relative path: {}",
             path.display()
         )));
@@ -206,17 +207,17 @@ pub fn validate_relative_path(path: &Path, limits: &Limits) -> Result<()> {
                 depth = depth.saturating_add(1);
                 validate_component(name)?;
                 let text = name.to_str().ok_or_else(|| {
-                    SafeArcError::Policy(format!(
+                    IrohaZipError::Policy(format!(
                         "non-Unicode filenames are rejected: {}",
                         path.display()
                     ))
                 })?;
                 utf8_bytes = utf8_bytes
                     .checked_add(text.len() + 1)
-                    .ok_or_else(|| SafeArcError::Policy("path length overflow".to_owned()))?;
+                    .ok_or_else(|| IrohaZipError::Policy("path length overflow".to_owned()))?;
             }
             _ => {
-                return Err(SafeArcError::Policy(format!(
+                return Err(IrohaZipError::Policy(format!(
                     "path contains an absolute, parent, or prefix component: {}",
                     path.display()
                 )));
@@ -225,14 +226,14 @@ pub fn validate_relative_path(path: &Path, limits: &Limits) -> Result<()> {
     }
 
     if depth > limits.max_depth {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "path depth exceeds {}: {}",
             limits.max_depth,
             path.display()
         )));
     }
     if utf8_bytes > limits.max_path_bytes {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "path exceeds {} UTF-8 bytes: {}",
             limits.max_path_bytes,
             path.display()
@@ -243,21 +244,21 @@ pub fn validate_relative_path(path: &Path, limits: &Limits) -> Result<()> {
 
 pub fn validate_component(name: &OsStr) -> Result<()> {
     let text = name.to_str().ok_or_else(|| {
-        SafeArcError::Policy("non-Unicode filename component is rejected".to_owned())
+        IrohaZipError::Policy("non-Unicode filename component is rejected".to_owned())
     })?;
 
     if text.is_empty() || text == "." || text == ".." {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "invalid filename component: {text:?}"
         )));
     }
     if text.ends_with(' ') || text.ends_with('.') {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "Windows-trimmed trailing dot or space is rejected: {text:?}"
         )));
     }
     if text.contains(':') {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "colon and NTFS alternate-stream syntax are rejected: {text:?}"
         )));
     }
@@ -266,7 +267,7 @@ pub fn validate_component(name: &OsStr) -> Result<()> {
             || character.is_control()
             || matches!(character, '<' | '>' | '"' | '|' | '?' | '*' | '\\' | '/')
     }) {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "Windows-invalid character is rejected: {text:?}"
         )));
     }
@@ -283,7 +284,7 @@ pub fn validate_component(name: &OsStr) -> Result<()> {
             "COM¹" | "COM²" | "COM³" | "LPT¹" | "LPT²" | "LPT³"
         );
     if reserved {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "Windows device name is rejected: {text:?}"
         )));
     }
@@ -300,5 +301,5 @@ fn is_numbered_reserved(value: &str, prefix: &str) -> bool {
 
 fn checked_add(left: u64, right: u64, label: &str) -> Result<u64> {
     left.checked_add(right)
-        .ok_or_else(|| SafeArcError::Policy(format!("{label} overflow")))
+        .ok_or_else(|| IrohaZipError::Policy(format!("{label} overflow")))
 }

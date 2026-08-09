@@ -4,10 +4,10 @@
 
 #[cfg(windows)]
 mod windows_app {
-    use safearc::backend::BackendBundle;
-    use safearc::config::{Config, FilenameEncoding, default_config_path};
-    use safearc::settings::{SettingsField, SettingsForm};
-    use safearc::util;
+    use iroha_zip::backend::BackendBundle;
+    use iroha_zip::config::{Config, FilenameEncoding, default_config_path};
+    use iroha_zip::settings::{SettingsField, SettingsForm};
+    use iroha_zip::util;
     use std::cell::RefCell;
     use std::ffi::{OsStr, OsString, c_void};
     use std::fs;
@@ -46,8 +46,8 @@ mod windows_app {
     };
     use windows::core::{Error as WindowsError, HRESULT, PCWSTR};
 
-    const WINDOW_CLASS: &str = "SafeArc.Settings.Window";
-    const WINDOW_TITLE: &str = "SafeArc 設定";
+    const WINDOW_CLASS: &str = "iroha-zip.Settings.Window";
+    const WINDOW_TITLE: &str = "iroha-zip 設定";
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     const BUTTON_CHECKED: usize = 1;
 
@@ -470,9 +470,9 @@ mod windows_app {
                         .map_err(|error| error.to_string())?;
                     BackendBundle::verify(&backend_dir).map_err(|error| error.to_string())?;
 
-                    let executable = sibling("safearc.exe")?;
+                    let executable = sibling("iroha-zip.exe")?;
                     let temporary_config = std::env::temp_dir()
-                        .join(format!("safearc-doctor-{}.toml", util::unique_token()));
+                        .join(format!("iroha-zip-doctor-{}.toml", util::unique_token()));
                     config
                         .save(&temporary_config)
                         .map_err(|error| error.to_string())?;
@@ -578,7 +578,7 @@ mod windows_app {
             if !register
                 && !confirm_action(
                     parent,
-                    "現在のユーザーからSafeArcの関連付け候補を解除します。続行しますか？",
+                    "現在のユーザーからiroha-zipの関連付け候補を解除します。続行しますか？",
                 )
             {
                 set_control_text(self.controls.status, "関連付けの解除を中止しました。");
@@ -608,9 +608,9 @@ mod windows_app {
                 return Err(command_failure("関連付け", &output));
             }
             let message = if register {
-                "SafeArcをアーカイブアプリ候補として登録しました。既定のアプリ画面で拡張子ごとの選択を確定してください。"
+                "iroha-zipをアーカイブアプリ候補として登録しました。既定のアプリ画面で拡張子ごとの選択を確定してください。"
             } else {
-                "SafeArcの関連付け候補を解除しました。Windowsの既定選択は必要に応じて変更してください。"
+                "iroha-zipの関連付け候補を解除しました。Windowsの既定選択は必要に応じて変更してください。"
             };
             set_control_text(self.controls.status, message);
             show_message(Some(parent), message, MB_OK | MB_ICONINFORMATION);
@@ -1316,7 +1316,7 @@ mod windows_app {
                 }
                 Ok(path)
             }
-            Some(_) => Err("使用方法: safearc-settings.exe [--config PATH]".to_owned()),
+            Some(_) => Err("使用方法: iroha-zip-settings.exe [--config PATH]".to_owned()),
         }
     }
 
@@ -1381,7 +1381,7 @@ fn main() -> std::process::ExitCode {
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect();
-            let title: Vec<u16> = OsStr::new("SafeArc 設定")
+            let title: Vec<u16> = OsStr::new("iroha-zip 設定")
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect();
@@ -1400,6 +1400,6 @@ fn main() -> std::process::ExitCode {
 
 #[cfg(not(windows))]
 fn main() -> std::process::ExitCode {
-    eprintln!("safearc-settings: the graphical settings screen is available on Windows");
+    eprintln!("iroha-zip-settings: the graphical settings screen is available on Windows");
     std::process::ExitCode::from(2)
 }

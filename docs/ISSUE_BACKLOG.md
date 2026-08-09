@@ -54,7 +54,7 @@ Acceptance: use a protected anonymous channel or equivalent one-use mechanism, z
 
 Evaluate `IAttachmentExecute`, AMSI, or supported Defender interfaces after publication while preserving Mark-of-the-Web.
 
-Acceptance: scanning cannot silently downgrade fail-closed extraction, engine unavailability has an explicit policy, and results are distinguishable from SafeArc structural validation.
+Acceptance: scanning cannot silently downgrade fail-closed extraction, engine unavailability has an explicit policy, and results are distinguishable from iroha-zip structural validation.
 
 ### [UX-001: Settings accessibility and integration automation](https://github.com/hjosugi/iroha-zip/issues/11)
 

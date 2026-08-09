@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 use crate::policy::Limits;
 use crate::util;
 
@@ -28,7 +28,7 @@ pub struct Config {
 #[serde(default, deny_unknown_fields)]
 pub struct BackendConfig {
     /// Directory containing backend-manifest.tsv and the pinned bsdtar bundle.
-    /// Relative paths are resolved against safearc.exe.
+    /// Relative paths are resolved against iroha-zip.exe.
     pub directory: Option<PathBuf>,
 }
 
@@ -93,9 +93,9 @@ impl Config {
             return Ok(Self::default());
         }
         let text = fs::read_to_string(path)
-            .map_err(|error| SafeArcError::io_path("cannot read configuration", path, error))?;
+            .map_err(|error| IrohaZipError::io_path("cannot read configuration", path, error))?;
         let config: Self = toml::from_str(&text).map_err(|error| {
-            SafeArcError::Config(format!("cannot parse {}: {error}", path.display()))
+            IrohaZipError::Config(format!("cannot parse {}: {error}", path.display()))
         })?;
         config.validate()?;
         Ok(config)
@@ -107,7 +107,7 @@ impl Config {
         }
         let parent = configuration_parent(path);
         fs::create_dir_all(parent).map_err(|error| {
-            SafeArcError::io_path("cannot create configuration directory", parent, error)
+            IrohaZipError::io_path("cannot create configuration directory", parent, error)
         })?;
         let config = Self::default();
         let text = config.serialized()?;
@@ -115,11 +115,11 @@ impl Config {
             .write(true)
             .create_new(true)
             .open(path)
-            .map_err(|error| SafeArcError::io_path("cannot create configuration", path, error))?;
+            .map_err(|error| IrohaZipError::io_path("cannot create configuration", path, error))?;
         file.write_all(text.as_bytes())
-            .map_err(|error| SafeArcError::io_path("cannot write configuration", path, error))?;
+            .map_err(|error| IrohaZipError::io_path("cannot write configuration", path, error))?;
         file.sync_all()
-            .map_err(|error| SafeArcError::io_path("cannot flush configuration", path, error))?;
+            .map_err(|error| IrohaZipError::io_path("cannot flush configuration", path, error))?;
         Ok(true)
     }
 
@@ -127,18 +127,18 @@ impl Config {
         let text = self.serialized()?;
         let parent = configuration_parent(path);
         fs::create_dir_all(parent).map_err(|error| {
-            SafeArcError::io_path("cannot create configuration directory", parent, error)
+            IrohaZipError::io_path("cannot create configuration directory", parent, error)
         })?;
 
         let token = util::unique_token();
-        let temporary = parent.join(format!(".safearc-config-{token}.tmp"));
-        let backup = parent.join(format!(".safearc-config-{token}.bak"));
+        let temporary = parent.join(format!(".iroha-zip-config-{token}.tmp"));
+        let backup = parent.join(format!(".iroha-zip-config-{token}.bak"));
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&temporary)
             .map_err(|error| {
-                SafeArcError::io_path("cannot create temporary configuration", &temporary, error)
+                IrohaZipError::io_path("cannot create temporary configuration", &temporary, error)
             })?;
         if let Err(error) = file
             .write_all(text.as_bytes())
@@ -146,7 +146,7 @@ impl Config {
         {
             drop(file);
             let _ = fs::remove_file(&temporary);
-            return Err(SafeArcError::io_path(
+            return Err(IrohaZipError::io_path(
                 "cannot write temporary configuration",
                 &temporary,
                 error,
@@ -158,7 +158,7 @@ impl Config {
         if had_previous {
             fs::rename(path, &backup).map_err(|error| {
                 let _ = fs::remove_file(&temporary);
-                SafeArcError::io_path("cannot back up configuration", path, error)
+                IrohaZipError::io_path("cannot back up configuration", path, error)
             })?;
         }
         if let Err(error) = fs::rename(&temporary, path) {
@@ -166,7 +166,7 @@ impl Config {
                 let _ = fs::rename(&backup, path);
             }
             let _ = fs::remove_file(&temporary);
-            return Err(SafeArcError::io_path(
+            return Err(IrohaZipError::io_path(
                 "cannot replace configuration",
                 path,
                 error,
@@ -242,15 +242,15 @@ impl Config {
     fn serialized(&self) -> Result<String> {
         self.validate()?;
         toml::to_string_pretty(self).map_err(|error| {
-            SafeArcError::Config(format!("cannot serialize configuration: {error}"))
+            IrohaZipError::Config(format!("cannot serialize configuration: {error}"))
         })
     }
 
     pub fn backend_directory(&self) -> Result<PathBuf> {
         let executable = env::current_exe()
-            .map_err(|error| SafeArcError::io("cannot locate safearc executable", error))?;
+            .map_err(|error| IrohaZipError::io("cannot locate iroha-zip executable", error))?;
         let executable_dir = executable.parent().ok_or_else(|| {
-            SafeArcError::Config("safearc executable has no parent directory".to_owned())
+            IrohaZipError::Config("iroha-zip executable has no parent directory".to_owned())
         })?;
         let configured = self
             .backend
@@ -266,8 +266,8 @@ impl Config {
     }
 }
 
-fn config_error(message: impl Into<String>) -> SafeArcError {
-    SafeArcError::Config(message.into())
+fn config_error(message: impl Into<String>) -> IrohaZipError {
+    IrohaZipError::Config(message.into())
 }
 
 fn configuration_parent(path: &Path) -> &Path {
@@ -279,17 +279,17 @@ fn configuration_parent(path: &Path) -> &Path {
 pub fn default_config_path() -> Result<PathBuf> {
     if cfg!(windows) {
         let base = env::var_os("LOCALAPPDATA")
-            .ok_or_else(|| SafeArcError::Config("LOCALAPPDATA is not defined".to_owned()))?;
-        return Ok(PathBuf::from(base).join("SafeArc").join("config.toml"));
+            .ok_or_else(|| IrohaZipError::Config("LOCALAPPDATA is not defined".to_owned()))?;
+        return Ok(PathBuf::from(base).join("iroha-zip").join("config.toml"));
     }
 
     if let Some(base) = env::var_os("XDG_CONFIG_HOME") {
-        return Ok(PathBuf::from(base).join("safearc").join("config.toml"));
+        return Ok(PathBuf::from(base).join("iroha-zip").join("config.toml"));
     }
     let home = env::var_os("HOME")
-        .ok_or_else(|| SafeArcError::Config("HOME is not defined".to_owned()))?;
+        .ok_or_else(|| IrohaZipError::Config("HOME is not defined".to_owned()))?;
     Ok(PathBuf::from(home)
         .join(".config")
-        .join("safearc")
+        .join("iroha-zip")
         .join("config.toml"))
 }

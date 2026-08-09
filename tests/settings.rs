@@ -1,10 +1,10 @@
-use safearc::config::{Config, FilenameEncoding};
-use safearc::settings::{SettingsField, SettingsForm, format_byte_count};
+use iroha_zip::config::{Config, FilenameEncoding};
+use iroha_zip::settings::{SettingsField, SettingsForm, format_byte_count};
 
 #[test]
 fn form_round_trip_preserves_every_configuration_field() {
     let mut config = Config::default();
-    config.backend.directory = Some("C:/SafeArc/backend".into());
+    config.backend.directory = Some("C:/iroha-zip/backend".into());
     config.sandbox.timeout_seconds = 42;
     config.sandbox.memory_limit_mib = 2_048;
     config.limits.max_archive_bytes = 16 * 1024_u64.pow(3);

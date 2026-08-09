@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible SafeArc defect without publishing sensitive exploit material.
+description: Report a reproducible iroha-zip defect without publishing sensitive exploit material.
 title: "[Bug] "
 labels: ["bug", "needs-triage"]
 body:
@@ -10,8 +10,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: SafeArc version
-      placeholder: v0.2.1
+      label: iroha-zip version
+      placeholder: v0.3.0
     validations:
       required: true
   - type: input
@@ -39,7 +39,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics
-      description: Paste redacted output from the settings-screen diagnosis or `safearc doctor`.
+      description: Paste redacted output from the settings-screen diagnosis or `iroha-zip doctor`.
       render: text
   - type: checkboxes
     id: safety

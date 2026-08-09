@@ -1,6 +1,6 @@
-# Contributing to SafeArc
+# Contributing to iroha-zip
 
-SafeArc processes untrusted archives, so changes at trust boundaries require more evidence than ordinary application changes.
+iroha-zip processes untrusted archives, so changes at trust boundaries require more evidence than ordinary application changes.
 
 ## Development checks
 

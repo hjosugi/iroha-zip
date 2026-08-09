@@ -30,4 +30,4 @@ The CI workflow runs formatting, tests, Clippy, and release builds on both `ubun
 - Malicious archive regression corpus for traversal, links, junctions, ADS, hardlinks, and archive bombs
 - Authenticode signing and independent security review
 
-Until those Windows integration checks are complete, treat `v0.2.1` as a security-oriented preview rather than an audited security product.
+Until those Windows integration checks are complete, treat `v0.3.0` as a security-oriented preview rather than an audited security product.

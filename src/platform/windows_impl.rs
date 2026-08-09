@@ -44,7 +44,7 @@ use windows::Win32::System::Threading::{
 };
 use windows::core::{Error as WindowsError, HRESULT, PCWSTR, PWSTR};
 
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 use crate::monitor;
 use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
 use crate::util;
@@ -67,9 +67,9 @@ impl Sandbox {
         let bytes = memory_limit_mib
             .checked_mul(1024 * 1024)
             .and_then(|value| usize::try_from(value).ok())
-            .ok_or_else(|| SafeArcError::Config("sandbox memory limit is too large".to_owned()))?;
+            .ok_or_else(|| IrohaZipError::Config("sandbox memory limit is too large".to_owned()))?;
         if bytes < 64 * 1024 * 1024 {
-            return Err(SafeArcError::Config(
+            return Err(IrohaZipError::Config(
                 "sandbox memory limit must be at least 64 MiB".to_owned(),
             ));
         }
@@ -84,7 +84,7 @@ impl Sandbox {
                 eprintln!(
                     "warning: AppContainer creation failed; explicit unsandboxed fallback is active: {error}"
                 );
-                let parent = std::env::temp_dir().join("safearc-unsandboxed");
+                let parent = std::env::temp_dir().join("iroha-zip-unsandboxed");
                 let root = util::create_unique_dir(&parent, "job-")?;
                 Ok(Self {
                     root,
@@ -129,9 +129,9 @@ impl Drop for Sandbox {
 fn create_appcontainer() -> Result<(String, PSID, PathBuf)> {
     let token = util::unique_token().replace('-', "");
     let suffix_len = token.len().min(28);
-    let profile_name = format!("SafeArc.Job.{}", &token[..suffix_len]);
+    let profile_name = format!("iroha-zip.Job.{}", &token[..suffix_len]);
     let name = wide_null(OsStr::new(&profile_name));
-    let display = wide_null(OsStr::new("SafeArc extraction job"));
+    let display = wide_null(OsStr::new("iroha-zip extraction job"));
     let description = wide_null(OsStr::new(
         "Ephemeral no-network archive extraction container",
     ));
@@ -150,11 +150,11 @@ fn create_appcontainer() -> Result<(String, PSID, PathBuf)> {
     match root_result {
         Ok(root) => {
             fs::create_dir_all(&root).map_err(|error| {
-                SafeArcError::io_path("cannot create AppContainer storage", &root, error)
+                IrohaZipError::io_path("cannot create AppContainer storage", &root, error)
             })?;
             validate_directory_security(&root)?;
             let resolved_root = fs::canonicalize(&root).map_err(|error| {
-                SafeArcError::io_path("cannot resolve AppContainer storage", &root, error)
+                IrohaZipError::io_path("cannot resolve AppContainer storage", &root, error)
             })?;
             validate_directory_security(&resolved_root)?;
             Ok((profile_name, sid, resolved_root))
@@ -193,15 +193,15 @@ fn run_in_appcontainer(
     spec: ProcessSpec,
 ) -> Result<ProcessResult> {
     let stdout = File::create(&spec.stdout_log).map_err(|error| {
-        SafeArcError::io_path("cannot create process stdout log", &spec.stdout_log, error)
+        IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
     })?;
     let stderr = File::create(&spec.stderr_log).map_err(|error| {
-        SafeArcError::io_path("cannot create process stderr log", &spec.stderr_log, error)
+        IrohaZipError::io_path("cannot create process stderr log", &spec.stderr_log, error)
     })?;
     let stdin = OpenOptions::new()
         .read(true)
         .open("NUL")
-        .map_err(|error| SafeArcError::io("cannot open NUL for sandbox stdin", error))?;
+        .map_err(|error| IrohaZipError::io("cannot open NUL for sandbox stdin", error))?;
 
     let stdout_handle = raw_handle(&stdout);
     let stderr_handle = raw_handle(&stderr);
@@ -222,7 +222,7 @@ fn run_in_appcontainer(
     job_limits.BasicLimitInformation.ActiveProcessLimit = 1;
     job_limits.JobMemoryLimit = memory_limit_bytes;
     let job_limits_size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
-        .map_err(|_| SafeArcError::Sandbox("job limits structure is too large".to_owned()))?;
+        .map_err(|_| IrohaZipError::Sandbox("job limits structure is too large".to_owned()))?;
     unsafe {
         SetInformationJobObject(
             job.handle(),
@@ -283,7 +283,7 @@ fn run_in_appcontainer(
 
     let mut startup = STARTUPINFOEXW::default();
     startup.StartupInfo.cb = u32::try_from(size_of::<STARTUPINFOEXW>())
-        .map_err(|_| SafeArcError::Sandbox("startup structure is too large".to_owned()))?;
+        .map_err(|_| IrohaZipError::Sandbox("startup structure is too large".to_owned()))?;
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
     startup.StartupInfo.hStdInput = stdin_handle;
     startup.StartupInfo.hStdOutput = stdout_handle;
@@ -325,10 +325,10 @@ fn run_in_appcontainer(
 
 fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
     let stdout = File::create(&spec.stdout_log).map_err(|error| {
-        SafeArcError::io_path("cannot create process stdout log", &spec.stdout_log, error)
+        IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
     })?;
     let stderr = File::create(&spec.stderr_log).map_err(|error| {
-        SafeArcError::io_path("cannot create process stderr log", &spec.stderr_log, error)
+        IrohaZipError::io_path("cannot create process stderr log", &spec.stderr_log, error)
     })?;
 
     let mut command = Command::new(&spec.program);
@@ -342,7 +342,7 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
         .stderr(Stdio::from(stderr))
         .creation_flags(CREATE_NO_WINDOW_RAW);
     let mut child = command.spawn().map_err(|error| {
-        SafeArcError::io_path(
+        IrohaZipError::io_path(
             "cannot start unsandboxed archive backend",
             &spec.program,
             error,
@@ -353,7 +353,7 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
     loop {
         if let Some(status) = child
             .try_wait()
-            .map_err(|error| SafeArcError::io("cannot query archive backend", error))?
+            .map_err(|error| IrohaZipError::io("cannot query archive backend", error))?
         {
             if let Some(root) = &spec.monitor_root {
                 monitor::check_resource_limits(root, &spec.limits)?;
@@ -365,7 +365,7 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
         if started.elapsed() >= spec.timeout {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(SafeArcError::Sandbox(format!(
+            return Err(IrohaZipError::Sandbox(format!(
                 "unsandboxed archive backend exceeded {:?}",
                 spec.timeout
             )));
@@ -402,14 +402,14 @@ fn wait_for_process(
         }
         if wait != WAIT_TIMEOUT {
             let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0001) };
-            return Err(SafeArcError::Sandbox(format!(
+            return Err(IrohaZipError::Sandbox(format!(
                 "WaitForSingleObject returned unexpected status {wait:?}"
             )));
         }
         if started.elapsed() >= spec.timeout {
             let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0002) };
             let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
-            return Err(SafeArcError::Sandbox(format!(
+            return Err(IrohaZipError::Sandbox(format!(
                 "archive backend exceeded {:?}",
                 spec.timeout
             )));
@@ -454,7 +454,7 @@ impl AttributeList {
         let mut bytes = 0usize;
         let _ = unsafe { InitializeProcThreadAttributeList(None, count, None, &raw mut bytes) };
         if bytes == 0 {
-            return Err(SafeArcError::Sandbox(
+            return Err(IrohaZipError::Sandbox(
                 "InitializeProcThreadAttributeList returned zero bytes".to_owned(),
             ));
         }
@@ -477,11 +477,12 @@ impl Drop for AttributeList {
 }
 
 pub fn validate_directory_security(path: &Path) -> Result<()> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| SafeArcError::io_path("cannot inspect directory security", path, error))?;
+    let metadata = fs::symlink_metadata(path).map_err(|error| {
+        IrohaZipError::io_path("cannot inspect directory security", path, error)
+    })?;
     reject_reparse(path, &metadata)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "not a real directory: {}",
             path.display()
         )));
@@ -492,17 +493,17 @@ pub fn validate_directory_security(path: &Path) -> Result<()> {
 
 pub fn validate_regular_file_security(path: &Path) -> Result<()> {
     let metadata = fs::symlink_metadata(path)
-        .map_err(|error| SafeArcError::io_path("cannot inspect input file", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot inspect input file", path, error))?;
     reject_reparse(path, &metadata)?;
     if !metadata.is_file() || metadata.file_type().is_symlink() {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "input is not a regular file: {}",
             path.display()
         )));
     }
     let info = file_information(path)?;
     if info.nNumberOfLinks != 1 {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "hard-linked input is rejected to avoid replacement races: {}",
             path.display()
         )));
@@ -516,7 +517,7 @@ pub fn validate_extracted_entry_security(path: &Path, metadata: &Metadata) -> Re
     if metadata.is_file() {
         let info = file_information(path)?;
         if info.nNumberOfLinks != 1 {
-            return Err(SafeArcError::Policy(format!(
+            return Err(IrohaZipError::Policy(format!(
                 "hard-linked output is rejected: {}",
                 path.display()
             )));
@@ -536,7 +537,7 @@ pub fn file_identity(path: &Path) -> Result<Option<FileIdentity>> {
 
 fn reject_reparse(path: &Path, metadata: &Metadata) -> Result<()> {
     if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "NTFS reparse points are rejected: {}",
             path.display()
         )));
@@ -546,7 +547,7 @@ fn reject_reparse(path: &Path, metadata: &Metadata) -> Result<()> {
 
 fn file_information(path: &Path) -> Result<BY_HANDLE_FILE_INFORMATION> {
     let file = File::open(path).map_err(|error| {
-        SafeArcError::io_path("cannot open file for identity check", path, error)
+        IrohaZipError::io_path("cannot open file for identity check", path, error)
     })?;
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
     unsafe { GetFileInformationByHandle(raw_handle(&file), &raw mut info) }
@@ -581,7 +582,7 @@ fn reject_named_streams(path: &Path) -> Result<()> {
     loop {
         let name = wide_array_to_string(&data.cStreamName);
         if name != "::$DATA" {
-            return Err(SafeArcError::Policy(format!(
+            return Err(IrohaZipError::Policy(format!(
                 "NTFS alternate data stream is rejected on {}: {name:?}",
                 path.display()
             )));
@@ -614,7 +615,7 @@ pub fn read_mark_of_the_web(path: &Path) -> Result<Option<Vec<u8>>> {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => {
-            return Err(SafeArcError::io_path(
+            return Err(IrohaZipError::io_path(
                 "cannot read Mark-of-the-Web",
                 path,
                 error,
@@ -625,7 +626,7 @@ pub fn read_mark_of_the_web(path: &Path) -> Result<Option<Vec<u8>>> {
     std::io::Read::by_ref(&mut file)
         .take(16 * 1024)
         .read_to_end(&mut bytes)
-        .map_err(|error| SafeArcError::io_path("cannot read Mark-of-the-Web", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot read Mark-of-the-Web", path, error))?;
     let text = String::from_utf8_lossy(&bytes);
     let zone = text
         .lines()
@@ -645,7 +646,7 @@ pub fn read_mark_of_the_web(path: &Path) -> Result<Option<Vec<u8>>> {
 
 pub fn write_mark_of_the_web(path: &Path, zone: &[u8]) -> Result<()> {
     if zone.len() > 16 * 1024 || zone.contains(&0) {
-        return Err(SafeArcError::Policy(
+        return Err(IrohaZipError::Policy(
             "invalid Mark-of-the-Web payload".to_owned(),
         ));
     }
@@ -655,11 +656,11 @@ pub fn write_mark_of_the_web(path: &Path, zone: &[u8]) -> Result<()> {
         .create(true)
         .truncate(true)
         .open(&stream)
-        .map_err(|error| SafeArcError::io_path("cannot write Mark-of-the-Web", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot write Mark-of-the-Web", path, error))?;
     file.write_all(zone)
-        .map_err(|error| SafeArcError::io_path("cannot write Mark-of-the-Web", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot write Mark-of-the-Web", path, error))?;
     file.sync_all()
-        .map_err(|error| SafeArcError::io_path("cannot flush Mark-of-the-Web", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot flush Mark-of-the-Web", path, error))?;
     Ok(())
 }
 
@@ -672,7 +673,7 @@ pub fn open_folder(path: &Path) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|error| SafeArcError::io_path("cannot open output directory", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot open output directory", path, error))?;
     Ok(())
 }
 
@@ -783,12 +784,12 @@ fn minimal_environment_pairs(program: &Path, root: &Path) -> Vec<(OsString, OsSt
     ]
 }
 
-fn windows_error(operation: &str, error: WindowsError) -> SafeArcError {
-    SafeArcError::Sandbox(format!("{operation} failed: {error}"))
+fn windows_error(operation: &str, error: WindowsError) -> IrohaZipError {
+    IrohaZipError::Sandbox(format!("{operation} failed: {error}"))
 }
 
-fn windows_error_path(operation: &str, path: &Path, error: WindowsError) -> SafeArcError {
-    SafeArcError::Sandbox(format!(
+fn windows_error_path(operation: &str, path: &Path, error: WindowsError) -> IrohaZipError {
+    IrohaZipError::Sandbox(format!(
         "{operation} failed for {}: {error}",
         path.display()
     ))

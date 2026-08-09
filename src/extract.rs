@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::backend::BackendBundle;
 use crate::cli::FilenameEncoding;
 use crate::config::Config;
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 use crate::platform::{ProcessSpec, Sandbox};
 use crate::{monitor, policy, transfer, util};
 
@@ -27,7 +27,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
         .map(Path::to_path_buf)
         .map_or_else(|| util::smart_destination(&archive), Ok)?;
     if destination.exists() {
-        return Err(SafeArcError::Usage(format!(
+        return Err(IrohaZipError::Usage(format!(
             "refusing to overwrite existing destination: {}",
             destination.display()
         )));
@@ -47,10 +47,10 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
     let input_dir = sandbox.root().join("input");
     let output_dir = sandbox.root().join("output");
     fs::create_dir(&input_dir).map_err(|error| {
-        SafeArcError::io_path("cannot create sandbox input directory", &input_dir, error)
+        IrohaZipError::io_path("cannot create sandbox input directory", &input_dir, error)
     })?;
     fs::create_dir(&output_dir).map_err(|error| {
-        SafeArcError::io_path("cannot create sandbox output directory", &output_dir, error)
+        IrohaZipError::io_path("cannot create sandbox output directory", &output_dir, error)
     })?;
 
     let sandbox_backend = request.backend.copy_verified_to(&backend_dir)?;
@@ -61,7 +61,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
         request.config.limits.max_archive_bytes,
     )?;
     if copied_archive == 0 {
-        return Err(SafeArcError::Policy(
+        return Err(IrohaZipError::Policy(
             "empty input archive is rejected".to_owned(),
         ));
     }
@@ -99,7 +99,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
         .checked_add(request.config.limits.max_single_file_bytes)
         .and_then(|value| value.checked_add(2 * 1024 * 1024))
         .ok_or_else(|| {
-            SafeArcError::Config("extraction monitor byte budget overflow".to_owned())
+            IrohaZipError::Config("extraction monitor byte budget overflow".to_owned())
         })?;
     let transient_files = request
         .config
@@ -107,7 +107,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
         .max_files
         .checked_add(18)
         .ok_or_else(|| {
-            SafeArcError::Config("extraction monitor file budget overflow".to_owned())
+            IrohaZipError::Config("extraction monitor file budget overflow".to_owned())
         })?;
     let transient_directories = request
         .config
@@ -115,7 +115,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
         .max_directories
         .checked_add(4)
         .ok_or_else(|| {
-            SafeArcError::Config("extraction monitor directory budget overflow".to_owned())
+            IrohaZipError::Config("extraction monitor directory budget overflow".to_owned())
         })?;
     let monitor_limits = monitor::limits_with_baseline(
         &baseline,
@@ -143,7 +143,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
     if result.exit_code != 0 {
         let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
         let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
-        return Err(SafeArcError::Backend(format!(
+        return Err(IrohaZipError::Backend(format!(
             "bsdtar exited with code {}. stderr={stderr:?}, stdout={stdout:?}",
             result.exit_code
         )));
@@ -178,11 +178,11 @@ fn choose_payload_root(output_root: &Path, archive: &Path) -> Result<PathBuf> {
         .map(util::archive_base_name)
         .unwrap_or_default();
     let mut entries = fs::read_dir(output_root).map_err(|error| {
-        SafeArcError::io_path("cannot inspect extracted root", output_root, error)
+        IrohaZipError::io_path("cannot inspect extracted root", output_root, error)
     })?;
     let first = match entries.next() {
         Some(entry) => entry.map_err(|error| {
-            SafeArcError::io_path("cannot inspect extracted root entry", output_root, error)
+            IrohaZipError::io_path("cannot inspect extracted root entry", output_root, error)
         })?,
         None => return Ok(output_root.to_path_buf()),
     };
@@ -191,7 +191,7 @@ fn choose_payload_root(output_root: &Path, archive: &Path) -> Result<PathBuf> {
     }
 
     let metadata = fs::symlink_metadata(first.path()).map_err(|error| {
-        SafeArcError::io_path(
+        IrohaZipError::io_path(
             "cannot inspect extracted top-level entry",
             &first.path(),
             error,

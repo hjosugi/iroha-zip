@@ -3,10 +3,10 @@ use std::fmt::{self, Display, Formatter};
 use std::io;
 use std::path::Path;
 
-pub type Result<T> = std::result::Result<T, SafeArcError>;
+pub type Result<T> = std::result::Result<T, IrohaZipError>;
 
 #[derive(Debug)]
-pub enum SafeArcError {
+pub enum IrohaZipError {
     Io { context: String, source: io::Error },
     Config(String),
     Backend(String),
@@ -16,7 +16,7 @@ pub enum SafeArcError {
     Usage(String),
 }
 
-impl SafeArcError {
+impl IrohaZipError {
     pub fn io(context: impl Into<String>, source: io::Error) -> Self {
         Self::Io {
             context: context.into(),
@@ -29,7 +29,7 @@ impl SafeArcError {
     }
 }
 
-impl Display for SafeArcError {
+impl Display for IrohaZipError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io { context, source } => write!(f, "{context}: {source}"),
@@ -43,7 +43,7 @@ impl Display for SafeArcError {
     }
 }
 
-impl Error for SafeArcError {
+impl Error for IrohaZipError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io { source, .. } => Some(source),

@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::backend::BackendBundle;
 use crate::cli::CreateFormat;
 use crate::config::Config;
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 use crate::platform::{ProcessSpec, Sandbox};
 use crate::{monitor, policy, transfer, util};
 
@@ -20,19 +20,19 @@ pub fn create_archive(
 ) -> Result<PathBuf> {
     crate::platform::validate_directory_security(source)?;
     let source = fs::canonicalize(source)
-        .map_err(|error| SafeArcError::io_path("cannot open archive source", source, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot open archive source", source, error))?;
     crate::platform::validate_directory_security(&source)?;
     policy::audit_tree(&source, &config.limits)?;
 
     let output = normalized_output(output)?;
     if output.starts_with(&source) {
-        return Err(SafeArcError::Usage(format!(
+        return Err(IrohaZipError::Usage(format!(
             "output archive must not be inside the source directory: {}",
             output.display()
         )));
     }
     if output.exists() {
-        return Err(SafeArcError::Usage(format!(
+        return Err(IrohaZipError::Usage(format!(
             "refusing to overwrite existing archive: {}",
             output.display()
         )));
@@ -43,7 +43,7 @@ pub fn create_archive(
     let source_dir = sandbox.root().join("source");
     let output_dir = sandbox.root().join("output");
     fs::create_dir(&output_dir).map_err(|error| {
-        SafeArcError::io_path(
+        IrohaZipError::io_path(
             "cannot create sandbox archive directory",
             &output_dir,
             error,
@@ -68,7 +68,7 @@ pub fn create_archive(
         .limits
         .max_archive_bytes
         .checked_add(2 * 1024 * 1024)
-        .ok_or_else(|| SafeArcError::Config("creation monitor byte budget overflow".to_owned()))?;
+        .ok_or_else(|| IrohaZipError::Config("creation monitor byte budget overflow".to_owned()))?;
     let monitor_limits = monitor::limits_with_baseline(
         &baseline,
         4,
@@ -94,7 +94,7 @@ pub fn create_archive(
     if result.exit_code != 0 {
         let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
         let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
-        return Err(SafeArcError::Backend(format!(
+        return Err(IrohaZipError::Backend(format!(
             "bsdtar exited with code {} while creating {}. stderr={stderr:?}, stdout={stdout:?}",
             result.exit_code,
             format.expected_extension()
@@ -103,17 +103,17 @@ pub fn create_archive(
 
     crate::platform::validate_regular_file_security(&sandbox_archive)?;
     let metadata = fs::symlink_metadata(&sandbox_archive).map_err(|error| {
-        SafeArcError::io_path("cannot inspect staged archive", &sandbox_archive, error)
+        IrohaZipError::io_path("cannot inspect staged archive", &sandbox_archive, error)
     })?;
     crate::platform::validate_extracted_entry_security(&sandbox_archive, &metadata)?;
     let size = metadata.len();
     if size == 0 {
-        return Err(SafeArcError::Backend(
+        return Err(IrohaZipError::Backend(
             "backend produced an empty archive".to_owned(),
         ));
     }
     if size > config.limits.max_archive_bytes {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "created archive is {size} bytes; limit is {} bytes",
             config.limits.max_archive_bytes
         )));
@@ -163,22 +163,22 @@ fn normalized_output(path: &Path) -> Result<PathBuf> {
         path.to_path_buf()
     } else {
         let current = std::env::current_dir()
-            .map_err(|error| SafeArcError::io("cannot read current directory", error))?;
+            .map_err(|error| IrohaZipError::io("cannot read current directory", error))?;
         current.join(path)
     };
     let file_name = absolute.file_name().ok_or_else(|| {
-        SafeArcError::Usage(format!("output has no filename: {}", absolute.display()))
+        IrohaZipError::Usage(format!("output has no filename: {}", absolute.display()))
     })?;
     policy::validate_component(file_name)?;
     let parent = absolute.parent().ok_or_else(|| {
-        SafeArcError::Usage(format!("output has no parent: {}", absolute.display()))
+        IrohaZipError::Usage(format!("output has no parent: {}", absolute.display()))
     })?;
     fs::create_dir_all(parent).map_err(|error| {
-        SafeArcError::io_path("cannot create archive output directory", parent, error)
+        IrohaZipError::io_path("cannot create archive output directory", parent, error)
     })?;
     crate::platform::validate_directory_security(parent)?;
     let parent = fs::canonicalize(parent).map_err(|error| {
-        SafeArcError::io_path("cannot resolve archive output directory", parent, error)
+        IrohaZipError::io_path("cannot resolve archive output directory", parent, error)
     })?;
     crate::platform::validate_directory_security(&parent)?;
     Ok(parent.join(file_name))

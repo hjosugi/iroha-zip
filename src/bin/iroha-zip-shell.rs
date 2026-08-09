@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use safearc::config::default_config_path;
+use iroha_zip::config::default_config_path;
 
 fn main() -> ExitCode {
     match run() {
@@ -17,20 +17,20 @@ fn main() -> ExitCode {
     }
 }
 
-fn run() -> safearc::error::Result<()> {
+fn run() -> iroha_zip::error::Result<()> {
     let mut arguments = std::env::args_os().skip(1);
     let archive = arguments.next().map(PathBuf::from).ok_or_else(|| {
-        safearc::error::SafeArcError::Usage(
-            "safearc-shell requires exactly one archive path".to_owned(),
+        iroha_zip::error::IrohaZipError::Usage(
+            "iroha-zip-shell requires exactly one archive path".to_owned(),
         )
     })?;
     if arguments.next().is_some() {
-        return Err(safearc::error::SafeArcError::Usage(
-            "safearc-shell requires exactly one archive path".to_owned(),
+        return Err(iroha_zip::error::IrohaZipError::Usage(
+            "iroha-zip-shell requires exactly one archive path".to_owned(),
         ));
     }
     let config = default_config_path()?;
-    let _ = safearc::shell_extract(&archive, &config)?;
+    let _ = iroha_zip::shell_extract(&archive, &config)?;
     Ok(())
 }
 
@@ -45,7 +45,7 @@ fn show_error(message: &str) {
         .encode_wide()
         .chain(std::iter::once(0))
         .collect();
-    let title: Vec<u16> = OsStr::new("SafeArc")
+    let title: Vec<u16> = OsStr::new("iroha-zip")
         .encode_wide()
         .chain(std::iter::once(0))
         .collect();
@@ -61,5 +61,5 @@ fn show_error(message: &str) {
 
 #[cfg(not(windows))]
 fn show_error(message: &str) {
-    eprintln!("safearc-shell: {message}");
+    eprintln!("iroha-zip-shell: {message}");
 }

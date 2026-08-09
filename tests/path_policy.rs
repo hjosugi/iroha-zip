@@ -2,9 +2,9 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 
-use safearc::policy::{self, Limits};
-use safearc::transfer;
-use safearc::util;
+use iroha_zip::policy::{self, Limits};
+use iroha_zip::transfer;
+use iroha_zip::util;
 
 #[test]
 fn accepts_normal_and_japanese_names() {
@@ -58,7 +58,7 @@ fn enforces_path_depth_and_utf8_length() {
 
 #[test]
 fn audited_copy_preserves_only_regular_tree_content() {
-    let parent = std::env::temp_dir().join(format!("safearc-test-{}", util::unique_token()));
+    let parent = std::env::temp_dir().join(format!("iroha-zip-test-{}", util::unique_token()));
     let source = parent.join("source");
     let target = parent.join("target");
     fs::create_dir_all(source.join("nested")).unwrap();
@@ -80,7 +80,7 @@ fn audited_copy_preserves_only_regular_tree_content() {
 
 #[test]
 fn audit_rejects_hard_links() {
-    let parent = std::env::temp_dir().join(format!("safearc-test-{}", util::unique_token()));
+    let parent = std::env::temp_dir().join(format!("iroha-zip-test-{}", util::unique_token()));
     fs::create_dir_all(&parent).unwrap();
     let first = parent.join("first.txt");
     let second = parent.join("second.txt");

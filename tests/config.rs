@@ -1,7 +1,14 @@
 use std::fs;
 
-use safearc::config::{Config, FilenameEncoding};
-use safearc::util;
+use iroha_zip::config::{Config, FilenameEncoding};
+use iroha_zip::util;
+
+#[test]
+fn default_configuration_uses_the_application_directory() {
+    let path = iroha_zip::config::default_config_path().unwrap();
+    assert_eq!(path.file_name().unwrap(), "config.toml");
+    assert_eq!(path.parent().unwrap().file_name().unwrap(), "iroha-zip");
+}
 
 #[test]
 fn default_config_round_trips_through_toml() {
@@ -83,7 +90,7 @@ fn validation_rejects_unsafe_or_inconsistent_limits() {
 
 #[test]
 fn save_replaces_configuration_and_preserves_all_settings() {
-    let directory = std::env::temp_dir().join(format!("safearc-config-{}", util::unique_token()));
+    let directory = std::env::temp_dir().join(format!("iroha-zip-config-{}", util::unique_token()));
     let path = directory.join("config.toml");
     let mut config = Config::default();
     config.backend.directory = Some("custom/backend".into());
@@ -110,7 +117,7 @@ fn save_replaces_configuration_and_preserves_all_settings() {
 
 #[test]
 fn invalid_configuration_is_not_written() {
-    let directory = std::env::temp_dir().join(format!("safearc-config-{}", util::unique_token()));
+    let directory = std::env::temp_dir().join(format!("iroha-zip-config-{}", util::unique_token()));
     let path = directory.join("config.toml");
     let valid = Config::default();
     valid.save(&path).unwrap();

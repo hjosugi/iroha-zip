@@ -41,14 +41,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $packages = @(Get-ChildItem -LiteralPath dist -Filter 'SafeArc-*-windows-x64.zip')
+          $packages = @(Get-ChildItem -LiteralPath dist -Filter 'iroha-zip-*-windows-x64.zip')
           if ($packages.Count -ne 1) {
             throw "Expected exactly one release ZIP; found $($packages.Count)."
           }
           $zip = $packages[0]
           gh release create $env:GITHUB_REF_NAME `
             --verify-tag `
-            --title "SafeArc $($env:GITHUB_REF_NAME.TrimStart('v'))" `
+            --title "iroha-zip $($env:GITHUB_REF_NAME.TrimStart('v'))" `
             --prerelease `
             --generate-notes `
             $zip.FullName `

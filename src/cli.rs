@@ -6,7 +6,7 @@ pub use crate::config::FilenameEncoding;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "safearc",
+    name = "iroha-zip",
     version,
     about = "Safely extract archives through a pinned bsdtar backend",
     long_about = None

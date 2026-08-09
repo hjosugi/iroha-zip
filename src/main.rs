@@ -9,24 +9,24 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use clap::Parser;
-use safearc::backend::BackendBundle;
-use safearc::cli::{Cli, Command};
-use safearc::config::{Config, default_config_path};
-use safearc::create;
-use safearc::error::Result;
+use iroha_zip::backend::BackendBundle;
+use iroha_zip::cli::{Cli, Command};
+use iroha_zip::config::{Config, default_config_path};
+use iroha_zip::create;
 #[cfg(windows)]
-use safearc::error::SafeArcError;
-use safearc::extract::{self, ExtractRequest};
+use iroha_zip::error::IrohaZipError;
+use iroha_zip::error::Result;
+use iroha_zip::extract::{self, ExtractRequest};
 #[cfg(windows)]
-use safearc::platform::{ProcessSpec, Sandbox};
+use iroha_zip::platform::{ProcessSpec, Sandbox};
 #[cfg(windows)]
-use safearc::util;
+use iroha_zip::util;
 
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("safearc: {error}");
+            eprintln!("iroha-zip: {error}");
             ExitCode::from(2)
         }
     }
@@ -116,11 +116,11 @@ fn run() -> Result<()> {
 #[cfg(windows)]
 fn open_settings(config_path: &std::path::Path) -> Result<()> {
     let executable = std::env::current_exe()
-        .map_err(|error| SafeArcError::io("cannot locate safearc executable", error))?;
+        .map_err(|error| IrohaZipError::io("cannot locate iroha-zip executable", error))?;
     let directory = executable.parent().ok_or_else(|| {
-        SafeArcError::Config("safearc executable has no parent directory".to_owned())
+        IrohaZipError::Config("iroha-zip executable has no parent directory".to_owned())
     })?;
-    let settings = directory.join("safearc-settings.exe");
+    let settings = directory.join("iroha-zip-settings.exe");
     std::process::Command::new(&settings)
         .arg("--config")
         .arg(config_path)
@@ -128,13 +128,13 @@ fn open_settings(config_path: &std::path::Path) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|error| SafeArcError::io_path("cannot open settings", &settings, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot open settings", &settings, error))?;
     Ok(())
 }
 
 #[cfg(not(windows))]
 fn open_settings(_config_path: &std::path::Path) -> Result<()> {
-    Err(safearc::error::SafeArcError::Unsupported(
+    Err(iroha_zip::error::IrohaZipError::Unsupported(
         "the graphical settings screen is available on Windows".to_owned(),
     ))
 }
@@ -158,14 +158,14 @@ fn probe_backend_in_sandbox(backend: &BackendBundle, config: &Config) -> Result<
     let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
     let stderr = util::read_limited(&stderr_log, 16 * 1024)?;
     if result.exit_code != 0 {
-        return Err(SafeArcError::Backend(format!(
+        return Err(IrohaZipError::Backend(format!(
             "sandboxed bsdtar --version failed with code {}. stderr={stderr:?}, stdout={stdout:?}",
             result.exit_code
         )));
     }
     let version = if stdout.is_empty() { stderr } else { stdout };
     if version.is_empty() {
-        return Err(SafeArcError::Backend(
+        return Err(IrohaZipError::Backend(
             "sandboxed bsdtar --version returned no text".to_owned(),
         ));
     }

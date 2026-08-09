@@ -1,10 +1,10 @@
-# SafeArc
+# iroha-zip
 
-SafeArcは、未信頼の圧縮ファイルをWindows上でできるだけ小さい権限で展開し、検査済みの通常ファイルから書庫を作成するRust製ラッパーです。
+iroha-zipは、未信頼の圧縮ファイルをWindows上でできるだけ小さい権限で展開し、検査済みの通常ファイルから書庫を作成するRust製ラッパーです。
 
 目的は「Rustで全書庫形式を再実装する」ことではありません。最新版のlibarchive/`bsdtar.exe`を独立プロセスとして使い、そのプロセスを一時的なAppContainerに閉じ込め、展開前後と圧縮元をRust側で検査します。展開と作成のどちらでも、`bsdtar.exe`を通常ユーザー権限で直接実行しません。
 
-これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.2.1`です。
+これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.3.0`です。
 
 ## 主な動作
 
@@ -74,7 +74,7 @@ RARとLZHの作成は実装していません。RARは独自形式で、libarchi
 通常は書庫内のフラグとlibarchiveの自動判定を使います。古い日本語ZIP/LZHが文字化けする場合は、CP932を明示できます。
 
 ```powershell
-safearc.exe extract .\old-japanese.zip --encoding cp932
+iroha-zip.exe extract .\old-japanese.zip --encoding cp932
 ```
 
 選択肢は次の4つです。
@@ -90,7 +90,7 @@ ZIPに文字コード情報が正しく保存されていない場合、完全�
 
 ## セキュリティ設計
 
-SafeArcは次をfail-closedで拒否します。
+iroha-zipは次をfail-closedで拒否します。
 
 - AppContainerの作成に失敗した状態での暗黙の展開・作成
 - `..`、絶対パス、Windowsドライブプレフィックス
@@ -120,7 +120,7 @@ SafeArcは次をfail-closedで拒否します。
 
 ## なぜbsdtarをZIPに同梱していないか
 
-第三者が作った実行ファイルを出所不明のまま再配布することを避けるためです。SafeArcのソースと公式リリースZIPにはバックエンドバイナリを含めません。
+第三者が作った実行ファイルを出所不明のまま再配布することを避けるためです。iroha-zipのソースと公式リリースZIPにはバックエンドバイナリを含めません。
 
 ユーザー自身が信頼するlibarchiveビルドを用意し、設定画面の「bundleを取り込む」または「MSYS2から取り込む」を使います。取り込み時にEXEと全DLLのSHA-256マニフェストを生成し、取り込み後に完全検証します。付属スクリプトは自動化用にも残しています。
 
@@ -167,8 +167,8 @@ cargo build --release
 成功すると、配布用フォルダとZIPが生成されます。
 
 ```text
-dist\SafeArc\
-   dist\SafeArc-0.2.1-windows-x64.zip
+dist\iroha-zip\
+   dist\iroha-zip-0.3.0-windows-x64.zip
 ```
 
 初回ビルド時に`Cargo.lock`がない場合は生成されます。以後は`Cargo.lock`をバージョン管理し、`--locked`でビルドしてください。
@@ -184,8 +184,8 @@ dist\SafeArc\
 配布フォルダで設定画面を開きます。
 
 ```powershell
-.\safearc.exe settings
-# または .\safearc-settings.exe
+.\iroha-zip.exe settings
+# または .\iroha-zip-settings.exe
 ```
 
 設定画面から次のすべてを実行できます。
@@ -206,7 +206,7 @@ dist\SafeArc\
 設定ファイルは通常、次に作成されます。
 
 ```text
-%LOCALAPPDATA%\SafeArc\config.toml
+%LOCALAPPDATA%\iroha-zip\config.toml
 ```
 
 設定例は[`config.example.toml`](config.example.toml)です。
@@ -214,21 +214,21 @@ dist\SafeArc\
 CLIだけで初期化・診断する場合は従来のコマンドも使用できます。
 
 ```powershell
-.\safearc.exe init-config
-.\safearc.exe doctor
+.\iroha-zip.exe init-config
+.\iroha-zip.exe doctor
 ```
 
-Windowsは既定アプリの変更をユーザー操作で確定する仕組みです。設定画面でSafeArcを候補として登録し、「既定のアプリを開く」からZIP、7z、RARなどをSafeArcへ割り当てると、ダブルクリックで同名フォルダへ展開します。
+Windowsは既定アプリの変更をユーザー操作で確定する仕組みです。設定画面でiroha-zipを候補として登録し、「既定のアプリを開く」からZIP、7z、RARなどをiroha-zipへ割り当てると、ダブルクリックで同名フォルダへ展開します。
 
 ## CLI
 
 ### 展開
 
 ```powershell
-safearc.exe extract .\archive.zip
-safearc.exe extract .\archive.zip --encoding cp932
-safearc.exe extract .\archive.7z --output D:\Extracted\archive
-safearc.exe extract .\archive.tar.gz --open
+iroha-zip.exe extract .\archive.zip
+iroha-zip.exe extract .\archive.zip --encoding cp932
+iroha-zip.exe extract .\archive.7z --output D:\Extracted\archive
+iroha-zip.exe extract .\archive.tar.gz --open
 ```
 
 既存の出力先は上書きしません。出力先を省略すると、書庫の隣に衝突しない名前を作ります。
@@ -236,10 +236,10 @@ safearc.exe extract .\archive.tar.gz --open
 ### 作成
 
 ```powershell
-safearc.exe create zip .\folder .\folder.zip
-safearc.exe create seven-zip .\folder .\folder.7z
-safearc.exe create tar .\folder .\folder.tar
-safearc.exe create tar-gz .\folder .\folder.tar.gz
+iroha-zip.exe create zip .\folder .\folder.zip
+iroha-zip.exe create seven-zip .\folder .\folder.7z
+iroha-zip.exe create tar .\folder .\folder.tar
+iroha-zip.exe create tar-gz .\folder .\folder.tar.gz
 ```
 
 圧縮元の中に出力書庫を作る操作、リンクやADSを含む圧縮元、既存書庫の上書きは拒否します。
@@ -247,7 +247,7 @@ safearc.exe create tar-gz .\folder .\folder.tar.gz
 ### 診断
 
 ```powershell
-safearc.exe doctor
+iroha-zip.exe doctor
 ```
 
 設定、バックエンドの全ハッシュ、`bsdtar --version`、AppContainer作成可否を確認します。
@@ -266,6 +266,6 @@ safearc.exe doctor
 
 ## ライセンス
 
-SafeArc本体はMITまたはApache-2.0のデュアルライセンスです。
+iroha-zip本体はMITまたはApache-2.0のデュアルライセンスです。
 
 取り込むlibarchiveおよびDLLのライセンスは、それぞれの配布元に従います。バイナリを第三者へ再配布する場合は、依存DLLを含むライセンス表示を別途確認してください。

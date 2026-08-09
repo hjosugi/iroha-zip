@@ -4,7 +4,7 @@
 
 ソース配布にはバイナリを含めません。
 
-通常は`SafeArc 設定`の「bundleを取り込む」または「MSYS2から取り込む」を使用してください。次のスクリプトは自動化用です。
+通常は`iroha-zip 設定`の「bundleを取り込む」または「MSYS2から取り込む」を使用してください。次のスクリプトは自動化用です。
 
 ```powershell
 .\scripts\export-msys2-backend.ps1 -Msys2Root C:\msys64
@@ -16,4 +16,4 @@
 .\scripts\install-backend.ps1 -SourceDirectory C:\path\to\bundle
 ```
 
-SafeArcはマニフェストにない余分なファイルも拒否します。
+iroha-zipはマニフェストにない余分なファイルも拒否します。

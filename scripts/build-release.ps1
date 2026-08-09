@@ -48,13 +48,13 @@ try {
     $version = ((Select-String -LiteralPath "Cargo.toml" -Pattern '^version\s*=\s*"([^\"]+)"').Matches[0].Groups[1].Value)
     $releaseSource = Join-Path $ProjectRoot "target\$Target\release"
     $distRoot = Join-Path $ProjectRoot "dist"
-    $appRoot = Join-Path $distRoot "SafeArc"
+    $appRoot = Join-Path $distRoot "iroha-zip"
     if (Test-Path -LiteralPath $appRoot) {
         Remove-Item -LiteralPath $appRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Path $appRoot | Out-Null
 
-    foreach ($binary in @("safearc.exe", "safearc-shell.exe", "safearc-settings.exe")) {
+    foreach ($binary in @("iroha-zip.exe", "iroha-zip-shell.exe", "iroha-zip-settings.exe")) {
         $source = Join-Path $releaseSource $binary
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "Built binary is missing: $source"
@@ -96,7 +96,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\THREAT_MODEL.md") `
         -Destination (Join-Path $appRoot "docs\THREAT_MODEL.md")
 
-    $zip = Join-Path $distRoot "SafeArc-$version-windows-x64.zip"
+    $zip = Join-Path $distRoot "iroha-zip-$version-windows-x64.zip"
     if (Test-Path -LiteralPath $zip) {
         Remove-Item -LiteralPath $zip -Force
     }

@@ -75,7 +75,7 @@ if ($executables.Count -ne 1) {
 
 $destinationParent = Split-Path -Parent $DestinationDirectory
 New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
-$stage = Join-Path $destinationParent (".safearc-backend-stage-" + [Guid]::NewGuid().ToString("N"))
+$stage = Join-Path $destinationParent (".iroha-zip-backend-stage-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $stage | Out-Null
 
 try {
@@ -126,7 +126,7 @@ try {
     $executableRelative = $stageExecutable[0].FullName.Substring($stage.Length).TrimStart($PathSeparators)
     $executableRelative = $executableRelative.Replace('\', '/')
     $lines = [System.Collections.Generic.List[string]]::new()
-    $lines.Add("SAFEARC-BACKEND-MANIFEST`t1")
+    $lines.Add("IROHA-ZIP-BACKEND-MANIFEST`t1")
     $lines.Add("executable`t$executableRelative")
 
     foreach ($file in $stageFiles) {
@@ -146,7 +146,7 @@ try {
 
     $backup = $null
     if (Test-Path -LiteralPath $DestinationDirectory) {
-        $backup = Join-Path $destinationParent (".safearc-backend-backup-" + [Guid]::NewGuid().ToString("N"))
+        $backup = Join-Path $destinationParent (".iroha-zip-backend-backup-" + [Guid]::NewGuid().ToString("N"))
         Move-Item -LiteralPath $DestinationDirectory -Destination $backup
     }
 
@@ -165,7 +165,7 @@ try {
 
     Write-Host "Installed a pinned backend bundle: $DestinationDirectory"
     Write-Host "Files: $($stageFiles.Count)"
-    Write-Host "Run: .\target\x86_64-pc-windows-msvc\release\safearc.exe doctor"
+    Write-Host "Run: .\target\x86_64-pc-windows-msvc\release\iroha-zip.exe doctor"
 }
 finally {
     if (Test-Path -LiteralPath $stage) {

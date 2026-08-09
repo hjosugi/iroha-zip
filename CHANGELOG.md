@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-08-09
+
+- Unified the package, application, service, executable, configuration, Windows integration, sandbox, backend manifest, and release artifact names under `iroha-zip`.
+- Renamed the Rust library crate to `iroha_zip` and its public error type to `IrohaZipError`.
+- Moved the default configuration directory to `%LOCALAPPDATA%\iroha-zip` on Windows and the corresponding `iroha-zip` directory on other platforms.
+- Renamed the CLI, shell integration, and settings executables to `iroha-zip.exe`, `iroha-zip-shell.exe`, and `iroha-zip-settings.exe`.
+
 ## 0.2.1 - 2026-08-09
 
 - Refactored settings form conversion and validation into a platform-neutral, unit-tested module.
@@ -18,7 +25,7 @@
 - Added validated, rollback-safe configuration replacement and expanded configuration tests.
 - Added reproducible backend-free Windows release packages and tag-driven GitHub releases.
 - Added a checked dependency policy and generated third-party license inventory to release packages.
-- Added `safearc settings` as the supported settings entry point.
+- Added `iroha-zip settings` as the supported settings entry point.
 
 ## 0.1.0 - 2026-08-08
 

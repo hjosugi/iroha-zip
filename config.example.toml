@@ -1,5 +1,5 @@
 [backend]
-# safearc.exeからの相対パス、または絶対パス。
+# iroha-zip.exeからの相対パス、または絶対パス。
 directory = "backend/libarchive"
 
 [sandbox]

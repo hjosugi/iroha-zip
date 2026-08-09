@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 use crate::monitor;
 use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
 use crate::util;
@@ -18,12 +18,12 @@ pub struct Sandbox {
 impl Sandbox {
     pub fn new(_memory_limit_mib: u64, allow_unsandboxed: bool) -> Result<Self> {
         if !allow_unsandboxed {
-            return Err(SafeArcError::Unsupported(
+            return Err(IrohaZipError::Unsupported(
                 "AppContainer isolation is only implemented on Windows. Pass --allow-unsandboxed only for controlled testing."
                     .to_owned(),
             ));
         }
-        let parent = std::env::temp_dir().join("safearc-unsandboxed");
+        let parent = std::env::temp_dir().join("iroha-zip-unsandboxed");
         let root = util::create_unique_dir(&parent, "job-")?;
         Ok(Self { root })
     }
@@ -34,10 +34,10 @@ impl Sandbox {
 
     pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult> {
         let stdout = File::create(&spec.stdout_log).map_err(|error| {
-            SafeArcError::io_path("cannot create process stdout log", &spec.stdout_log, error)
+            IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
         })?;
         let stderr = File::create(&spec.stderr_log).map_err(|error| {
-            SafeArcError::io_path("cannot create process stderr log", &spec.stderr_log, error)
+            IrohaZipError::io_path("cannot create process stderr log", &spec.stderr_log, error)
         })?;
 
         let mut environment = BTreeMap::<OsString, OsString>::new();
@@ -59,14 +59,14 @@ impl Sandbox {
             .stderr(Stdio::from(stderr))
             .spawn()
             .map_err(|error| {
-                SafeArcError::io_path("cannot start archive backend", &spec.program, error)
+                IrohaZipError::io_path("cannot start archive backend", &spec.program, error)
             })?;
 
         let started = Instant::now();
         loop {
             if let Some(status) = child
                 .try_wait()
-                .map_err(|error| SafeArcError::io("cannot query archive backend", error))?
+                .map_err(|error| IrohaZipError::io("cannot query archive backend", error))?
             {
                 if let Some(root) = &spec.monitor_root {
                     monitor::check_resource_limits(root, &spec.limits)?;
@@ -79,7 +79,7 @@ impl Sandbox {
             if started.elapsed() >= spec.timeout {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(SafeArcError::Sandbox(format!(
+                return Err(IrohaZipError::Sandbox(format!(
                     "archive backend exceeded {:?}",
                     spec.timeout
                 )));
@@ -104,10 +104,11 @@ impl Drop for Sandbox {
 }
 
 pub fn validate_directory_security(path: &Path) -> Result<()> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| SafeArcError::io_path("cannot inspect directory security", path, error))?;
+    let metadata = fs::symlink_metadata(path).map_err(|error| {
+        IrohaZipError::io_path("cannot inspect directory security", path, error)
+    })?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "not a real directory: {}",
             path.display()
         )));
@@ -117,9 +118,9 @@ pub fn validate_directory_security(path: &Path) -> Result<()> {
 
 pub fn validate_regular_file_security(path: &Path) -> Result<()> {
     let metadata = fs::symlink_metadata(path)
-        .map_err(|error| SafeArcError::io_path("cannot inspect file security", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot inspect file security", path, error))?;
     if !metadata.is_file() || metadata.file_type().is_symlink() {
-        return Err(SafeArcError::Policy(format!(
+        return Err(IrohaZipError::Policy(format!(
             "not a regular file: {}",
             path.display()
         )));
@@ -132,7 +133,7 @@ pub fn validate_extracted_entry_security(path: &Path, metadata: &Metadata) -> Re
     {
         use std::os::unix::fs::MetadataExt;
         if metadata.is_file() && metadata.nlink() != 1 {
-            return Err(SafeArcError::Policy(format!(
+            return Err(IrohaZipError::Policy(format!(
                 "hard-linked output is rejected: {}",
                 path.display()
             )));
@@ -146,7 +147,7 @@ pub fn file_identity(path: &Path) -> Result<Option<FileIdentity>> {
     {
         use std::os::unix::fs::MetadataExt;
         let metadata = fs::metadata(path)
-            .map_err(|error| SafeArcError::io_path("cannot read file identity", path, error))?;
+            .map_err(|error| IrohaZipError::io_path("cannot read file identity", path, error))?;
         return Ok(Some(FileIdentity {
             volume: metadata.dev(),
             index: metadata.ino(),
@@ -171,9 +172,9 @@ pub fn open_folder(path: &Path) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .map_err(|error| SafeArcError::io_path("cannot open output directory", path, error))?;
+        .map_err(|error| IrohaZipError::io_path("cannot open output directory", path, error))?;
     if !status.success() {
-        return Err(SafeArcError::Sandbox(format!(
+        return Err(IrohaZipError::Sandbox(format!(
             "xdg-open failed with {status}"
         )));
     }

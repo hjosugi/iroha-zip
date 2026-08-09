@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::error::{Result, SafeArcError};
+use crate::error::{IrohaZipError, Result};
 use crate::platform;
 use crate::policy::{AuditSummary, Limits};
 
@@ -21,7 +21,7 @@ pub fn check_resource_limits(root: &Path, limits: &Limits) -> Result<()> {
             Ok(entries) => entries,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => {
-                return Err(SafeArcError::io_path(
+                return Err(IrohaZipError::io_path(
                     "cannot monitor extraction directory",
                     &directory,
                     error,
@@ -31,14 +31,14 @@ pub fn check_resource_limits(root: &Path, limits: &Limits) -> Result<()> {
 
         for entry in entries {
             let entry = entry.map_err(|error| {
-                SafeArcError::io_path("cannot monitor extraction entry", &directory, error)
+                IrohaZipError::io_path("cannot monitor extraction entry", &directory, error)
             })?;
             let path = entry.path();
             let metadata = match fs::symlink_metadata(&path) {
                 Ok(metadata) => metadata,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(error) => {
-                    return Err(SafeArcError::io_path(
+                    return Err(IrohaZipError::io_path(
                         "cannot monitor extracted object",
                         &path,
                         error,
@@ -47,7 +47,7 @@ pub fn check_resource_limits(root: &Path, limits: &Limits) -> Result<()> {
             };
 
             if metadata.file_type().is_symlink() {
-                return Err(SafeArcError::Policy(format!(
+                return Err(IrohaZipError::Policy(format!(
                     "link created during extraction: {}",
                     path.display()
                 )));
@@ -56,9 +56,9 @@ pub fn check_resource_limits(root: &Path, limits: &Limits) -> Result<()> {
             if metadata.is_dir() {
                 directories = directories
                     .checked_add(1)
-                    .ok_or_else(|| SafeArcError::Policy("directory count overflow".to_owned()))?;
+                    .ok_or_else(|| IrohaZipError::Policy("directory count overflow".to_owned()))?;
                 if directories > limits.max_directories {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "directory count exceeded {} while extracting",
                         limits.max_directories
                     )));
@@ -67,16 +67,16 @@ pub fn check_resource_limits(root: &Path, limits: &Limits) -> Result<()> {
             } else if metadata.is_file() {
                 files = files
                     .checked_add(1)
-                    .ok_or_else(|| SafeArcError::Policy("file count overflow".to_owned()))?;
+                    .ok_or_else(|| IrohaZipError::Policy("file count overflow".to_owned()))?;
                 if files > limits.max_files {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "file count exceeded {} while extracting",
                         limits.max_files
                     )));
                 }
                 let size = metadata.len();
                 if size > limits.max_single_file_bytes {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "single file exceeded {} bytes while extracting: {}",
                         limits.max_single_file_bytes,
                         path.display()
@@ -84,15 +84,15 @@ pub fn check_resource_limits(root: &Path, limits: &Limits) -> Result<()> {
                 }
                 total_bytes = total_bytes
                     .checked_add(size)
-                    .ok_or_else(|| SafeArcError::Policy("expanded size overflow".to_owned()))?;
+                    .ok_or_else(|| IrohaZipError::Policy("expanded size overflow".to_owned()))?;
                 if total_bytes > limits.max_total_bytes {
-                    return Err(SafeArcError::Policy(format!(
+                    return Err(IrohaZipError::Policy(format!(
                         "expanded data exceeded {} bytes while extracting",
                         limits.max_total_bytes
                     )));
                 }
             } else {
-                return Err(SafeArcError::Policy(format!(
+                return Err(IrohaZipError::Policy(format!(
                     "special object created during extraction: {}",
                     path.display()
                 )));
@@ -127,5 +127,5 @@ pub fn limits_with_baseline(
 
 fn checked_budget_add(left: u64, right: u64, label: &str) -> Result<u64> {
     left.checked_add(right)
-        .ok_or_else(|| SafeArcError::Config(format!("{label} overflow")))
+        .ok_or_else(|| IrohaZipError::Config(format!("{label} overflow")))
 }

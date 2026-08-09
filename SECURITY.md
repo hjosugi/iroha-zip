@@ -1,6 +1,6 @@
 # Security policy
 
-SafeArc v0.1.0はセキュリティ指向の試作実装であり、第三者監査済みではありません。
+iroha-zip v0.1.0はセキュリティ指向の試作実装であり、第三者監査済みではありません。
 
 ## Supported versions
 

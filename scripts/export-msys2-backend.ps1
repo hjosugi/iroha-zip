@@ -30,7 +30,7 @@ function Invoke-Ldd([string]$UnixPath) {
     # Pass the path as bash $1 instead of interpolating it into shell syntax.
     $output = @(
         & $bash --noprofile --norc -lc 'PATH=/ucrt64/bin:/usr/bin ldd "$1"' `
-            safearc-ldd $UnixPath 2>&1
+            iroha-zip-ldd $UnixPath 2>&1
     )
     if ($LASTEXITCODE -ne 0) {
         throw "ldd failed for $UnixPath`n$($output -join "`n")"
@@ -71,7 +71,7 @@ while ($pending.Count -gt 0) {
     }
 }
 
-$temporaryBundle = Join-Path ([System.IO.Path]::GetTempPath()) ("safearc-msys2-" + [Guid]::NewGuid().ToString("N"))
+$temporaryBundle = Join-Path ([System.IO.Path]::GetTempPath()) ("iroha-zip-msys2-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $temporaryBundle | Out-Null
 try {
     foreach ($unixPath in ($seen | Sort-Object)) {
