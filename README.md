@@ -4,7 +4,7 @@ SafeArcは、未信頼の圧縮ファイルをWindows上でできるだけ小さ
 
 目的は「Rustで全書庫形式を再実装する」ことではありません。最新版のlibarchive/`bsdtar.exe`を独立プロセスとして使い、そのプロセスを一時的なAppContainerに閉じ込め、展開前後と圧縮元をRust側で検査します。展開と作成のどちらでも、`bsdtar.exe`を通常ユーザー権限で直接実行しません。
 
-これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.2.0`です。
+これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.2.1`です。
 
 ## 主な動作
 
@@ -168,7 +168,7 @@ cargo build --release
 
 ```text
 dist\SafeArc\
-   dist\SafeArc-0.2.0-windows-x64.zip
+   dist\SafeArc-0.2.1-windows-x64.zip
 ```
 
 初回ビルド時に`Cargo.lock`がない場合は生成されます。以後は`Cargo.lock`をバージョン管理し、`--locked`でビルドしてください。

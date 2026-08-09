@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.1 - 2026-08-09
+
 - Refactored settings form conversion and validation into a platform-neutral, unit-tested module.
 - Added human-readable binary size units, field-specific validation focus, and lossless config round trips.
 - Added unsaved-change tracking, close confirmation, progress states, destructive-action confirmation, and keyboard dialog navigation to the settings screen.

@@ -28,7 +28,7 @@ SafeArc v0.1.0はセキュリティ指向の試作実装であり、第三者監
 
 ## Production release requirements
 
-監査済み・production-readyと表明するリリースの前に最低限、次を満たしてください。`v0.2.0`はこれらを完了するためのpreviewです。
+監査済み・production-readyと表明するリリースの前に最低限、次を満たしてください。`v0.2.x`はこれらを完了するためのpreviewです。
 
 - Windows CIで`cargo test`と`cargo clippy`が成功
 - 実際のWindows 11でZIP、7z、RAR、LZH、TAR.GZ、`.Z`を展開
