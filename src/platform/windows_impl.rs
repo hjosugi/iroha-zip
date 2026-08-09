@@ -28,7 +28,7 @@ use windows::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeleteAppContainerProfile, GetAppContainerFolderPath,
 };
 use windows::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, FreeSid, GetTokenInformation,
+    ACL, DACL_SECURITY_INFORMATION, FreeSid, GetTokenInformation, NO_INHERITANCE,
     PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_CAPABILITIES,
     SUB_CONTAINERS_AND_OBJECTS_INHERIT, TOKEN_GROUPS, TOKEN_QUERY, TokenCapabilities,
     TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
@@ -37,10 +37,10 @@ use windows::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_FLAG_SEQUENTIAL_SCAN, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_ID_BOTH_DIR_INFO,
-    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
-    FindClose, FindFirstStreamW, FindNextStreamW, FindStreamInfoStandard,
-    GetFileInformationByHandle, GetFileInformationByHandleEx, OPEN_EXISTING,
-    WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
+    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FILE_TRAVERSE, FileIdBothDirectoryInfo,
+    FileIdBothDirectoryRestartInfo, FindClose, FindFirstStreamW, FindNextStreamW,
+    FindStreamInfoStandard, GetFileInformationByHandle, GetFileInformationByHandleEx,
+    OPEN_EXISTING, WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
 };
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -451,6 +451,11 @@ impl Sandbox {
                         })();
                         match prepared {
                             Ok(resolved) => {
+                                if let Err(error) =
+                                    grant_appcontainer_parent_traverse(&resolved, sid)
+                                {
+                                    return sandbox.fail_after_cleanup(error);
+                                }
                                 sandbox.sealed_source_parent = Some(resolved);
                                 Ok(sandbox)
                             }
@@ -613,6 +618,39 @@ impl Sandbox {
 }
 
 fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> {
+    set_appcontainer_access(
+        path,
+        sid,
+        FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
+        SUB_CONTAINERS_AND_OBJECTS_INHERIT,
+        true,
+        "staged source",
+    )
+}
+
+fn grant_appcontainer_parent_traverse(path: &Path, sid: PSID) -> Result<()> {
+    // The archive backend changes into the sealed source and then enumerates it.
+    // Grant only traversal on its private parent; do not expose sibling names or
+    // inherit access to future children. The source itself receives the separate
+    // read-only ACL immediately before the backend starts.
+    set_appcontainer_access(
+        path,
+        sid,
+        FILE_TRAVERSE.0,
+        NO_INHERITANCE,
+        false,
+        "sealed staging parent",
+    )
+}
+
+fn set_appcontainer_access(
+    path: &Path,
+    sid: PSID,
+    access_permissions: u32,
+    inheritance: windows::Win32::Security::ACE_FLAGS,
+    protect_dacl: bool,
+    operation_name: &str,
+) -> Result<()> {
     let wide_path = wide_null(path.as_os_str());
     let mut existing_acl: *mut ACL = null_mut();
     let mut security_descriptor = PSECURITY_DESCRIPTOR::default();
@@ -630,7 +668,7 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
     };
     if get_status != ERROR_SUCCESS {
         return Err(windows_status_error_path(
-            "GetNamedSecurityInfoW(staged source)",
+            &format!("GetNamedSecurityInfoW({operation_name})"),
             path,
             get_status.0,
         ));
@@ -639,17 +677,15 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
     let operation = (|| {
         if existing_acl.is_null() {
             return Err(IrohaZipError::Sandbox(format!(
-                "staged source unexpectedly has a null DACL: {}",
+                "{operation_name} unexpectedly has a null DACL: {}",
                 path.display()
             )));
         }
 
         let entry = EXPLICIT_ACCESS_W {
-            // Replace any access for this Package SID with only the rights needed
-            // to enumerate and read the staged source tree.
-            grfAccessPermissions: FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
+            grfAccessPermissions: access_permissions,
             grfAccessMode: SET_ACCESS,
-            grfInheritance: SUB_CONTAINERS_AND_OBJECTS_INHERIT,
+            grfInheritance: inheritance,
             Trustee: TRUSTEE_W {
                 pMultipleTrustee: null_mut(),
                 MultipleTrusteeOperation: NO_MULTIPLE_TRUSTEE,
@@ -668,7 +704,7 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
         };
         if merge_status != ERROR_SUCCESS {
             return Err(windows_status_error_path(
-                "SetEntriesInAclW(staged source)",
+                &format!("SetEntriesInAclW({operation_name})"),
                 path,
                 merge_status.0,
             ));
@@ -680,11 +716,16 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
             )));
         }
 
+        let security_information = if protect_dacl {
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION
+        } else {
+            DACL_SECURITY_INFORMATION
+        };
         let set_status = unsafe {
             SetNamedSecurityInfoW(
                 PCWSTR(wide_path.as_ptr()),
                 SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                security_information,
                 None,
                 None,
                 Some(sealed_acl),
@@ -696,7 +737,7 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
         }
         if set_status != ERROR_SUCCESS {
             return Err(windows_status_error_path(
-                "SetNamedSecurityInfoW(staged source)",
+                &format!("SetNamedSecurityInfoW({operation_name})"),
                 path,
                 set_status.0,
             ));

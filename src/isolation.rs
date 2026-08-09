@@ -14,7 +14,6 @@ const SLEEP_MILLISECONDS: u64 = 5_000;
 const MEMORY_LIMIT_MIB: u64 = 64;
 #[cfg(windows)]
 const REQUESTED_MEMORY_MIB: u64 = 256;
-#[cfg(windows)]
 const STAGING_FIXTURES: [&str; 7] = [
     "read.txt",
     "overwrite.txt",
@@ -100,6 +99,30 @@ pub fn staging_write_probe(root: &Path) -> Result<StagingWriteProbeResult> {
         == expected
     {
         readable_paths.push("nested-file".to_owned());
+    }
+    let root_entries = fs::read_dir(root)
+        .map_err(|error| IrohaZipError::io("cannot enumerate sealed staging root", error))?
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(|error| IrohaZipError::io("cannot enumerate a sealed staging entry", error))?;
+    if root_entries.len() == STAGING_FIXTURES.len() {
+        readable_paths.push("root-directory".to_owned());
+    }
+    let nested_entries = fs::read_dir(root.join("nested"))
+        .map_err(|error| IrohaZipError::io("cannot enumerate sealed nested directory", error))?
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(|error| IrohaZipError::io("cannot enumerate a sealed nested entry", error))?;
+    if nested_entries.len() == 1 {
+        readable_paths.push("nested-directory".to_owned());
+    }
+    std::env::set_current_dir(root).map_err(|error| {
+        IrohaZipError::io("cannot enter sealed staging root as archive backend", error)
+    })?;
+    let current_entries = fs::read_dir(".")
+        .map_err(|error| IrohaZipError::io("cannot enumerate sealed current directory", error))?
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(|error| IrohaZipError::io("cannot enumerate a sealed current entry", error))?;
+    if current_entries.len() == STAGING_FIXTURES.len() {
+        readable_paths.push("current-directory".to_owned());
     }
 
     let mut denied_operations = Vec::new();
@@ -525,7 +548,15 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
 fn expected_staging_write_probe() -> StagingWriteProbeResult {
     StagingWriteProbeResult {
         schema_version: 1,
-        readable_paths: ["root-file", "nested-file"].map(str::to_owned).to_vec(),
+        readable_paths: [
+            "root-file",
+            "nested-file",
+            "root-directory",
+            "nested-directory",
+            "current-directory",
+        ]
+        .map(str::to_owned)
+        .to_vec(),
         denied_operations: [
             "overwrite-existing-file",
             "append-existing-file",
