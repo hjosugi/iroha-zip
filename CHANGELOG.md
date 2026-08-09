@@ -2,12 +2,11 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-08-09
+
 - Refactored backend-manifest parsing into a bounded, platform-neutral API suitable for deterministic tests and future fuzzing.
 - Reject oversized manifests, excessive file records, invalid UTF-8, unsafe Windows names, non-normalized paths, ambiguous executables, duplicate paths, and malformed hashes before backend-tree verification.
 - Added a versioned backend-manifest specification and regression coverage for valid and hostile parser inputs.
-
-## 0.3.0 - 2026-08-09
-
 - Unified the package, application, service, executable, configuration, Windows integration, sandbox, backend manifest, and release artifact names under `iroha-zip`.
 - Renamed the Rust library crate to `iroha_zip` and its public error type to `IrohaZipError`.
 - Moved the default configuration directory to `%LOCALAPPDATA%\iroha-zip` on Windows and the corresponding `iroha-zip` directory on other platforms.
