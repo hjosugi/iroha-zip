@@ -82,6 +82,8 @@ Design a read-only file listing and selective extraction flow while treating met
 
 Acceptance: listing has the same timeout/resource/path policy, does not parse archives in the main process, and selection cannot bypass post-extraction tree audit.
 
+Progress (2026-08-09): extraction now has one shared staging boundary. The `preview` CLI performs a complete temporary extraction under the same AppContainer/LPAC, timeout, Job Object, live resource, and path/security audit, then builds a typed inventory between two full tree fingerprints and publishes nothing. Repeated `extract --select` paths are applied only to the audited payload, are never forwarded to bsdtar, reject unsafe/ambiguous selectors, and are copied through handle-retaining/audited APIs into a tree that is fingerprinted again before the existing partial/handoff/atomic publication path. The native graphical preview, cancellation/progress UX, prerequisite real-Windows/corpus/signed-release evidence, and end-to-end selected-format matrix remain open. See [the preview security contract](ARCHIVE_PREVIEW.md).
+
 ### [OPS-001: Signed updater](https://github.com/hjosugi/iroha-zip/issues/13)
 
 Design an opt-in updater with rollback, channel selection, signature verification, and no implicit backend replacement.

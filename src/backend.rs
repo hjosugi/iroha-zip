@@ -247,6 +247,20 @@ impl BackendBundle {
                 IrohaZipError::io_path("cannot inspect backend source", &source, error)
             })?;
             copy_file_new_exact(&source, &target, source_metadata.len())?;
+            #[cfg(unix)]
+            if relative == self.executable_relative()? {
+                use std::os::unix::fs::PermissionsExt;
+
+                fs::set_permissions(&target, fs::Permissions::from_mode(0o500)).map_err(
+                    |error| {
+                        IrohaZipError::io_path(
+                            "cannot make sandbox backend executable",
+                            &target,
+                            error,
+                        )
+                    },
+                )?;
+            }
             let copied_hash = sha256_file(&target)?;
             if !copied_hash.eq_ignore_ascii_case(expected_hash) {
                 return Err(IrohaZipError::Backend(format!(

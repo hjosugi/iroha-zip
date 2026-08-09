@@ -9,8 +9,11 @@ pub mod extract;
 pub mod monitor;
 pub mod platform;
 pub mod policy;
+pub mod preview;
+pub mod selection;
 pub mod settings;
 pub mod snapshot;
+mod staging;
 pub mod transfer;
 pub mod util;
 
@@ -43,6 +46,7 @@ pub fn shell_extract_with_report(archive: &Path, config_path: &Path) -> Result<E
         archive,
         output: None,
         encoding: config.behavior.default_filename_encoding,
+        selections: &[],
         open: config.behavior.open_after_double_click,
         allow_unsandboxed: false,
     })

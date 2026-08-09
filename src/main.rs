@@ -23,6 +23,7 @@ use iroha_zip::error::Result;
 use iroha_zip::extract::{self, ExtractRequest};
 #[cfg(windows)]
 use iroha_zip::platform::{AttachmentHandoffSession, ProcessSpec, Sandbox};
+use iroha_zip::preview::{self, PreviewRequest};
 #[cfg(windows)]
 use iroha_zip::snapshot::AuditedFile;
 #[cfg(windows)]
@@ -80,10 +81,39 @@ fn run() -> Result<()> {
             #[cfg(not(windows))]
             println!("AppContainer:  unavailable; backend execution was not attempted");
         }
+        Command::Preview {
+            archive,
+            encoding,
+            allow_unsandboxed,
+        } => {
+            let config = Config::load(&config_path)?;
+            let backend = BackendBundle::verify(&config.backend_directory()?)?;
+            let encoding = encoding.unwrap_or(config.behavior.default_filename_encoding);
+            let result = preview::preview(PreviewRequest {
+                backend: &backend,
+                config: &config,
+                archive: &archive,
+                encoding,
+                allow_unsandboxed,
+            })?;
+            for entry in &result.entries {
+                println!(
+                    "{}\t{}\t{}",
+                    entry.kind.display_name(),
+                    entry.size,
+                    entry.path.display()
+                );
+            }
+            eprintln!(
+                "previewed {} files, {} directories ({} bytes); nothing was published",
+                result.summary.files, result.summary.directories, result.summary.total_bytes
+            );
+        }
         Command::Extract {
             archive,
             output,
             encoding,
+            select,
             open,
             allow_unsandboxed,
         } => {
@@ -96,6 +126,7 @@ fn run() -> Result<()> {
                 archive: &archive,
                 output: output.as_deref(),
                 encoding,
+                selections: &select,
                 open,
                 allow_unsandboxed,
             })?;

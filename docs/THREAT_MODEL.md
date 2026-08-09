@@ -48,6 +48,8 @@ iroha-zipの中心目標は、攻撃者が作成した書庫を展開すると�
 | ハードリンク | link countとファイルID重複を拒否 |
 | NTFS ADS | 展開後ツリーのnamed streamを拒否 |
 | Windows予約名や末尾ドット | 各パスコンポーネントをWindows規則で検査 |
+| preview表示のmetadata/control文字注入 | 書庫listing文字列をparseせず、完全展開・監査済みfilesystemから型付きentryだけを生成 |
+| 選択pathによるoption注入・監査迂回 | selectorをbackendへ渡さず、書庫全体監査後のhandle保持copyと選択tree再監査にだけ使用 |
 | バックエンド差し替え | EXEと全DLLをSHA-256マニフェストで固定し、コピー後に再ハッシュ |
 | DLL横取り | バックエンドディレクトリの余分なファイルを拒否し、最小PATHで起動 |
 | 既存データ上書き | `create_new`、`-k`、既存出力拒否、最終rename |
@@ -69,12 +71,14 @@ AppContainerプロセス
 
 通常プロセス
   7. outputツリーを再帰監査
-  8. 通常ファイル／ディレクトリだけをpartialへコピー
- 9. Mark-of-the-Webを付与
- 10. 設定時はWindows Attachment Servicesへ引き渡す
- 11. 内容・ツリー・リンク・ADS・Mark-of-the-Webを再監査
- 12. 新規名へrenameして公開
- 13. AppContainer profileと一時データを削除
+  8. preview時は監査済みtreeをfingerprintして一覧化し、再fingerprint後に公開せず削除
+  9. 選択展開時は監査済みtreeから選択treeを作り、source/selection双方を再fingerprint
+ 10. 通常ファイル／ディレクトリだけをpartialへコピー
+ 11. Mark-of-the-Webを付与
+ 12. 設定時はWindows Attachment Servicesへ引き渡す
+ 13. 内容・ツリー・リンク・ADS・Mark-of-the-Webを再監査
+ 14. 新規名へrenameして公開
+ 15. AppContainer profileと一時データを削除
 ```
 
 

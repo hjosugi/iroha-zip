@@ -229,6 +229,18 @@ Windowsは既定アプリの変更をユーザー操作で確定する仕組み�
 
 ## CLI
 
+### プレビューと選択展開
+
+`preview`は通常展開と同じsandbox・timeout・容量・個数・パス監査で書庫全体を一時展開し、公開せずに監査済みtreeだけを一覧表示します。書庫のlisting文字列をmain processでparseしません。
+
+~~~powershell
+iroha-zip.exe preview .\archive.zip
+iroha-zip.exe extract .\archive.zip --select "docs\readme.txt"
+iroha-zip.exe extract .\archive.zip --select "写真" --select "資料\index.txt"
+~~~
+
+`--select`はpreviewに表示された相対pathを複数指定できます。選択はbackendへ渡さず、書庫全体の監査後に適用し、選択treeも再監査してから通常のpartial/atomic publish経路へ渡します。安全でない未選択entryがあっても書庫全体を拒否します。詳細は[`ARCHIVE_PREVIEW.md`](docs/ARCHIVE_PREVIEW.md)を参照してください。
+
 ### 展開
 
 ```powershell
@@ -262,7 +274,7 @@ iroha-zip.exe doctor
 ## 現在の制約
 
 - パスワード付き書庫は未対応です。stock Windows版bsdtarの制約と、コマンドラインへ秘密を載せないConPTY設計・試験条件は[暗号化書庫設計](docs/ENCRYPTED_ARCHIVES.md)で追跡します。
-- 書庫内容を閲覧するファイラーUIはありません。現在は「ダブルクリックで安全側に即展開」が中心です。
+- CLIのpolicy-safe previewと選択展開はありますが、書庫内容を閲覧・検索・選択するネイティブGUIは未実装です。
 - ウイルス対策エンジンではありません。展開後の実行ファイルが安全であることは保証しません。
 - AppContainerやWindowsカーネル、libarchive自体の未知の脆弱性を防げる保証はありません。
 - 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。

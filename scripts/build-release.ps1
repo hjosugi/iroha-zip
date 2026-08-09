@@ -95,6 +95,7 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $appRoot "docs") | Out-Null
     foreach ($document in @(
         "ANTIMALWARE_HANDOFF.md",
+        "ARCHIVE_PREVIEW.md",
         "BACKEND_MANIFEST.md",
         "BUILD_STATUS.md",
         "ENCRYPTED_ARCHIVES.md",

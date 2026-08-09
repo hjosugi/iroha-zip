@@ -22,6 +22,21 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Inspect the policy-safe tree that would be published, without publishing it.
+    Preview {
+        /// Archive to inspect.
+        archive: PathBuf,
+
+        /// Override the ZIP/LHA filename encoding.
+        #[arg(long, value_enum)]
+        encoding: Option<FilenameEncoding>,
+
+        /// Explicitly permit preview without `AppContainer` isolation.
+        /// This is required on non-Windows platforms and is intentionally noisy.
+        #[arg(long)]
+        allow_unsandboxed: bool,
+    },
+
     /// Extract an archive to a new directory.
     Extract {
         /// Archive to extract.
@@ -34,6 +49,10 @@ pub enum Command {
         /// Override the ZIP/LHA filename encoding.
         #[arg(long, value_enum)]
         encoding: Option<FilenameEncoding>,
+
+        /// Publish only this preview-relative file or directory. Repeat for multiple paths.
+        #[arg(long = "select", value_name = "PATH")]
+        select: Vec<PathBuf>,
 
         /// Open the destination in Explorer after successful extraction.
         #[arg(long)]

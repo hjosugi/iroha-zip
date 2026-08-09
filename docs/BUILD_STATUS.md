@@ -11,6 +11,7 @@ Updated: 2026-08-09
 - Configuration serialization, backward compatibility, validation, rollback-safe replacement, and path-policy tests
 - Platform-neutral settings-form round trips, human-readable byte-unit parsing, and field-specific validation tests
 - Platform-neutral 100–300% layout scaling, stable 26-control IDs, exhaustive 11-action dispatch mapping, and concurrent-save tests
+- Shared archive staging, typed/sorted policy-safe preview inventory, fail-closed selective-tree materialization, and Unix fake-backend end-to-end orchestration tests
 - Bounded backend-manifest parsing with deterministic malformed-input, path, duplicate, and resource-limit regression tests
 - Handle-retaining input/source snapshots and deterministic source-tree race tests for identity replacement, same-size mutation, rename, hardlinks, and symbolic links
 - Native settings application type-check against `windows` 0.62.2 APIs
@@ -23,7 +24,7 @@ Updated: 2026-08-09
 - PowerShell syntax review for backend import, association, and release scripts
 - Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
 
-The current Linux suite contains 50 passing tests. Windows CI additionally runs the source-handle sharing test that verifies open snapshots block writes and renames.
+The current Linux suite contains 56 passing tests. Windows CI additionally runs the source-handle sharing test that verifies open snapshots block writes and renames.
 
 ## Performed by GitHub Actions
 
@@ -34,6 +35,7 @@ The CI workflow runs formatting, tests, Clippy, and release builds on both `ubun
 - AppContainer profile creation and isolated `bsdtar` execution
 - LPAC `bsdtar --version`, archive-format, registry/file/COM denial, and network-denial measurements
 - Settings-screen visual fit at 100–300% and mixed DPI, screen readers, folder pickers, Default Apps, external-state action rollback, and independent-process save contention
+- Native archive-preview tree/search/selection UI, progress/cancellation accessibility, and real-format selected-publication matrix
 - ZIP, 7z, RAR, LZH, TAR.GZ, and `.Z` extraction with a pinned libarchive bundle
 - ZIP, 7z, TAR, and TAR.GZ creation and byte-for-byte content comparison after re-extraction
 - Malicious archive regression corpus for traversal, links, junctions, ADS, hardlinks, and archive bombs

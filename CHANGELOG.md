@@ -12,6 +12,10 @@
 - Assigned stable IDs and unique access keys to every setting and action, with exhaustive action dispatch tests and a native Windows UI Automation smoke test.
 - Serialize concurrent configuration saves before rollback-safe replacement, using a named Windows mutex across processes in the current session.
 - Include every document linked from the packaged README in release ZIPs.
+- Refactored extraction into a shared staging boundary used by normal extraction and policy-safe preview.
+- Added a `preview` CLI that inventories only a fully extracted, audited, fingerprint-stable temporary tree and publishes nothing.
+- Added repeatable `extract --select PATH` filtering after the complete archive audit, followed by selected-tree and source-tree revalidation before the existing atomic publication boundary.
+- Make verified backend copies owner-readable/executable on Unix so the explicit unsandboxed integration-test path can exercise real process orchestration.
 
 ## 0.3.1 - 2026-08-09
 
