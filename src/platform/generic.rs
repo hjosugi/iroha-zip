@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
-use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
+use crate::platform::{FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec};
 use crate::util;
 
 pub struct Sandbox {
@@ -67,6 +67,10 @@ impl Sandbox {
         &self.root
     }
 
+    pub fn profile_name(&self) -> Option<&str> {
+        None
+    }
+
     pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult> {
         let stdout = File::create(&spec.stdout_log).map_err(|error| {
             IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
@@ -108,6 +112,7 @@ impl Sandbox {
                 }
                 return Ok(ProcessResult {
                     exit_code: status.code().unwrap_or(-1),
+                    isolation: ProcessIsolation::UNSANDBOXED,
                 });
             }
 
@@ -128,6 +133,27 @@ impl Sandbox {
                 return Err(error);
             }
             thread::sleep(Duration::from_millis(200));
+        }
+    }
+
+    pub fn cleanup(self) -> Result<()> {
+        match fs::remove_dir_all(&self.root) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(IrohaZipError::io_path(
+                "cannot remove unsandboxed temporary root",
+                &self.root,
+                error,
+            )),
+        }
+    }
+
+    pub fn fail_after_cleanup<T>(self, failure: IrohaZipError) -> Result<T> {
+        match self.cleanup() {
+            Ok(()) => Err(failure),
+            Err(cleanup) => Err(IrohaZipError::Sandbox(format!(
+                "{failure}; sandbox cleanup also failed: {cleanup}"
+            ))),
         }
     }
 }
@@ -283,4 +309,18 @@ pub fn open_folder(path: &Path) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_failure_cleanup_preserves_the_error_and_removes_the_root() {
+        let sandbox = Sandbox::new(64, true, IsolationMode::AppContainer).unwrap();
+        let root = sandbox.root().to_path_buf();
+        let result: Result<()> = sandbox.fail_after_cleanup(IrohaZipError::Usage("probe".into()));
+        assert!(matches!(result, Err(IrohaZipError::Usage(message)) if message == "probe"));
+        assert!(!root.exists());
+    }
 }

@@ -12,6 +12,8 @@ Run extraction and creation on disposable Windows 10/11 x64 machines with a pinn
 
 Acceptance: the matrix is automated where possible; created archives are re-extracted and content-hashed; AppContainer identity and network denial are recorded; no residual profile or temporary tree remains after every tested exit path.
 
+Progress (2026-08-10): a fixed-label Windows Server 2022/2025 Actions matrix now exports a verified MSYS2 backend and emits bounded JSON evidence. It covers zero-capability token inspection, active-loopback denial, deterministic timeout and memory-limit probes, explicit profile/root cleanup, ZIP/7z/TAR/TAR.GZ creation-preview-re-extraction, controlled TAR.BZ2/TAR.XZ/TAR.ZST/TAR.Z read fixtures, SHA-256 tree comparison, Japanese and >260-character paths, invalid-input non-publication, shell invocation, and settings-screen save/doctor automation. The workflow is locally parsed and cross-compiled but has not yet produced an Actions result for this local branch. Disposable Windows 10/11 x64 runs, RAR/LHA/CAB/ZIPX/raw-stream fixtures, LPAC and broader denial measurements, crash/loader/reparse races, and long-term evidence retention remain open; see [the evidence contract](WINDOWS_E2E.md).
+
 ### [SAFE-002: Malicious archive regression corpus](https://github.com/hjosugi/iroha-zip/issues/4)
 
 Build a legally redistributable local corpus for Zip Slip, absolute/drive/UNC paths, symlinks, hardlinks, junctions, reparse points, ADS, device names, trailing-dot aliases, duplicate file identities, deep paths, sparse expansion, and count/size bombs.

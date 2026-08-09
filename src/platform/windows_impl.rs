@@ -24,8 +24,8 @@ use windows::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeleteAppContainerProfile, GetAppContainerFolderPath,
 };
 use windows::Win32::Security::{
-    FreeSid, GetTokenInformation, PSID, SECURITY_CAPABILITIES, TOKEN_QUERY, TokenIsAppContainer,
-    TokenIsLessPrivilegedAppContainer,
+    FreeSid, GetTokenInformation, PSID, SECURITY_CAPABILITIES, TOKEN_GROUPS, TOKEN_QUERY,
+    TokenCapabilities, TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
 };
 use windows::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT,
@@ -57,7 +57,7 @@ use windows::core::{Error as WindowsError, GUID, HRESULT, PCWSTR, PWSTR};
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
-use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
+use crate::platform::{FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec};
 use crate::util;
 use crate::windows_command_line;
 
@@ -159,7 +159,7 @@ impl Drop for ConfigSaveGuard {
 pub struct Sandbox {
     root: PathBuf,
     memory_limit_bytes: usize,
-    mode: Mode,
+    mode: Option<Mode>,
 }
 
 enum Mode {
@@ -191,11 +191,11 @@ impl Sandbox {
             Ok((profile_name, sid, root)) => Ok(Self {
                 root,
                 memory_limit_bytes: bytes,
-                mode: Mode::AppContainer {
+                mode: Some(Mode::AppContainer {
                     profile_name,
                     sid,
                     isolation,
-                },
+                }),
             }),
             Err(error) if allow_unsandboxed => {
                 eprintln!(
@@ -206,7 +206,7 @@ impl Sandbox {
                 Ok(Self {
                     root,
                     memory_limit_bytes: bytes,
-                    mode: Mode::Unsandboxed,
+                    mode: Some(Mode::Unsandboxed),
                 })
             }
             Err(error) => Err(error),
@@ -217,30 +217,90 @@ impl Sandbox {
         &self.root
     }
 
+    pub fn profile_name(&self) -> Option<&str> {
+        match self.mode.as_ref()? {
+            Mode::AppContainer { profile_name, .. } => Some(profile_name),
+            Mode::Unsandboxed => None,
+        }
+    }
+
     pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult> {
-        match &self.mode {
+        match self
+            .mode
+            .as_ref()
+            .expect("live sandbox must retain its cleanup state")
+        {
             Mode::AppContainer { sid, isolation, .. } => {
                 run_in_appcontainer(*sid, *isolation, self.memory_limit_bytes, spec)
             }
             Mode::Unsandboxed => run_unsandboxed(spec),
         }
     }
+
+    pub fn cleanup(mut self) -> Result<()> {
+        self.cleanup_inner()
+    }
+
+    pub fn fail_after_cleanup<T>(self, failure: IrohaZipError) -> Result<T> {
+        match self.cleanup() {
+            Ok(()) => Err(failure),
+            Err(cleanup) => Err(IrohaZipError::Sandbox(format!(
+                "{failure}; sandbox cleanup also failed: {cleanup}"
+            ))),
+        }
+    }
+
+    fn cleanup_inner(&mut self) -> Result<()> {
+        let Some(mode) = self.mode.take() else {
+            return Ok(());
+        };
+        let mut failure = None;
+        match mode {
+            Mode::AppContainer {
+                profile_name, sid, ..
+            } => unsafe {
+                let name = wide_null(OsStr::new(&profile_name));
+                if let Err(error) = DeleteAppContainerProfile(PCWSTR(name.as_ptr())) {
+                    failure = Some(windows_error("DeleteAppContainerProfile", error));
+                }
+                if let Err(error) = fs::remove_dir_all(&self.root)
+                    && error.kind() != std::io::ErrorKind::NotFound
+                    && failure.is_none()
+                {
+                    failure = Some(IrohaZipError::io_path(
+                        "cannot remove AppContainer temporary root",
+                        &self.root,
+                        error,
+                    ));
+                }
+                let _ = FreeSid(sid);
+            },
+            Mode::Unsandboxed => {
+                if let Err(error) = fs::remove_dir_all(&self.root)
+                    && error.kind() != std::io::ErrorKind::NotFound
+                {
+                    failure = Some(IrohaZipError::io_path(
+                        "cannot remove unsandboxed temporary root",
+                        &self.root,
+                        error,
+                    ));
+                }
+            }
+        }
+        if self.root.exists() && failure.is_none() {
+            failure = Some(IrohaZipError::Sandbox(format!(
+                "sandbox temporary root still exists after cleanup: {}",
+                self.root.display()
+            )));
+        }
+        failure.map_or(Ok(()), Err)
+    }
 }
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
-        match &self.mode {
-            Mode::AppContainer {
-                profile_name, sid, ..
-            } => unsafe {
-                let name = wide_null(OsStr::new(profile_name));
-                let _ = DeleteAppContainerProfile(PCWSTR(name.as_ptr()));
-                let _ = fs::remove_dir_all(&self.root);
-                let _ = FreeSid(*sid);
-            },
-            Mode::Unsandboxed => {
-                let _ = fs::remove_dir_all(&self.root);
-            }
+        if let Err(error) = self.cleanup_inner() {
+            eprintln!("warning: sandbox cleanup failed: {error}");
         }
     }
 }
@@ -265,25 +325,49 @@ fn create_appcontainer() -> Result<(String, PSID, PathBuf)> {
     }
     .map_err(|error| windows_error("CreateAppContainerProfile", error))?;
 
-    let root_result = appcontainer_folder(sid);
-    match root_result {
-        Ok(root) => {
-            fs::create_dir_all(&root).map_err(|error| {
-                IrohaZipError::io_path("cannot create AppContainer storage", &root, error)
-            })?;
-            validate_directory_security(&root)?;
-            let resolved_root = fs::canonicalize(&root).map_err(|error| {
-                IrohaZipError::io_path("cannot resolve AppContainer storage", &root, error)
-            })?;
-            validate_directory_security(&resolved_root)?;
-            Ok((profile_name, sid, resolved_root))
-        }
+    let mut cleanup_root = None;
+    let setup_result = (|| {
+        let root = appcontainer_folder(sid)?;
+        cleanup_root = Some(root.clone());
+        fs::create_dir_all(&root).map_err(|error| {
+            IrohaZipError::io_path("cannot create AppContainer storage", &root, error)
+        })?;
+        validate_directory_security(&root)?;
+        let resolved_root = fs::canonicalize(&root).map_err(|error| {
+            IrohaZipError::io_path("cannot resolve AppContainer storage", &root, error)
+        })?;
+        validate_directory_security(&resolved_root)?;
+        Ok(resolved_root)
+    })();
+    match setup_result {
+        Ok(resolved_root) => Ok((profile_name, sid, resolved_root)),
         Err(error) => {
+            let mut cleanup_errors = Vec::new();
             unsafe {
-                let _ = DeleteAppContainerProfile(PCWSTR(name.as_ptr()));
+                if let Err(cleanup) = DeleteAppContainerProfile(PCWSTR(name.as_ptr())) {
+                    cleanup_errors.push(format!("DeleteAppContainerProfile failed: {cleanup}"));
+                }
+            }
+            if let Some(root) = cleanup_root
+                && let Err(cleanup) = fs::remove_dir_all(&root)
+                && cleanup.kind() != std::io::ErrorKind::NotFound
+            {
+                cleanup_errors.push(format!(
+                    "cannot remove AppContainer initialization root {}: {cleanup}",
+                    root.display()
+                ));
+            }
+            unsafe {
                 let _ = FreeSid(sid);
             }
-            Err(error)
+            if cleanup_errors.is_empty() {
+                Err(error)
+            } else {
+                Err(IrohaZipError::Sandbox(format!(
+                    "{error}; AppContainer initialization cleanup also failed: {}",
+                    cleanup_errors.join("; ")
+                )))
+            }
         }
     }
 }
@@ -468,35 +552,89 @@ fn run_in_appcontainer(
     let thread_handle = OwnedHandle::new(process_info.hThread);
     drop(thread_handle);
 
-    if let Err(error) = verify_process_isolation(process.handle(), isolation) {
-        let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0004) };
-        let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
-        return Err(error);
-    }
+    let isolation_evidence = match verify_process_isolation(process.handle(), isolation) {
+        Ok(evidence) => evidence,
+        Err(error) => {
+            let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0004) };
+            let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
+            return Err(error);
+        }
+    };
 
-    wait_for_process(&process, &job, &spec)
+    wait_for_process(&process, &job, &spec, isolation_evidence)
 }
 
-fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result<()> {
+fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result<ProcessIsolation> {
     let mut token = HANDLE::default();
     unsafe {
         windows::Win32::System::Threading::OpenProcessToken(process, TOKEN_QUERY, &raw mut token)
     }
     .map_err(|error| windows_error("OpenProcessToken", error))?;
     let token = OwnedHandle::new(token);
-    if query_token_flag(token.handle(), TokenIsAppContainer)? == 0 {
+    let is_app_container = query_token_flag(token.handle(), TokenIsAppContainer)? != 0;
+    let is_lpac = query_token_flag(token.handle(), TokenIsLessPrivilegedAppContainer)? != 0;
+    if !is_app_container {
         return Err(IrohaZipError::Sandbox(
             "created process does not have an AppContainer token".to_owned(),
         ));
     }
-    if isolation.is_lpac()
-        && query_token_flag(token.handle(), TokenIsLessPrivilegedAppContainer)? == 0
-    {
+    if isolation.is_lpac() && !is_lpac {
         return Err(IrohaZipError::Sandbox(
             "LPAC was requested but the created process token is not less privileged".to_owned(),
         ));
     }
-    Ok(())
+    if !isolation.is_lpac() && is_lpac {
+        return Err(IrohaZipError::Sandbox(
+            "regular AppContainer was requested but the created token is LPAC".to_owned(),
+        ));
+    }
+    let capability_count = query_token_capability_count(token.handle())?;
+    if capability_count != 0 {
+        return Err(IrohaZipError::Sandbox(format!(
+            "created AppContainer token unexpectedly has {capability_count} capabilities"
+        )));
+    }
+    Ok(ProcessIsolation {
+        is_app_container,
+        is_less_privileged_app_container: is_lpac,
+        capability_count,
+    })
+}
+
+fn query_token_capability_count(token: HANDLE) -> Result<u32> {
+    const MAX_TOKEN_INFORMATION_BYTES: u32 = 1024 * 1024;
+
+    let mut required = 0u32;
+    let _ = unsafe { GetTokenInformation(token, TokenCapabilities, None, 0, &raw mut required) };
+    if required < u32::try_from(size_of::<u32>()).unwrap_or(u32::MAX)
+        || required > MAX_TOKEN_INFORMATION_BYTES
+    {
+        return Err(IrohaZipError::Sandbox(format!(
+            "unexpected token capability buffer size: {required}"
+        )));
+    }
+    let buffer_bytes = required.max(u32::try_from(size_of::<TOKEN_GROUPS>()).unwrap_or(u32::MAX));
+    let bytes = usize::try_from(buffer_bytes)
+        .map_err(|_| IrohaZipError::Sandbox("token capability size overflow".to_owned()))?;
+    let mut storage = vec![0usize; bytes.div_ceil(size_of::<usize>())];
+    let mut returned = buffer_bytes;
+    unsafe {
+        GetTokenInformation(
+            token,
+            TokenCapabilities,
+            Some(storage.as_mut_ptr().cast::<c_void>()),
+            buffer_bytes,
+            &raw mut returned,
+        )
+    }
+    .map_err(|error| windows_error("query token capabilities", error))?;
+    if returned > buffer_bytes {
+        return Err(IrohaZipError::Sandbox(format!(
+            "token capability query exceeded its buffer: {returned} > {buffer_bytes}"
+        )));
+    }
+    let groups = unsafe { &*storage.as_ptr().cast::<TOKEN_GROUPS>() };
+    Ok(groups.GroupCount)
 }
 
 fn query_token_flag(
@@ -561,6 +699,7 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
             }
             return Ok(ProcessResult {
                 exit_code: status.code().unwrap_or(-1),
+                isolation: ProcessIsolation::UNSANDBOXED,
             });
         }
         if started.elapsed() >= spec.timeout {
@@ -586,6 +725,7 @@ fn wait_for_process(
     process: &OwnedHandle,
     job: &OwnedHandle,
     spec: &ProcessSpec,
+    isolation: ProcessIsolation,
 ) -> Result<ProcessResult> {
     let started = Instant::now();
     loop {
@@ -599,6 +739,7 @@ fn wait_for_process(
             }
             return Ok(ProcessResult {
                 exit_code: exit_code.cast_signed(),
+                isolation,
             });
         }
         if wait != WAIT_TIMEOUT {

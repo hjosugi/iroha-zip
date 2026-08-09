@@ -80,6 +80,29 @@ fn backend_evidence_validation_can_require_a_supported_source() {
 }
 
 #[test]
+fn isolation_report_is_available_for_machine_readable_windows_evidence() {
+    let cli = Cli::try_parse_from(["iroha-zip", "isolation-report"]).unwrap();
+    assert!(matches!(cli.command, Command::IsolationReport));
+}
+
+#[test]
+fn internal_failure_probes_are_hidden_but_parseable() {
+    let sleep = Cli::try_parse_from(["iroha-zip", "internal-sleep-probe", "5000"]).unwrap();
+    assert!(matches!(
+        sleep.command,
+        Command::InternalSleepProbe {
+            milliseconds: 5_000
+        }
+    ));
+
+    let memory = Cli::try_parse_from(["iroha-zip", "internal-memory-probe", "268435456"]).unwrap();
+    assert!(matches!(
+        memory.command,
+        Command::InternalMemoryProbe { bytes: 268_435_456 }
+    ));
+}
+
+#[test]
 fn preview_uses_the_same_encoding_and_isolation_controls_as_extract() {
     let cli = Cli::try_parse_from([
         "iroha-zip",

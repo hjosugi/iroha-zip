@@ -43,88 +43,96 @@ pub fn create_archive(
         allow_unsandboxed,
         config.sandbox.isolation,
     )?;
-    let backend_dir = sandbox.root().join("backend");
-    let source_dir = sandbox.root().join("source");
-    let output_dir = sandbox.root().join("output");
-    fs::create_dir(&output_dir).map_err(|error| {
-        IrohaZipError::io_path(
-            "cannot create sandbox archive directory",
-            &output_dir,
-            error,
-        )
-    })?;
+    let operation = (|| {
+        let backend_dir = sandbox.root().join("backend");
+        let source_dir = sandbox.root().join("source");
+        let output_dir = sandbox.root().join("output");
+        fs::create_dir(&output_dir).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot create sandbox archive directory",
+                &output_dir,
+                error,
+            )
+        })?;
 
-    let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
-    transfer::copy_audited_tree(&source, &source_dir, &config.limits)?;
+        let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
+        transfer::copy_audited_tree(&source, &source_dir, &config.limits)?;
 
-    let sandbox_archive = output_dir.join("archive.bin");
-    let stdout_log = sandbox.root().join("bsdtar.stdout.log");
-    let stderr_log = sandbox.root().join("bsdtar.stderr.log");
-    let mut args = create_arguments(format);
-    args.push(OsString::from("-f"));
-    args.push(sandbox_archive.as_os_str().to_owned());
-    args.push(OsString::from("-C"));
-    args.push(source_dir.as_os_str().to_owned());
-    args.push(OsString::from("."));
+        let sandbox_archive = output_dir.join("archive.bin");
+        let stdout_log = sandbox.root().join("bsdtar.stdout.log");
+        let stderr_log = sandbox.root().join("bsdtar.stderr.log");
+        let mut args = create_arguments(format);
+        args.push(OsString::from("-f"));
+        args.push(sandbox_archive.as_os_str().to_owned());
+        args.push(OsString::from("-C"));
+        args.push(source_dir.as_os_str().to_owned());
+        args.push(OsString::from("."));
 
-    let baseline = policy::measure_tree(sandbox.root())?;
-    let transient_bytes = config
-        .limits
-        .max_archive_bytes
-        .checked_add(2 * 1024 * 1024)
-        .ok_or_else(|| IrohaZipError::Config("creation monitor byte budget overflow".to_owned()))?;
-    let monitor_limits = monitor::limits_with_baseline(
-        &baseline,
-        4,
-        1,
-        transient_bytes,
-        config
+        let baseline = policy::measure_tree(sandbox.root())?;
+        let transient_bytes = config
             .limits
-            .max_single_file_bytes
-            .max(config.limits.max_archive_bytes),
-    )?;
+            .max_archive_bytes
+            .checked_add(2 * 1024 * 1024)
+            .ok_or_else(|| {
+                IrohaZipError::Config("creation monitor byte budget overflow".to_owned())
+            })?;
+        let monitor_limits = monitor::limits_with_baseline(
+            &baseline,
+            4,
+            1,
+            transient_bytes,
+            config
+                .limits
+                .max_single_file_bytes
+                .max(config.limits.max_archive_bytes),
+        )?;
 
-    let result = sandbox.run(ProcessSpec {
-        program: sandbox_backend,
-        args,
-        current_dir: sandbox.root().to_path_buf(),
-        stdout_log: stdout_log.clone(),
-        stderr_log: stderr_log.clone(),
-        timeout: Duration::from_secs(config.sandbox.timeout_seconds),
-        monitor_root: Some(sandbox.root().to_path_buf()),
-        limits: monitor_limits,
-    })?;
+        let result = sandbox.run(ProcessSpec {
+            program: sandbox_backend,
+            args,
+            current_dir: sandbox.root().to_path_buf(),
+            stdout_log: stdout_log.clone(),
+            stderr_log: stderr_log.clone(),
+            timeout: Duration::from_secs(config.sandbox.timeout_seconds),
+            monitor_root: Some(sandbox.root().to_path_buf()),
+            limits: monitor_limits,
+        })?;
+        if result.exit_code != 0 {
+            let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
+            let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
+            return Err(IrohaZipError::Backend(format!(
+                "bsdtar exited with code {} while creating {}. stderr={stderr:?}, stdout={stdout:?}",
+                result.exit_code,
+                format.expected_extension()
+            )));
+        }
 
-    if result.exit_code != 0 {
-        let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
-        let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
-        return Err(IrohaZipError::Backend(format!(
-            "bsdtar exited with code {} while creating {}. stderr={stderr:?}, stdout={stdout:?}",
-            result.exit_code,
-            format.expected_extension()
-        )));
+        crate::platform::validate_regular_file_security(&sandbox_archive)?;
+        let metadata = fs::symlink_metadata(&sandbox_archive).map_err(|error| {
+            IrohaZipError::io_path("cannot inspect staged archive", &sandbox_archive, error)
+        })?;
+        crate::platform::validate_extracted_entry_security(&sandbox_archive, &metadata)?;
+        let size = metadata.len();
+        if size == 0 {
+            return Err(IrohaZipError::Backend(
+                "backend produced an empty archive".to_owned(),
+            ));
+        }
+        if size > config.limits.max_archive_bytes {
+            return Err(IrohaZipError::Policy(format!(
+                "created archive is {size} bytes; limit is {} bytes",
+                config.limits.max_archive_bytes
+            )));
+        }
+        util::copy_file_new_exact(&sandbox_archive, &output, size)
+    })();
+    match operation {
+        Ok(()) => {
+            sandbox.cleanup()?;
+            Ok(output)
+        }
+        Err(error) => sandbox.fail_after_cleanup(error),
     }
-
-    crate::platform::validate_regular_file_security(&sandbox_archive)?;
-    let metadata = fs::symlink_metadata(&sandbox_archive).map_err(|error| {
-        IrohaZipError::io_path("cannot inspect staged archive", &sandbox_archive, error)
-    })?;
-    crate::platform::validate_extracted_entry_security(&sandbox_archive, &metadata)?;
-    let size = metadata.len();
-    if size == 0 {
-        return Err(IrohaZipError::Backend(
-            "backend produced an empty archive".to_owned(),
-        ));
-    }
-    if size > config.limits.max_archive_bytes {
-        return Err(IrohaZipError::Policy(format!(
-            "created archive is {size} bytes; limit is {} bytes",
-            config.limits.max_archive_bytes
-        )));
-    }
-
-    util::copy_file_new_exact(&sandbox_archive, &output, size)?;
-    Ok(output)
 }
 
 fn create_arguments(format: CreateFormat) -> Vec<OsString> {

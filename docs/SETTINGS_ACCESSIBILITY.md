@@ -1,6 +1,6 @@
 # Settings accessibility and UI automation
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 
 This document records the implemented UX-001 contract and the evidence that is still required on
 real Windows systems. It does not claim screen-reader or high-DPI certification.
@@ -47,6 +47,8 @@ It edits a path and numeric value through `ValuePattern`, toggles a checkbox thr
 closes through `WindowPattern`, and requires the unsaved-change confirmation to be exposed as an
 accessible window.
 
+When supplied a verified backend and evidence path by the dedicated Windows E2E job, a second disposable settings process also saves that backend path through the native Save button, dismisses the success dialog, invokes the settings-screen diagnosis, requires the real backend/AppContainer diagnostic success dialog, closes from a clean state, hashes the saved configuration and executable, and writes a JSON report after removing the temporary tree. This does not exercise backend replacement, file associations, Default Apps, or folder-picker side effects.
+
 The smoke test deliberately does not invoke backend import, association, Default Apps, or folder
 launch buttons because those actions mutate or open external Windows state. Their ID-to-handler
 dispatch is covered by the exhaustive platform-neutral test. Their side effects and rollback must
@@ -73,7 +75,7 @@ UX-001 stays open until disposable Windows 10 and 11 systems record:
 4. Japanese and English Windows with long and non-ASCII paths;
 5. every external-state action, confirmation, progress indication, failure, and rollback;
 6. concurrent saves from two independent processes;
-7. Windows CI execution of the native UI Automation smoke test.
+7. a passing Windows CI execution of both native UI Automation phases for the current branch.
 
 Primary implementation references:
 

@@ -1,7 +1,11 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Executable
+    [string]$Executable,
+
+    [string]$BackendDirectory,
+
+    [string]$EvidenceOutput
 )
 
 Set-StrictMode -Version Latest
@@ -9,6 +13,18 @@ $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class IrohaZipUiAutomationNative {
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostMessageW(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+}
+"@
+
+$ButtonClickMessage = 0x00F5
 
 function Wait-Until {
     param(
@@ -66,7 +82,67 @@ function Require-Control {
     return $control
 }
 
+function Find-SecondaryWindow {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [System.Windows.Automation.AutomationElement]$MainWindow
+    )
+    $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+        [System.Windows.Automation.TreeScope]::Children,
+        [System.Windows.Automation.Condition]::TrueCondition
+    )
+    foreach ($candidate in $windows) {
+        if ($candidate.Current.ProcessId -eq $Process.Id -and
+            $candidate.Current.NativeWindowHandle -ne $MainWindow.Current.NativeWindowHandle) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Dismiss-Message {
+    param([System.Windows.Automation.AutomationElement]$Dialog)
+    $button = Find-ByAutomationId -Root $Dialog -Id 1
+    if ($null -eq $button) {
+        throw "The settings message did not expose its OK button."
+    }
+    if (-not [IrohaZipUiAutomationNative]::PostMessageW(
+        [IntPtr]$button.Current.NativeWindowHandle,
+        $ButtonClickMessage,
+        [UIntPtr]::Zero,
+        [IntPtr]::Zero
+    )) {
+        throw "Cannot activate the settings message OK button."
+    }
+}
+
+function Invoke-Control {
+    param([System.Windows.Automation.AutomationElement]$Control)
+    if (-not [IrohaZipUiAutomationNative]::PostMessageW(
+        [IntPtr]$Control.Current.NativeWindowHandle,
+        $ButtonClickMessage,
+        [UIntPtr]::Zero,
+        [IntPtr]::Zero
+    )) {
+        throw "Cannot activate control $($Control.Current.AutomationId)."
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($BackendDirectory) -ne
+    [string]::IsNullOrWhiteSpace($EvidenceOutput)) {
+    throw "-BackendDirectory and -EvidenceOutput must be provided together."
+}
+
 $executablePath = (Resolve-Path -LiteralPath $Executable).Path
+$backendPath = $null
+$evidencePath = $null
+if (-not [string]::IsNullOrWhiteSpace($BackendDirectory)) {
+    $backendPath = (Resolve-Path -LiteralPath $BackendDirectory).Path
+    if (-not (Test-Path -LiteralPath $backendPath -PathType Container)) {
+        throw "BackendDirectory is not a directory: $BackendDirectory"
+    }
+    $evidencePath = [System.IO.Path]::GetFullPath($EvidenceOutput)
+}
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ("iroha-zip-ui-日本語-" + [Guid]::NewGuid().ToString("N"))
 $longDirectory = Join-Path $testRoot ("長い保存先-" + ("x" * 96))
@@ -74,6 +150,7 @@ $configPath = Join-Path $testRoot "設定.toml"
 [System.IO.Directory]::CreateDirectory($longDirectory) | Out-Null
 
 $process = $null
+$setupEvidence = $null
 try {
     $process = Start-Process -FilePath $executablePath `
         -ArgumentList @("--config", $configPath) -PassThru
@@ -142,22 +219,106 @@ try {
     )
     $windowPattern.Close()
     $confirmation = Wait-Until {
-        $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
-            [System.Windows.Automation.TreeScope]::Children,
-            [System.Windows.Automation.Condition]::TrueCondition
-        )
-        foreach ($candidate in $windows) {
-            if ($candidate.Current.ProcessId -eq $process.Id -and $candidate -ne $window) {
-                return $candidate
-            }
-        }
-        return $null
+        Find-SecondaryWindow -Process $process -MainWindow $window
     }
     if ($confirmation.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
         throw "Unsaved-change confirmation was not exposed as an accessible window."
     }
 
     Write-Host "Settings UI Automation contract passed for 26 controls."
+
+    if ($null -ne $backendPath) {
+        $process.Kill()
+        $process.WaitForExit()
+        $process = Start-Process -FilePath $executablePath `
+            -ArgumentList @("--config", $configPath) -PassThru
+        $window = Wait-Until {
+            $condition = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+                $process.Id
+            )
+            [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+                [System.Windows.Automation.TreeScope]::Children,
+                $condition
+            )
+        }
+
+        $backendControl = Require-Control -Window $window -Id 2001 `
+            -Type ([System.Windows.Automation.ControlType]::Edit)
+        $backendPattern = [System.Windows.Automation.ValuePattern]$backendControl.GetCurrentPattern(
+            [System.Windows.Automation.ValuePattern]::Pattern
+        )
+        $backendPattern.SetValue($backendPath)
+
+        $save = Require-Control -Window $window -Id 1 `
+            -Type ([System.Windows.Automation.ControlType]::Button)
+        Invoke-Control $save
+        $savedMessage = Wait-Until {
+            Find-SecondaryWindow -Process $process -MainWindow $window
+        }
+        Dismiss-Message $savedMessage
+        Wait-Until {
+            $null -eq (Find-SecondaryWindow -Process $process -MainWindow $window)
+        } | Out-Null
+        Wait-Until { Test-Path -LiteralPath $configPath -PathType Leaf } | Out-Null
+        $savedConfig = [System.IO.File]::ReadAllText($configPath)
+        $escapedBackendPath = $backendPath.Replace(
+            [string][char]92,
+            ([string][char]92 + [char]92)
+        )
+        if (-not $savedConfig.Contains($backendPath) -and
+            -not $savedConfig.Contains($escapedBackendPath)) {
+            throw "The settings screen did not persist the selected backend path."
+        }
+
+        $doctor = Require-Control -Window $window -Id 1002 `
+            -Type ([System.Windows.Automation.ControlType]::Button)
+        $doctorStarted = [DateTime]::UtcNow
+        Invoke-Control $doctor
+        $doctorMessage = Wait-Until -TimeoutSeconds 90 -Condition {
+            Find-SecondaryWindow -Process $process -MainWindow $window
+        }
+        $textCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Text
+        )
+        $doctorText = @(
+            $doctorMessage.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                $textCondition
+            ) | ForEach-Object { $_.Current.Name }
+        ) -join "`n"
+        if ($doctorText -notmatch "診断に成功") {
+            throw "Settings-screen backend/AppContainer diagnostic did not report success: $doctorText"
+        }
+        Dismiss-Message $doctorMessage
+        Wait-Until {
+            $null -eq (Find-SecondaryWindow -Process $process -MainWindow $window)
+        } | Out-Null
+
+        $setupEvidence = [ordered]@{
+            schemaVersion = 1
+            status = "passed"
+            generatedAtUtc = [DateTime]::UtcNow.ToString("o")
+            controlCount = 26
+            longAndNonAsciiPathEdited = $true
+            unsavedChangeConfirmationExposed = $true
+            backendPathSaved = $true
+            backendDoctorSucceeded = $true
+            doctorElapsedMilliseconds = [int64]([DateTime]::UtcNow - $doctorStarted).TotalMilliseconds
+            configSha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            settingsExecutableSha256 = (Get-FileHash -LiteralPath $executablePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            temporaryRootRemoved = $false
+        }
+
+        $windowPattern = [System.Windows.Automation.WindowPattern]$window.GetCurrentPattern(
+            [System.Windows.Automation.WindowPattern]::Pattern
+        )
+        $windowPattern.Close()
+        if (-not $process.WaitForExit(15000)) {
+            throw "Settings application did not exit after a clean saved-state close."
+        }
+    }
 }
 finally {
     if ($null -ne $process -and -not $process.HasExited) {
@@ -167,4 +328,16 @@ finally {
     if (Test-Path -LiteralPath $testRoot) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force
     }
+}
+
+if ($null -ne $setupEvidence) {
+    $setupEvidence.temporaryRootRemoved = -not (Test-Path -LiteralPath $testRoot)
+    $evidenceParent = Split-Path -Parent $evidencePath
+    [System.IO.Directory]::CreateDirectory($evidenceParent) | Out-Null
+    [System.IO.File]::WriteAllText(
+        $evidencePath,
+        "$(ConvertTo-Json -InputObject $setupEvidence -Depth 10)`n",
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Write-Host "Settings setup evidence: $evidencePath"
 }

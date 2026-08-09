@@ -52,7 +52,12 @@ pub fn preview(request: PreviewRequest<'_>) -> Result<PreviewResult> {
         request.encoding,
         request.allow_unsandboxed,
     )?;
-    inventory_tree(staged.payload_root(), &request.config.limits)
+    let result = match inventory_tree(staged.payload_root(), &request.config.limits) {
+        Ok(result) => result,
+        Err(error) => return staged.fail(error),
+    };
+    staged.finish()?;
+    Ok(result)
 }
 
 pub fn inventory_tree(root: &Path, limits: &Limits) -> Result<PreviewResult> {

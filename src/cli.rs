@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -93,6 +94,18 @@ pub enum Command {
         #[arg(long)]
         require_supported: bool,
     },
+
+    /// Measure the selected AppContainer/LPAC token, capabilities, network denial, and cleanup.
+    IsolationReport,
+
+    #[command(hide = true)]
+    InternalNetworkProbe { endpoint: SocketAddr },
+
+    #[command(hide = true)]
+    InternalSleepProbe { milliseconds: u64 },
+
+    #[command(hide = true)]
+    InternalMemoryProbe { bytes: u64 },
 
     /// Write a default configuration file if one does not exist.
     InitConfig,

@@ -7,6 +7,7 @@ pub mod config;
 pub mod create;
 pub mod error;
 pub mod extract;
+pub mod isolation;
 pub mod monitor;
 pub mod platform;
 pub mod policy;

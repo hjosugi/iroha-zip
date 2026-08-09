@@ -149,6 +149,72 @@ jobs:
           ./scripts/test-settings-ui.ps1
           -Executable ./target/release/iroha-zip-settings.exe
 
+  windows-e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install a current MSYS2 UCRT64 libarchive source
+        id: msys2
+        uses: msys2/setup-msys2@c6f39ce767a3de8ac436a58b2d471ed9325a8d2d
+        with:
+          msystem: UCRT64
+          update: true
+          cache: false
+          install: mingw-w64-ucrt-x86_64-libarchive
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+
+      - name: Build release binaries
+        run: cargo build --release --locked
+
+      - name: Export a verified backend
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: >-
+          ./scripts/export-msys2-backend.ps1
+          -Msys2Root $env:MSYS2_ROOT
+          -DestinationDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
+
+      - name: Exercise archive and isolation matrix
+        shell: pwsh
+        run: >-
+          ./scripts/test-windows-e2e.ps1
+          -Executable ./target/release/iroha-zip.exe
+          -ShellExecutable ./target/release/iroha-zip-shell.exe
+          -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
+          -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'windows-e2e.json')
+
+      - name: Exercise settings-screen setup and diagnosis
+        shell: pwsh
+        run: >-
+          ./scripts/test-settings-ui.ps1
+          -Executable ./target/release/iroha-zip-settings.exe
+          -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
+          -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'settings-e2e.json')
+
+      - name: Upload machine-readable Windows evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-e2e-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/windows-e2e.json
+            ${{ runner.temp }}/settings-e2e.json
+          if-no-files-found: warn
+          retention-days: 14
+
   dependency-policy:
     runs-on: ubuntu-latest
 

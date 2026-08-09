@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added fixed-label Windows Server 2022/2025 E2E jobs with machine-readable evidence for verified-backend setup, zero-capability AppContainer tokens, loopback denial, timeout, memory limits, cleanup, archive creation/preview/re-extraction, invalid input, shell invocation, and settings-screen setup.
+- Require explicit AppContainer profile/root cleanup on successful create, extract, preview, shell, and doctor operations and on backend launch, timeout, resource, or nonzero-exit failures; cleanup failures are no longer silently hidden.
+- Extended `doctor` and the dedicated isolation report with measured token flags and capability counts instead of reporting only the requested isolation mode.
 - Added an opt-in zero-capability LPAC prototype, exposed in the settings screen and configuration file.
 - Verify the created child token is an AppContainer and, when requested, a less-privileged AppContainer; unsupported or downgraded launches fail closed.
 - Documented the fail-closed ConPTY design required for future encrypted-archive input without command-line, environment, log, or configuration exposure.

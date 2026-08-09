@@ -23,8 +23,24 @@ pub struct ProcessSpec {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProcessIsolation {
+    pub is_app_container: bool,
+    pub is_less_privileged_app_container: bool,
+    pub capability_count: u32,
+}
+
+impl ProcessIsolation {
+    pub const UNSANDBOXED: Self = Self {
+        is_app_container: false,
+        is_less_privileged_app_container: false,
+        capability_count: 0,
+    };
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProcessResult {
     pub exit_code: i32,
+    pub isolation: ProcessIsolation,
 }
 
 #[cfg(windows)]

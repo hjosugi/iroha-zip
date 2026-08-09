@@ -23,7 +23,7 @@ use iroha_zip::error::IrohaZipError;
 use iroha_zip::error::Result;
 use iroha_zip::extract::{self, ExtractRequest};
 #[cfg(windows)]
-use iroha_zip::platform::{AttachmentHandoffSession, ProcessSpec, Sandbox};
+use iroha_zip::platform::{AttachmentHandoffSession, ProcessIsolation, ProcessSpec, Sandbox};
 use iroha_zip::preview::{self, PreviewRequest};
 #[cfg(windows)]
 use iroha_zip::snapshot::AuditedFile;
@@ -85,11 +85,14 @@ fn run() -> Result<()> {
             }
             #[cfg(windows)]
             {
-                let version = probe_backend_in_sandbox(&backend, &config)?;
+                let (version, isolation) = probe_backend_in_sandbox(&backend, &config)?;
                 println!("version:       {version}");
                 println!(
-                    "isolation:     {}; backend execution succeeded",
-                    config.sandbox.isolation.display_name()
+                    "isolation:     requested={}; AppContainer={}; LPAC={}; capabilities={}; backend execution succeeded",
+                    config.sandbox.isolation.display_name(),
+                    isolation.is_app_container,
+                    isolation.is_less_privileged_app_container,
+                    isolation.capability_count
                 );
                 report_attachment_handoff_diagnostic(config.behavior.attachment_handoff)?;
             }
@@ -114,6 +117,40 @@ fn run() -> Result<()> {
                     "WARNING: backend source is unsupported and was accepted explicitly; provenance is not verified"
                 );
             }
+        }
+        Command::IsolationReport => {
+            let config = Config::load(&config_path)?;
+            let report = iroha_zip::isolation::measure(&config)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).map_err(|error| {
+                    iroha_zip::error::IrohaZipError::Sandbox(format!(
+                        "cannot serialize isolation report: {error}"
+                    ))
+                })?
+            );
+        }
+        Command::InternalNetworkProbe { endpoint } => {
+            let report = iroha_zip::isolation::network_probe(endpoint);
+            println!(
+                "{}",
+                serde_json::to_string(&report).map_err(|error| {
+                    iroha_zip::error::IrohaZipError::Sandbox(format!(
+                        "cannot serialize internal network probe: {error}"
+                    ))
+                })?
+            );
+        }
+        Command::InternalSleepProbe { milliseconds } => {
+            if milliseconds > 60_000 {
+                return Err(iroha_zip::error::IrohaZipError::Usage(
+                    "internal sleep probe is bounded to 60000 milliseconds".to_owned(),
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(milliseconds));
+        }
+        Command::InternalMemoryProbe { bytes } => {
+            iroha_zip::isolation::memory_probe(bytes)?;
         }
         Command::Preview {
             archive,
@@ -280,38 +317,50 @@ fn open_settings(_config_path: &std::path::Path) -> Result<()> {
 }
 
 #[cfg(windows)]
-fn probe_backend_in_sandbox(backend: &BackendBundle, config: &Config) -> Result<String> {
+fn probe_backend_in_sandbox(
+    backend: &BackendBundle,
+    config: &Config,
+) -> Result<(String, ProcessIsolation)> {
     let sandbox = Sandbox::new(
         config.sandbox.memory_limit_mib,
         false,
         config.sandbox.isolation,
     )?;
-    let sandbox_backend = backend.copy_verified_to(&sandbox.root().join("backend"))?;
-    let stdout_log = sandbox.root().join("doctor.stdout.log");
-    let stderr_log = sandbox.root().join("doctor.stderr.log");
-    let result = sandbox.run(ProcessSpec {
-        program: sandbox_backend,
-        args: vec![OsString::from("--version")],
-        current_dir: sandbox.root().to_path_buf(),
-        stdout_log: stdout_log.clone(),
-        stderr_log: stderr_log.clone(),
-        timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 30)),
-        monitor_root: None,
-        limits: config.limits.clone(),
-    })?;
-    let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
-    let stderr = util::read_limited(&stderr_log, 16 * 1024)?;
-    if result.exit_code != 0 {
-        return Err(IrohaZipError::Backend(format!(
-            "sandboxed bsdtar --version failed with code {}. stderr={stderr:?}, stdout={stdout:?}",
-            result.exit_code
-        )));
+    let operation = (|| {
+        let sandbox_backend = backend.copy_verified_to(&sandbox.root().join("backend"))?;
+        let stdout_log = sandbox.root().join("doctor.stdout.log");
+        let stderr_log = sandbox.root().join("doctor.stderr.log");
+        let result = sandbox.run(ProcessSpec {
+            program: sandbox_backend,
+            args: vec![OsString::from("--version")],
+            current_dir: sandbox.root().to_path_buf(),
+            stdout_log: stdout_log.clone(),
+            stderr_log: stderr_log.clone(),
+            timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 30)),
+            monitor_root: None,
+            limits: config.limits.clone(),
+        })?;
+        let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
+        let stderr = util::read_limited(&stderr_log, 16 * 1024)?;
+        if result.exit_code != 0 {
+            return Err(IrohaZipError::Backend(format!(
+                "sandboxed bsdtar --version failed with code {}. stderr={stderr:?}, stdout={stdout:?}",
+                result.exit_code
+            )));
+        }
+        let version = if stdout.is_empty() { stderr } else { stdout };
+        if version.is_empty() {
+            return Err(IrohaZipError::Backend(
+                "sandboxed bsdtar --version returned no text".to_owned(),
+            ));
+        }
+        Ok((version, result.isolation))
+    })();
+    match operation {
+        Ok(evidence) => {
+            sandbox.cleanup()?;
+            Ok(evidence)
+        }
+        Err(error) => sandbox.fail_after_cleanup(error),
     }
-    let version = if stdout.is_empty() { stderr } else { stdout };
-    if version.is_empty() {
-        return Err(IrohaZipError::Backend(
-            "sandboxed bsdtar --version returned no text".to_owned(),
-        ));
-    }
-    Ok(version)
 }

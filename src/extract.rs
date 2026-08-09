@@ -53,21 +53,28 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<ExtractResult> {
     let (publish_root, summary) = if request.selections.is_empty() {
         (staged.payload_root(), staged.summary().clone())
     } else {
-        let summary = selection::materialize_selection(
+        let summary = match selection::materialize_selection(
             staged.payload_root(),
             &selected_root,
             request.selections,
             &request.config.limits,
-        )?;
+        ) {
+            Ok(summary) => summary,
+            Err(error) => return staged.fail(error),
+        };
         (selected_root.as_path(), summary)
     };
-    let published = transfer::commit_tree(
+    let published = match transfer::commit_tree(
         publish_root,
         &destination,
         motw.as_deref(),
         request.config.behavior.attachment_handoff,
         &request.config.limits,
-    )?;
+    ) {
+        Ok(published) => published,
+        Err(error) => return staged.fail(error),
+    };
+    staged.finish()?;
 
     if request.open {
         crate::platform::open_folder(&published.destination)?;

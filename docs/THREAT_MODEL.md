@@ -149,5 +149,5 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
 - 親ディレクトリハンドル相対の列挙、staging tree封印、作成書庫の再照合、Windows reparse競合stress test
-- fuzzing、malicious archive corpus、Windows integration tests
+- malicious archive corpus and the remaining Windows 10/11, LPAC, read-format, denial, crash, and race matrix described in [`WINDOWS_E2E.md`](WINDOWS_E2E.md)
 - MSYS2 package key rotation、過去archive availability、生成済みbackend SBOM/license証跡の独立レビュー

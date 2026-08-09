@@ -112,6 +112,8 @@ try {
         "backend-evidence.ps1",
         "export-msys2-backend.ps1",
         "register-associations.ps1",
+        "test-settings-ui.ps1",
+        "test-windows-e2e.ps1",
         "unregister-associations.ps1"
     )) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts\$script") `
@@ -141,7 +143,8 @@ try {
         "ISSUE_BACKLOG.md",
         "LPAC_EVALUATION.md",
         "SETTINGS_ACCESSIBILITY.md",
-        "THREAT_MODEL.md"
+        "THREAT_MODEL.md",
+        "WINDOWS_E2E.md"
     )) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\$document") `
             -Destination (Join-Path $appRoot "docs\$document")
