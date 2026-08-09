@@ -10,12 +10,15 @@ Updated: 2026-08-09
 - `cargo check --all-targets --target x86_64-pc-windows-msvc --locked`
 - Configuration serialization, backward compatibility, validation, rollback-safe replacement, and path-policy tests
 - Platform-neutral settings-form round trips, human-readable byte-unit parsing, and field-specific validation tests
+- Bounded backend-manifest parsing with deterministic malformed-input, path, duplicate, and resource-limit regression tests
 - Native settings application type-check against `windows` 0.62.2 APIs
 - TOML and GitHub Actions workflow parsing
 - `cargo-deny` advisory, license, ban, and source policy checks
 - `cargo-about` third-party license inventory generation from the locked dependency graph
 - PowerShell syntax review for backend import, association, and release scripts
 - Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
+
+The current platform-neutral suite contains 30 passing tests.
 
 ## Performed by GitHub Actions
 

@@ -1,15 +1,123 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read};
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
 use crate::error::{IrohaZipError, Result};
 use crate::platform;
+use crate::policy;
 
 const MANIFEST_FILE: &str = "backend-manifest.tsv";
 const MANIFEST_HEADER: &str = "IROHA-ZIP-BACKEND-MANIFEST\t1";
+pub const MAX_BACKEND_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
+pub const MAX_BACKEND_MANIFEST_FILES: usize = 4096;
+const MAX_BACKEND_MANIFEST_PATH_BYTES: usize = 4096;
+const MAX_BACKEND_MANIFEST_PATH_DEPTH: usize = 64;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackendManifest {
+    executable: PathBuf,
+    files: BTreeMap<PathBuf, String>,
+}
+
+impl BackendManifest {
+    pub fn parse(input: &[u8]) -> Result<Self> {
+        if input.len() > MAX_BACKEND_MANIFEST_BYTES {
+            return Err(IrohaZipError::Backend(format!(
+                "backend manifest exceeds the {MAX_BACKEND_MANIFEST_BYTES} byte limit"
+            )));
+        }
+        let text = std::str::from_utf8(input).map_err(|error| {
+            IrohaZipError::Backend(format!("backend manifest is not valid UTF-8: {error}"))
+        })?;
+        let mut lines = text.lines();
+        let header = lines
+            .next()
+            .ok_or_else(|| IrohaZipError::Backend("backend manifest is empty".to_owned()))?;
+        if header != MANIFEST_HEADER {
+            return Err(IrohaZipError::Backend(format!(
+                "unsupported backend manifest header: {header:?}"
+            )));
+        }
+
+        let mut executable = None;
+        let mut files = BTreeMap::new();
+        for (index, line) in lines.enumerate() {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let line_number = index + 2;
+            let mut fields = line.split('\t');
+            match (fields.next(), fields.next(), fields.next(), fields.next()) {
+                (Some("executable"), Some(value), None, None) => {
+                    let relative = validate_manifest_path(value)?;
+                    if executable.replace(relative).is_some() {
+                        return Err(IrohaZipError::Backend(
+                            "backend manifest contains multiple executable entries".to_owned(),
+                        ));
+                    }
+                }
+                (Some("sha256"), Some(hash), Some(value), None) => {
+                    if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                        return Err(IrohaZipError::Backend(format!(
+                            "invalid SHA-256 on manifest line {line_number}"
+                        )));
+                    }
+                    let relative = validate_manifest_path(value)?;
+                    if files.len() >= MAX_BACKEND_MANIFEST_FILES {
+                        return Err(IrohaZipError::Backend(format!(
+                            "backend manifest exceeds the {MAX_BACKEND_MANIFEST_FILES} file limit"
+                        )));
+                    }
+                    if files
+                        .insert(relative.clone(), hash.to_ascii_lowercase())
+                        .is_some()
+                    {
+                        return Err(IrohaZipError::Backend(format!(
+                            "duplicate manifest path: {}",
+                            relative.display()
+                        )));
+                    }
+                }
+                _ => {
+                    return Err(IrohaZipError::Backend(format!(
+                        "invalid backend manifest line {line_number}: {line:?}"
+                    )));
+                }
+            }
+        }
+
+        let executable = executable.ok_or_else(|| {
+            IrohaZipError::Backend("backend manifest has no executable entry".to_owned())
+        })?;
+        if files.is_empty() {
+            return Err(IrohaZipError::Backend(
+                "backend manifest has no hashed files".to_owned(),
+            ));
+        }
+        if !files.contains_key(&executable) {
+            return Err(IrohaZipError::Backend(format!(
+                "manifest executable is not listed as a hashed file: {}",
+                executable.display()
+            )));
+        }
+        Ok(Self { executable, files })
+    }
+
+    pub fn executable(&self) -> &Path {
+        &self.executable
+    }
+
+    pub fn file_count(&self) -> usize {
+        self.files.len()
+    }
+
+    pub fn file_hash(&self, path: &Path) -> Option<&str> {
+        self.files.get(path).map(String::as_str)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct BackendBundle {
@@ -49,16 +157,10 @@ impl BackendBundle {
         platform::validate_extracted_entry_security(&manifest_path, &manifest_metadata).map_err(
             |error| IrohaZipError::Backend(format!("invalid backend manifest: {error}")),
         )?;
-        let (executable, files) = parse_manifest(&manifest_path)?;
-        if !files.contains_key(&executable) {
-            return Err(IrohaZipError::Backend(format!(
-                "manifest executable is not listed as a hashed file: {}",
-                executable.display()
-            )));
-        }
+        let manifest = read_manifest(&manifest_path)?;
 
         let actual = collect_files(&root)?;
-        let expected: BTreeSet<PathBuf> = files.keys().cloned().collect();
+        let expected: BTreeSet<PathBuf> = manifest.files.keys().cloned().collect();
         if actual != expected {
             let unexpected: Vec<String> = actual
                 .difference(&expected)
@@ -73,7 +175,7 @@ impl BackendBundle {
             )));
         }
 
-        for (relative, expected_hash) in &files {
+        for (relative, expected_hash) in &manifest.files {
             let path = root.join(relative);
             let metadata = fs::symlink_metadata(&path).map_err(|error| {
                 IrohaZipError::io_path("cannot inspect backend file", &path, error)
@@ -98,11 +200,11 @@ impl BackendBundle {
             }
         }
 
-        let executable_path = root.join(&executable);
+        let executable_path = root.join(&manifest.executable);
         Ok(Self {
             root,
             executable: executable_path,
-            files,
+            files: manifest.files,
         })
     }
 
@@ -175,86 +277,44 @@ pub fn sha256_file(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn parse_manifest(path: &Path) -> Result<(PathBuf, BTreeMap<PathBuf, String>)> {
-    let file = File::open(path)
+fn read_manifest(path: &Path) -> Result<BackendManifest> {
+    let mut file = File::open(path)
         .map_err(|error| IrohaZipError::io_path("cannot open backend manifest", path, error))?;
-    let mut lines = BufReader::new(file).lines();
-    let header = lines
-        .next()
-        .transpose()
-        .map_err(|error| IrohaZipError::io_path("cannot read backend manifest", path, error))?
-        .ok_or_else(|| IrohaZipError::Backend("backend manifest is empty".to_owned()))?;
-    if header != MANIFEST_HEADER {
-        return Err(IrohaZipError::Backend(format!(
-            "unsupported backend manifest header: {header:?}"
-        )));
-    }
-
-    let mut executable = None;
-    let mut files = BTreeMap::new();
-    for (index, line) in lines.enumerate() {
-        let line = line
-            .map_err(|error| IrohaZipError::io_path("cannot read backend manifest", path, error))?;
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let fields: Vec<&str> = line.split('\t').collect();
-        match fields.as_slice() {
-            ["executable", value] => {
-                let relative = validate_manifest_path(value)?;
-                if executable.replace(relative).is_some() {
-                    return Err(IrohaZipError::Backend(
-                        "backend manifest contains multiple executable entries".to_owned(),
-                    ));
-                }
-            }
-            ["sha256", hash, value] => {
-                if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    return Err(IrohaZipError::Backend(format!(
-                        "invalid SHA-256 on manifest line {}",
-                        index + 2
-                    )));
-                }
-                let relative = validate_manifest_path(value)?;
-                if files.insert(relative.clone(), (*hash).to_owned()).is_some() {
-                    return Err(IrohaZipError::Backend(format!(
-                        "duplicate manifest path: {}",
-                        relative.display()
-                    )));
-                }
-            }
-            _ => {
-                return Err(IrohaZipError::Backend(format!(
-                    "invalid backend manifest line {}: {line:?}",
-                    index + 2
-                )));
-            }
-        }
-    }
-
-    let executable = executable.ok_or_else(|| {
-        IrohaZipError::Backend("backend manifest has no executable entry".to_owned())
-    })?;
-    if files.is_empty() {
-        return Err(IrohaZipError::Backend(
-            "backend manifest has no hashed files".to_owned(),
-        ));
-    }
-    Ok((executable, files))
+    let mut bytes = Vec::new();
+    file.by_ref()
+        .take(MAX_BACKEND_MANIFEST_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| IrohaZipError::io_path("cannot read backend manifest", path, error))?;
+    BackendManifest::parse(&bytes)
 }
 
 fn validate_manifest_path(value: &str) -> Result<PathBuf> {
     if value.is_empty()
+        || value.len() > MAX_BACKEND_MANIFEST_PATH_BYTES
         || value
             .chars()
             .any(|character| matches!(character, '\0' | '\t' | '\r' | '\n' | ':' | '\\'))
-        || value
-            .split('/')
-            .any(|part| part.is_empty() || matches!(part, "." | ".."))
     {
         return Err(IrohaZipError::Backend(format!(
             "invalid or non-normalized manifest path: {value:?}"
         )));
+    }
+    let parts: Vec<&str> = value.split('/').collect();
+    if parts.len() > MAX_BACKEND_MANIFEST_PATH_DEPTH
+        || parts
+            .iter()
+            .any(|part| part.is_empty() || matches!(*part, "." | ".."))
+    {
+        return Err(IrohaZipError::Backend(format!(
+            "invalid or non-normalized manifest path: {value:?}"
+        )));
+    }
+    for part in &parts {
+        policy::validate_component(std::ffi::OsStr::new(part)).map_err(|_| {
+            IrohaZipError::Backend(format!(
+                "manifest path contains an invalid Windows filename: {value:?}"
+            ))
+        })?;
     }
     let path = PathBuf::from(value);
     if path.is_absolute()

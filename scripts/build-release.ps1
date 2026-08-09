@@ -93,8 +93,10 @@ try {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot $file) -Destination (Join-Path $appRoot $file)
     }
     New-Item -ItemType Directory -Force -Path (Join-Path $appRoot "docs") | Out-Null
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\THREAT_MODEL.md") `
-        -Destination (Join-Path $appRoot "docs\THREAT_MODEL.md")
+    foreach ($document in @("BACKEND_MANIFEST.md", "THREAT_MODEL.md")) {
+        Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\$document") `
+            -Destination (Join-Path $appRoot "docs\$document")
+    }
 
     $zip = Join-Path $distRoot "iroha-zip-$version-windows-x64.zip"
     if (Test-Path -LiteralPath $zip) {

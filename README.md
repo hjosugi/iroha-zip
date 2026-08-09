@@ -146,6 +146,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 `SourceDirectory`直下またはその配下にある全ファイルがバックエンドとして固定されます。不要なEXEやDLLを混ぜないでください。
 
+`backend-manifest.tsv`の形式、入力上限、パス規則、検証範囲は[backend manifest仕様](docs/BACKEND_MANIFEST.md)に記載しています。v1マニフェストは取り込み後の完全性を固定するものであり、取得元そのものの信頼性や署名を証明するものではありません。
+
 ## ビルド
 
 Developer PowerShell for VS 2022、またはMSVC環境が利用できるPowerShellで実行します。

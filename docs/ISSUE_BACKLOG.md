@@ -30,6 +30,8 @@ Define supported libarchive sources and verify package signatures/hashes before 
 
 Acceptance: provenance is machine-readable, unsupported sources generate an explicit warning, and the generated manifest/SBOM/license inventory agree exactly with the imported tree.
 
+Progress (2026-08-09): v1 manifest parsing is now a bounded, platform-neutral API with deterministic validation tests and a checked format specification. Source-only Rust dependency licenses are generated and checked in CI. Backend acquisition provenance, package-signature verification, and private-package SBOM/license generation remain open.
+
 ## P1 — hardening and core capability
 
 ### [SAFE-005: Reduce source-tree TOCTOU windows](https://github.com/hjosugi/iroha-zip/issues/7)
@@ -62,6 +64,8 @@ Exercise the native settings application at 100–300% DPI, keyboard-only naviga
 
 Acceptance: all controls are reachable and labelled, content fits supported displays, destructive/long-running actions show progress or confirmation, and UI automation covers every button and setting.
 
+Progress (2026-08-09): keyboard dialog navigation, access keys, unsaved-change tracking, field-focused validation, readable capacity units, progress state, and destructive-action confirmation are implemented. Real 100–300% DPI, screen-reader, multilingual Windows, concurrent-save, and UI-automation evidence remains open.
+
 ## P2 — usability and platform breadth
 
 ### [UX-002: Archive preview without backend privilege expansion](https://github.com/hjosugi/iroha-zip/issues/12)
@@ -81,6 +85,8 @@ Acceptance: packages are verified before execution, downgrade policy is explicit
 Fuzz manifest parsing, Windows path validation, archive-name normalization, command-line quoting, and configuration round-trips.
 
 Acceptance: reproducible fuzz targets run in CI on a bounded schedule and all minimized regressions become deterministic tests.
+
+Progress (2026-08-09): backend manifest parsing is separated from filesystem I/O and covered by malformed UTF-8, structural, hash, duplicate, Windows-path, size, depth, and record-count regression tests. Dedicated fuzz targets and a bounded scheduled workflow remain open.
 
 ### [PORT-001: Windows ARM64 package](https://github.com/hjosugi/iroha-zip/issues/15)
 
