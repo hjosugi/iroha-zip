@@ -47,6 +47,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<ExtractResult> {
         request.config,
         archive_snapshot,
         request.encoding,
+        staging::ListingPolicy::External,
         request.allow_unsandboxed,
     )?;
     let selected_root = staged.workspace_root().join("selected");

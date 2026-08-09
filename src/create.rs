@@ -5,10 +5,11 @@ use std::time::Duration;
 
 use crate::backend::BackendBundle;
 use crate::cli::CreateFormat;
-use crate::config::Config;
+use crate::config::{Config, FilenameEncoding};
 use crate::error::{IrohaZipError, Result};
 use crate::platform::{ProcessSpec, Sandbox};
-use crate::{monitor, policy, transfer, util};
+use crate::snapshot::FileFingerprint;
+use crate::{monitor, policy, staging, transfer, util};
 
 pub fn create_archive(
     backend: &BackendBundle,
@@ -56,7 +57,8 @@ pub fn create_archive(
         })?;
 
         let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
-        transfer::copy_audited_tree(&source, &source_dir, &config.limits)?;
+        let expected_source =
+            transfer::copy_audited_tree_fingerprint(&source, &source_dir, &config.limits)?;
 
         let sandbox_archive = output_dir.join("archive.bin");
         let stdout_log = sandbox.root().join("bsdtar.stdout.log");
@@ -107,24 +109,34 @@ pub fn create_archive(
             )));
         }
 
-        crate::platform::validate_regular_file_security(&sandbox_archive)?;
-        let metadata = fs::symlink_metadata(&sandbox_archive).map_err(|error| {
-            IrohaZipError::io_path("cannot inspect staged archive", &sandbox_archive, error)
-        })?;
-        crate::platform::validate_extracted_entry_security(&sandbox_archive, &metadata)?;
-        let size = metadata.len();
-        if size == 0 {
-            return Err(IrohaZipError::Backend(
-                "backend produced an empty archive".to_owned(),
-            ));
-        }
-        if size > config.limits.max_archive_bytes {
-            return Err(IrohaZipError::Policy(format!(
-                "created archive is {size} bytes; limit is {} bytes",
-                config.limits.max_archive_bytes
-            )));
-        }
-        util::copy_file_new_exact(&sandbox_archive, &output, size)
+        require_tree_fingerprint(
+            &source_dir,
+            &config.limits,
+            &expected_source,
+            "backend modified the staged source tree while creating the archive",
+        )?;
+
+        let verified_archive = verify_created_archive(
+            backend,
+            config,
+            &sandbox_archive,
+            &expected_source,
+            allow_unsandboxed,
+        )?;
+        require_tree_fingerprint(
+            &source_dir,
+            &config.limits,
+            &expected_source,
+            "staged source tree changed before archive publication",
+        )?;
+
+        let mut publication_snapshot = open_verified_archive_for_publication(
+            &sandbox_archive,
+            &config.limits,
+            &verified_archive,
+        )?;
+        publication_snapshot.copy_to_new(&output)?;
+        Ok(())
     })();
     match operation {
         Ok(()) => {
@@ -133,6 +145,63 @@ pub fn create_archive(
         }
         Err(error) => sandbox.fail_after_cleanup(error),
     }
+}
+
+fn open_verified_archive_for_publication(
+    archive: &Path,
+    limits: &policy::Limits,
+    verified: &FileFingerprint,
+) -> Result<crate::snapshot::AuditedFile> {
+    let snapshot = policy::open_input_archive(archive, limits)?;
+    if snapshot.fingerprint() != verified {
+        return Err(IrohaZipError::Policy(
+            "created archive identity, timestamps, length, or content changed after verification"
+                .to_owned(),
+        ));
+    }
+    Ok(snapshot)
+}
+
+fn verify_created_archive(
+    backend: &BackendBundle,
+    config: &Config,
+    archive: &Path,
+    expected_source: &transfer::TreeFingerprint,
+    allow_unsandboxed: bool,
+) -> Result<FileFingerprint> {
+    let archive_snapshot = policy::open_input_archive(archive, &config.limits)?;
+    let archive_fingerprint = archive_snapshot.fingerprint().clone();
+    let staged = staging::stage_archive(
+        backend,
+        config,
+        archive_snapshot,
+        FilenameEncoding::Auto,
+        staging::ListingPolicy::CreatedByIrohaZip,
+        allow_unsandboxed,
+    )?;
+    let observed = match transfer::fingerprint_tree(staged.extracted_root(), &config.limits) {
+        Ok(observed) => observed,
+        Err(error) => return staged.fail(error),
+    };
+    if &observed != expected_source {
+        return staged.fail(IrohaZipError::Policy(
+            "created archive does not reproduce the audited source tree".to_owned(),
+        ));
+    }
+    staged.finish()?;
+    Ok(archive_fingerprint)
+}
+
+fn require_tree_fingerprint(
+    root: &Path,
+    limits: &policy::Limits,
+    expected: &transfer::TreeFingerprint,
+    message: &str,
+) -> Result<()> {
+    if &transfer::fingerprint_tree(root, limits)? != expected {
+        return Err(IrohaZipError::Policy(message.to_owned()));
+    }
+    Ok(())
 }
 
 fn create_arguments(format: CreateFormat) -> Vec<OsString> {
@@ -167,7 +236,10 @@ fn create_arguments(format: CreateFormat) -> Vec<OsString> {
             "--no-fflags",
         ],
     };
-    values.iter().map(|value| OsString::from(*value)).collect()
+    let mut arguments: Vec<OsString> = values.iter().map(|value| OsString::from(*value)).collect();
+    arguments.push(OsString::from("-s"));
+    arguments.push(OsString::from(r",^\./,,"));
+    arguments
 }
 
 fn normalized_output(path: &Path) -> Result<PathBuf> {
@@ -194,4 +266,66 @@ fn normalized_output(path: &Path) -> Result<PathBuf> {
     })?;
     crate::platform::validate_directory_security(&parent)?;
     Ok(parent.join(file_name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "iroha-zip-created-publication-{}",
+                util::unique_token()
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn verified_archive_identity_replacement_is_rejected_before_publication() {
+        let directory = TestDirectory::new();
+        let archive = directory.0.join("archive.bin");
+        let moved = directory.0.join("moved.bin");
+        fs::write(&archive, b"same bytes").unwrap();
+        let verified = policy::open_input_archive(&archive, &policy::Limits::default())
+            .unwrap()
+            .fingerprint()
+            .clone();
+
+        fs::rename(&archive, &moved).unwrap();
+        fs::write(&archive, b"same bytes").unwrap();
+
+        assert!(
+            open_verified_archive_for_publication(&archive, &policy::Limits::default(), &verified)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn verified_archive_same_size_mutation_is_rejected_before_publication() {
+        let directory = TestDirectory::new();
+        let archive = directory.0.join("archive.bin");
+        fs::write(&archive, b"alpha").unwrap();
+        let verified = policy::open_input_archive(&archive, &policy::Limits::default())
+            .unwrap()
+            .fingerprint()
+            .clone();
+
+        fs::write(&archive, b"bravo").unwrap();
+
+        assert!(
+            open_verified_archive_for_publication(&archive, &policy::Limits::default(), &verified)
+                .is_err()
+        );
+    }
 }

@@ -16,12 +16,23 @@ const MAX_ARCHIVE_LISTING_STDERR_BYTES: u64 = 1024 * 1024;
 
 pub(crate) struct StagedArchive {
     sandbox: Sandbox,
+    extracted_root: PathBuf,
     payload_root: PathBuf,
     workspace_root: PathBuf,
     summary: AuditSummary,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum ListingPolicy {
+    External,
+    CreatedByIrohaZip,
+}
+
 impl StagedArchive {
+    pub(crate) fn extracted_root(&self) -> &Path {
+        &self.extracted_root
+    }
+
     pub(crate) fn payload_root(&self) -> &Path {
         &self.payload_root
     }
@@ -48,6 +59,7 @@ pub(crate) fn stage_archive(
     config: &Config,
     mut archive_snapshot: AuditedFile,
     encoding: FilenameEncoding,
+    listing_policy: ListingPolicy,
     allow_unsandboxed: bool,
 ) -> Result<StagedArchive> {
     let archive = archive_snapshot.path().to_path_buf();
@@ -109,7 +121,14 @@ pub(crate) fn stage_archive(
             )));
         }
         let listing = read_listing(&stdout_log)?;
-        policy::validate_archive_listing(&listing, &config.limits)?;
+        match listing_policy {
+            ListingPolicy::External => {
+                policy::validate_archive_listing(&listing, &config.limits)?;
+            }
+            ListingPolicy::CreatedByIrohaZip => {
+                policy::validate_created_archive_listing(&listing, &config.limits)?;
+            }
+        }
         remove_process_log(&stdout_log)?;
         remove_process_log(&stderr_log)?;
 
@@ -188,11 +207,12 @@ pub(crate) fn stage_archive(
 
         let summary = policy::audit_tree(&output_dir, &config.limits)?;
         let payload_root = choose_payload_root(&output_dir, &archive)?;
-        Ok((payload_root, workspace_root, summary))
+        Ok((output_dir, payload_root, workspace_root, summary))
     })();
     match operation {
-        Ok((payload_root, workspace_root, summary)) => Ok(StagedArchive {
+        Ok((extracted_root, payload_root, workspace_root, summary)) => Ok(StagedArchive {
             sandbox,
+            extracted_root,
             payload_root,
             workspace_root,
             summary,

@@ -168,6 +168,14 @@ pub fn copy_audited_tree(
     target_root: &Path,
     limits: &Limits,
 ) -> Result<AuditSummary> {
+    Ok(copy_audited_tree_fingerprint(source_root, target_root, limits)?.summary)
+}
+
+pub(crate) fn copy_audited_tree_fingerprint(
+    source_root: &Path,
+    target_root: &Path,
+    limits: &Limits,
+) -> Result<TreeFingerprint> {
     copy_audited_tree_inner(source_root, target_root, limits, || Ok(()))
 }
 
@@ -176,7 +184,7 @@ fn copy_audited_tree_inner<F>(
     target_root: &Path,
     limits: &Limits,
     after_audit: F,
-) -> Result<AuditSummary>
+) -> Result<TreeFingerprint>
 where
     F: FnOnce() -> Result<()>,
 {
@@ -205,7 +213,7 @@ where
             "source tree changed while it was being copied".to_owned(),
         ));
     }
-    Ok(copied.summary)
+    Ok(copied)
 }
 
 pub fn fingerprint_tree(root: &Path, limits: &Limits) -> Result<TreeFingerprint> {

@@ -235,6 +235,18 @@ pub fn validate_relative_path(path: &Path, limits: &Limits) -> Result<()> {
 /// `bsdtar -t` preflight. The backend performs all archive parsing; this
 /// function only accepts a bounded UTF-8 list of normalized Windows-safe names.
 pub fn validate_archive_listing(input: &[u8], limits: &Limits) -> Result<u64> {
+    validate_archive_listing_inner(input, limits, false)
+}
+
+pub(crate) fn validate_created_archive_listing(input: &[u8], limits: &Limits) -> Result<u64> {
+    validate_archive_listing_inner(input, limits, true)
+}
+
+fn validate_archive_listing_inner(
+    input: &[u8],
+    limits: &Limits,
+    allow_created_root: bool,
+) -> Result<u64> {
     let text = std::str::from_utf8(input).map_err(|error| {
         IrohaZipError::Policy(format!(
             "archive member listing is not valid UTF-8: {error}"
@@ -246,9 +258,19 @@ pub fn validate_archive_listing(input: &[u8], limits: &Limits) -> Result<u64> {
         .ok_or_else(|| IrohaZipError::Config("archive entry limit overflow".to_owned()))?;
     let mut seen = HashSet::new();
     let mut entries = 0u64;
+    let mut saw_created_root = false;
 
     for raw_line in text.split_terminator('\n') {
         let member = raw_line.strip_suffix('\r').unwrap_or(raw_line);
+        if allow_created_root && member == "./" {
+            if saw_created_root {
+                return Err(IrohaZipError::Policy(
+                    "duplicate created-archive root marker is rejected".to_owned(),
+                ));
+            }
+            saw_created_root = true;
+            continue;
+        }
         validate_archive_member_name(member, limits)?;
         entries = checked_add(entries, 1, "archive entry count")?;
         if entries > max_entries {
@@ -367,4 +389,22 @@ fn is_numbered_reserved(value: &str, prefix: &str) -> bool {
 fn checked_add(left: u64, right: u64, label: &str) -> Result<u64> {
     left.checked_add(right)
         .ok_or_else(|| IrohaZipError::Policy(format!("{label} overflow")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_created_archive_preflight_can_ignore_one_exact_root_marker() {
+        let limits = Limits::default();
+        assert!(validate_archive_listing(b"./\nfile.txt\n", &limits).is_err());
+        assert_eq!(
+            validate_created_archive_listing(b"./\nfile.txt\n", &limits).unwrap(),
+            1
+        );
+        assert!(validate_created_archive_listing(b"./\n./\nfile.txt\n", &limits).is_err());
+        assert!(validate_created_archive_listing(b"./file.txt\n", &limits).is_err());
+        assert!(validate_created_archive_listing(b".\\\nfile.txt\n", &limits).is_err());
+    }
 }

@@ -96,9 +96,13 @@ AppContainerプロセス
   6. 親プロセスが出力サイズとオブジェクト数を監視
 
 通常プロセス
-  7. 生成物が通常ファイルであり上限内であることを再検査
-  8. 新規ファイルとして最終出力先へコピー
-  9. AppContainer profileと一時データを削除
+  7. staging sourceのpath/type/length/SHA-256 fingerprintを再照合
+  8. 生成書庫をidentity・時刻・長さ・SHA-256付きhandleで固定
+  9. 別AppContainerへhandleからcopyし、raw listingを事前検査して再展開
+ 10. 再展開した完全rootとstaging sourceのtree fingerprintを照合
+ 11. 生成書庫とstaging sourceを再照合
+ 12. 同じ生成書庫handleからcreate-newで最終出力へcopy
+ 13. 両AppContainer profileと一時データを削除
 ```
 
 ## 6. 残るリスク
@@ -133,7 +137,9 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 
 圧縮元ツリーは相対パス、種別、長さ、各ファイルのSHA-256を決定的にfingerprintします。実コピー時には各ファイルのidentity・時刻・長さ・内容を監査時の値と照合し、コピー後のツリーfingerprintも再比較します。同一サイズの改変、同じ内容を持つ別ファイルへの置換、rename、hardlink、symlink、およびroot外へ解決されるファイルはfail closedになります。
 
-ディレクトリ列挙そのものを親ディレクトリハンドル相対で固定する実装、監査コピー完了後からbackend読取完了までのstaging tree封印、作成書庫の再展開照合、およびWindows実機でのreparse point競合stress testは未完です。同一ユーザー権限をすでに持つ能動的攻撃者との全競合を排除したとは扱いません。
+作成backend終了後もstaging source fingerprintを維持していることを確認し、生成書庫はhandleから別sandboxへ渡します。作成時に先頭`./`を除去し、作成物だけに残る単一の`./` root marker以外は通常のraw member policyを緩めません。再展開した完全rootがsourceと一致し、さらに書庫identity・時刻・長さ・SHA-256が検証時と一致するhandleからだけ最終出力へcopyします。内容不一致、同一サイズ改変、identity置換、危険なlistingはいずれも出力前にfail closedになります。
+
+ディレクトリ列挙そのものを親ディレクトリハンドル相対で固定する実装、ACL／handleによるstaging treeの書込禁止、およびWindows実機でのreparse point競合stress testは未完です。事後fingerprintは変更を検出しますが、同一ユーザー権限をすでに持つ能動的攻撃者との全競合を排除したとは扱いません。
 
 ### 暗号化書庫
 
@@ -148,6 +154,6 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
-- 親ディレクトリハンドル相対の列挙、staging tree封印、作成書庫の再照合、Windows reparse競合stress test
+- 親ディレクトリハンドル相対の列挙、ACL／handleによるstaging tree封印、Windows reparse競合stress test
 - first passing review of the generated malicious corpus plus its remaining format/control-byte/CPU-bomb/crash/race matrix described in [`MALICIOUS_CORPUS.md`](MALICIOUS_CORPUS.md), and the Windows 10/11, LPAC, read-format, denial, crash, and race matrix in [`WINDOWS_E2E.md`](WINDOWS_E2E.md)
 - MSYS2 package key rotation、過去archive availability、生成済みbackend SBOM/license証跡の独立レビュー

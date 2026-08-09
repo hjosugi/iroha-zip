@@ -25,6 +25,7 @@ fn rejects_unsafe_raw_archive_names_before_backend_normalization() {
         b"alias.\n",
         b"alias \n",
         b"bad?.txt\n",
+        b"./\n",
         b"./not-normalized.txt\n",
         b"folder//empty.txt\n",
         b"\n",

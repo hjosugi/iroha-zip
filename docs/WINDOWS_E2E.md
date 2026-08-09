@@ -40,7 +40,7 @@ The archive harness fails the job unless all of these checks pass:
 | Memory | A child requesting and touching 256 MiB fails inside a Job Object limited to 64 MiB. |
 | Cleanup | All three probe profiles are deleted and all three temporary roots are absent after explicit cleanup. |
 | Doctor | A real `bsdtar --version` run reports measured AppContainer and zero-capability evidence. |
-| Create/read | ZIP, 7z, TAR, and TAR.GZ are created, previewed, extracted, and compared by relative path, type, length, and SHA-256. |
+| Create/read | ZIP, 7z, TAR, and TAR.GZ are internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. |
 | Additional read filters | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures; iroha-zip previews and extracts them to the same tree hash. |
 | Paths | The source includes Japanese names, an empty directory, deterministic binary data, and a relative path longer than 260 characters. |
 | Failure | A deliberately invalid ZIP exits nonzero, publishes no destination, and takes the cleanup-required backend-failure path. |

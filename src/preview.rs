@@ -50,6 +50,7 @@ pub fn preview(request: PreviewRequest<'_>) -> Result<PreviewResult> {
         request.config,
         archive,
         request.encoding,
+        staging::ListingPolicy::External,
         request.allow_unsandboxed,
     )?;
     let result = match inventory_tree(staged.payload_root(), &request.config.limits) {

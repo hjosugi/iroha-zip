@@ -19,6 +19,7 @@ Updated: 2026-08-10
 - Generated unsupported-source SPDX JSON validated against the official SPDX v2.3 JSON Schema
 - Five pinned fuzz targets, a successful initial bounded sanitizer campaign, isolated seeds, and deterministic minimized-regression promotion
 - Handle-retaining input/source snapshots and deterministic source-tree race tests for identity replacement, same-size mutation, rename, hardlinks, and symbolic links
+- Created-archive full-root re-extraction in a second sandbox, before/after source and archive fingerprints, handle-retained create-new publication, eight deterministic root/mutation/mismatch tests, and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Normal-AppContainer/LPAC configuration round trips and Windows LPAC process/token API type-check
@@ -32,7 +33,7 @@ Updated: 2026-08-10
 - Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
 - Split build/sign/package release boundary, strict three-EXE Authenticode publisher/EKU/timestamp verification, deterministic signature evidence, pinned SLSA provenance generation, and fail-closed immutable-release workflow parsing
 
-The current Linux suite contains 76 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate. Windows CI additionally runs the source-handle sharing test that verifies open snapshots block writes and renames.
+The current Linux suite contains 85 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate. Windows CI additionally runs the source-handle sharing test that verifies open snapshots block writes and renames.
 
 ## Performed by GitHub Actions
 
@@ -53,7 +54,7 @@ A `v*` tag whose value matches `Cargo.toml` and points to the current `main` com
 - First passing and reviewed malicious-corpus JSON from both Server jobs, then broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring
-- Real-Windows reparse point race stress tests, parent-directory handle-relative source enumeration, staging-tree sealing, and created-archive re-extraction comparison
+- Real-Windows reparse point race stress tests, parent-directory handle-relative source enumeration, write-denying staging-tree ACL/handle sealing, and first Windows evidence for internal created-archive re-extraction
 - Attachment Services with Defender enabled/disabled/unavailable, third-party providers, quarantine/deletion, ADS inventory, and MotW preservation across publication
 - First successful reviewed Authenticode/SLSA/immutable release after owner-managed Azure identity validation and repository settings, plus independent security review
 
