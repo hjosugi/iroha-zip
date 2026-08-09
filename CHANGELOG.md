@@ -8,6 +8,10 @@
 - Added opt-in Windows Attachment Services handoff policies (`disabled`, `best-effort`, and `required`) to configuration and the settings screen.
 - Run enabled handoff on the staged tree before publication, then re-audit file identities, links, reparse points, ADS, content hashes, tree structure, and Mark-of-the-Web before the final rename.
 - Report Attachment Services acceptance separately from structural validation and never describe it as a clean malware verdict.
+- Added a System-DPI-aware, resizable settings layout with 100–300% logical scaling, horizontal/vertical scrolling, and automatic focus visibility.
+- Assigned stable IDs and unique access keys to every setting and action, with exhaustive action dispatch tests and a native Windows UI Automation smoke test.
+- Serialize concurrent configuration saves before rollback-safe replacement, using a named Windows mutex across processes in the current session.
+- Include every document linked from the packaged README in release ZIPs.
 
 ## 0.3.1 - 2026-08-09
 

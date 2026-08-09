@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_HANDLE_EOF, ERROR_INVALID_PARAMETER,
     ERROR_NO_MORE_FILES, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS, HLOCAL, LocalFree,
-    SetHandleInformation, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows::Win32::Security::Isolation::{
@@ -42,12 +42,13 @@ use windows::Win32::System::JobObjects::{
     JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
 };
 use windows::Win32::System::Threading::{
-    CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
-    EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, InitializeProcThreadAttributeList,
-    LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY,
-    PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROC_THREAD_ATTRIBUTE_JOB_LIST,
-    PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
-    STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
+    CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateMutexW, CreateProcessW,
+    DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess,
+    InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
+    PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
+    PROCESS_INFORMATION, ReleaseMutex, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    UpdateProcThreadAttribute, WaitForSingleObject,
 };
 use windows::Win32::System::WindowsProgramming::PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
 use windows::Win32::UI::Shell::{AttachmentServices, IAttachmentExecute};
@@ -121,6 +122,36 @@ struct ComApartment;
 impl Drop for ComApartment {
     fn drop(&mut self) {
         unsafe { CoUninitialize() };
+    }
+}
+
+pub struct ConfigSaveGuard(HANDLE);
+
+pub fn lock_config_save() -> Result<ConfigSaveGuard> {
+    let name = wide_null(OsStr::new(r"Local\iroha-zip.ConfigSave.v1"));
+    let handle = unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) }
+        .map_err(|error| windows_error("CreateMutexW(config save)", error))?;
+    let wait = unsafe { WaitForSingleObject(handle, 30_000) };
+    if wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED {
+        let _ = unsafe { CloseHandle(handle) };
+        return if wait == WAIT_TIMEOUT {
+            Err(IrohaZipError::Config(
+                "timed out waiting for another configuration save".to_owned(),
+            ))
+        } else {
+            Err(IrohaZipError::Config(format!(
+                "cannot acquire configuration save mutex: wait result {}",
+                wait.0
+            )))
+        };
+    }
+    Ok(ConfigSaveGuard(handle))
+}
+
+impl Drop for ConfigSaveGuard {
+    fn drop(&mut self) {
+        let _ = unsafe { ReleaseMutex(self.0) };
+        let _ = unsafe { CloseHandle(self.0) };
     }
 }
 

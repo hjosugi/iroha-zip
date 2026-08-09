@@ -93,7 +93,16 @@ try {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot $file) -Destination (Join-Path $appRoot $file)
     }
     New-Item -ItemType Directory -Force -Path (Join-Path $appRoot "docs") | Out-Null
-    foreach ($document in @("BACKEND_MANIFEST.md", "THREAT_MODEL.md")) {
+    foreach ($document in @(
+        "ANTIMALWARE_HANDOFF.md",
+        "BACKEND_MANIFEST.md",
+        "BUILD_STATUS.md",
+        "ENCRYPTED_ARCHIVES.md",
+        "ISSUE_BACKLOG.md",
+        "LPAC_EVALUATION.md",
+        "SETTINGS_ACCESSIBILITY.md",
+        "THREAT_MODEL.md"
+    )) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\$document") `
             -Destination (Join-Path $appRoot "docs\$document")
     }

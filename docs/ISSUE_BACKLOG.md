@@ -72,7 +72,7 @@ Exercise the native settings application at 100–300% DPI, keyboard-only naviga
 
 Acceptance: all controls are reachable and labelled, content fits supported displays, destructive/long-running actions show progress or confirmation, and UI automation covers every button and setting.
 
-Progress (2026-08-09): keyboard dialog navigation, access keys, unsaved-change tracking, field-focused validation, readable capacity units, progress state, and destructive-action confirmation are implemented. Real 100–300% DPI, screen-reader, multilingual Windows, concurrent-save, and UI-automation evidence remains open.
+Progress (2026-08-09): the settings executable now embeds System-DPI awareness, scales its logical layout at 100–300%, remains resizable, scrolls both axes, and follows keyboard focus into the viewport. All 26 setting/action controls have stable IDs and access keys; every action dispatch is exhaustively mapped; Windows CI has a native UI Automation smoke test for names, types, focus, bounds, long/non-ASCII input, dirty state, and close confirmation. Configuration saves are serialized, with a named Windows mutex across processes in the current session and deterministic same-process concurrency coverage. Real visual/screen-reader/mixed-DPI evidence, Windows CI results for this change, independent-process contention, and external-state button/rollback automation remain open. See [the detailed accessibility contract](SETTINGS_ACCESSIBILITY.md).
 
 ## P2 — usability and platform breadth
 

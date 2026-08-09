@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::{Arc, Barrier};
 
 use iroha_zip::config::{AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode};
 use iroha_zip::util;
@@ -196,5 +197,41 @@ fn invalid_configuration_is_not_written() {
     assert!(invalid.save(&path).is_err());
     assert_eq!(fs::read_to_string(&path).unwrap(), original);
 
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn concurrent_saves_leave_one_complete_configuration_and_no_staging_files() {
+    let directory = std::env::temp_dir().join(format!(
+        "iroha-zip-concurrent-config-{}",
+        util::unique_token()
+    ));
+    let path = directory.join("config.toml");
+    let mut first = Config::default();
+    first.sandbox.timeout_seconds = 101;
+    let mut second = Config::default();
+    second.sandbox.timeout_seconds = 202;
+    let barrier = Arc::new(Barrier::new(3));
+
+    let handles = [first.clone(), second.clone()].map(|config| {
+        let path = path.clone();
+        let barrier = Arc::clone(&barrier);
+        std::thread::spawn(move || {
+            barrier.wait();
+            config.save(&path)
+        })
+    });
+    barrier.wait();
+    for handle in handles {
+        handle.join().unwrap().unwrap();
+    }
+
+    let saved = Config::load(&path).unwrap();
+    assert!(saved == first || saved == second);
+    assert!(
+        fs::read_dir(&directory)
+            .unwrap()
+            .all(|entry| entry.unwrap().file_name() == "config.toml")
+    );
     fs::remove_dir_all(directory).unwrap();
 }

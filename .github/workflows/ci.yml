@@ -37,6 +37,13 @@ jobs:
       - name: Build release binaries
         run: cargo build --release --all-targets --locked
 
+      - name: Exercise native settings accessibility contract
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          ./scripts/test-settings-ui.ps1
+          -Executable ./target/release/iroha-zip-settings.exe
+
   dependency-policy:
     runs-on: ubuntu-latest
 

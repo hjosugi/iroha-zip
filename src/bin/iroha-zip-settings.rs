@@ -8,25 +8,33 @@ mod windows_app {
     use iroha_zip::config::{
         AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode, default_config_path,
     };
-    use iroha_zip::settings::{SettingsField, SettingsForm};
+    use iroha_zip::settings::{
+        BASE_DPI, SettingsAction, SettingsField, SettingsForm, control_id, scale_logical,
+    };
     use iroha_zip::util;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::ffi::{OsStr, OsString, c_void};
     use std::fs;
+    use std::mem::size_of;
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use std::os::windows::process::CommandExt;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
-    use windows::Win32::Foundation::{ERROR_CANCELLED, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::Foundation::{
+        ERROR_CANCELLED, HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,
+    };
     use windows::Win32::Graphics::Gdi::{
-        COLOR_3DFACE, DEFAULT_GUI_FONT, GetStockObject, GetSysColorBrush, UpdateWindow,
+        COLOR_3DFACE, DEFAULT_GUI_FONT, GetStockObject, GetSysColorBrush, ScreenToClient,
+        UpdateWindow,
     };
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
         CoTaskMemFree, CoUninitialize,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, SetFocus};
+    use windows::Win32::UI::Controls::SetScrollInfo;
+    use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, GetFocus, SetFocus};
     use windows::Win32::UI::Shell::{
         FOS_DONTADDTORECENT, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS,
         FileOpenDialog, IFileOpenDialog, IShellItem, SHCreateItemFromParsingName,
@@ -37,14 +45,19 @@ mod windows_app {
         BS_PUSHBUTTON, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CBN_SELCHANGE, CBS_DROPDOWNLIST,
         CBS_HASSTRINGS, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW,
         DefWindowProcW, DestroyWindow, DispatchMessageW, EN_CHANGE, ES_AUTOHSCROLL, ES_NUMBER,
-        GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, HMENU,
-        IDC_ARROW, IDC_WAIT, IDYES, IsDialogMessageW, LoadCursorW, MB_ICONERROR,
-        MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_YESNO, MESSAGEBOX_STYLE, MSG, MessageBoxW,
-        PostQuitMessage, RegisterClassW, SW_SHOWNORMAL, SendMessageW, SetCursor, SetWindowLongPtrW,
-        SetWindowTextW, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
-        WM_COMMAND, WM_CREATE, WM_DESTROY, WM_NCCREATE, WM_SETFONT, WNDCLASSW, WS_CAPTION,
-        WS_CHILD, WS_EX_CLIENTEDGE, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP,
-        WS_VISIBLE, WS_VSCROLL,
+        GWLP_USERDATA, GetClientRect, GetMessageW, GetScrollInfo, GetSystemMetrics,
+        GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HMENU, IDC_ARROW,
+        IDC_WAIT, IDYES, IsChild, IsDialogMessageW, LoadCursorW, MB_ICONERROR, MB_ICONINFORMATION,
+        MB_ICONWARNING, MB_OK, MB_YESNO, MESSAGEBOX_STYLE, MSG, MessageBoxW, PostQuitMessage,
+        RegisterClassW, SB_BOTTOM, SB_HORZ, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP,
+        SB_THUMBPOSITION, SB_THUMBTRACK, SB_TOP, SB_VERT, SCROLLINFO, SIF_ALL, SIF_PAGE, SIF_POS,
+        SIF_RANGE, SM_CXSCREEN, SM_CYSCREEN, SW_ERASE, SW_INVALIDATE, SW_SCROLLCHILDREN,
+        SW_SHOWNORMAL, ScrollWindowEx, SendMessageW, SetCursor, SetWindowLongPtrW, SetWindowTextW,
+        ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND,
+        WM_CREATE, WM_DESTROY, WM_HSCROLL, WM_MOUSEWHEEL, WM_NCCREATE, WM_SETFONT, WM_SIZE,
+        WM_VSCROLL, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_EX_CLIENTEDGE, WS_HSCROLL, WS_MAXIMIZEBOX,
+        WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_THICKFRAME, WS_VISIBLE,
+        WS_VSCROLL,
     };
     use windows::core::{Error as WindowsError, HRESULT, PCWSTR};
 
@@ -52,19 +65,8 @@ mod windows_app {
     const WINDOW_TITLE: &str = "iroha-zip 設定";
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     const BUTTON_CHECKED: usize = 1;
-
-    const ID_BACKEND_BROWSE: usize = 1001;
-    const ID_BACKEND_DOCTOR: usize = 1002;
-    const ID_BACKEND_IMPORT: usize = 1003;
-    const ID_BACKEND_MSYS2: usize = 1004;
-    const ID_REGISTER: usize = 1101;
-    const ID_UNREGISTER: usize = 1102;
-    const ID_DEFAULT_APPS: usize = 1103;
-    const ID_CONFIG_FOLDER: usize = 1104;
-    const ID_DEFAULTS: usize = 1201;
-    // IDOK and IDCANCEL let IsDialogMessageW map Enter and Escape naturally.
-    const ID_SAVE: usize = 1;
-    const ID_CANCEL: usize = 2;
+    const CONTENT_WIDTH: i32 = 932;
+    const CONTENT_HEIGHT: i32 = 720;
 
     #[derive(Default)]
     struct Controls {
@@ -90,6 +92,8 @@ mod windows_app {
         config_path: PathBuf,
         controls: Controls,
         saved_config: RefCell<Config>,
+        scroll_x: Cell<i32>,
+        scroll_y: Cell<i32>,
     }
 
     impl App {
@@ -98,6 +102,8 @@ mod windows_app {
                 config_path,
                 controls: Controls::default(),
                 saved_config: RefCell::new(Config::default()),
+                scroll_x: Cell::new(0),
+                scroll_y: Cell::new(0),
             }
         }
 
@@ -129,8 +135,17 @@ mod windows_app {
                 )?;
 
                 add_group(parent, instance, "バックエンド", 14, 60, 904, 108)?;
-                add_static(parent, instance, "保存先", 28, 86, 92, 22)?;
-                self.controls.backend = add_edit(parent, instance, 122, 82, 558, 25, false)?;
+                add_static(parent, instance, "保存先(&L)", 28, 86, 92, 22)?;
+                self.controls.backend = add_edit(
+                    parent,
+                    instance,
+                    122,
+                    82,
+                    558,
+                    25,
+                    false,
+                    control_id::BACKEND_DIRECTORY,
+                )?;
                 add_button(
                     parent,
                     instance,
@@ -139,7 +154,7 @@ mod windows_app {
                     81,
                     96,
                     27,
-                    ID_BACKEND_BROWSE,
+                    control_id::BACKEND_BROWSE,
                     false,
                 )?;
                 add_button(
@@ -150,7 +165,7 @@ mod windows_app {
                     81,
                     104,
                     27,
-                    ID_BACKEND_DOCTOR,
+                    control_id::BACKEND_DOCTOR,
                     false,
                 )?;
                 add_button(
@@ -161,7 +176,7 @@ mod windows_app {
                     119,
                     190,
                     28,
-                    ID_BACKEND_IMPORT,
+                    control_id::BACKEND_IMPORT,
                     false,
                 )?;
                 add_button(
@@ -172,7 +187,7 @@ mod windows_app {
                     119,
                     190,
                     28,
-                    ID_BACKEND_MSYS2,
+                    control_id::BACKEND_MSYS2,
                     false,
                 )?;
                 add_static(
@@ -186,40 +201,124 @@ mod windows_app {
                 )?;
 
                 add_group(parent, instance, "AppContainer", 14, 174, 904, 67)?;
-                add_static(parent, instance, "分離モード", 28, 201, 92, 22)?;
-                self.controls.isolation = add_combo(parent, instance, 122, 197, 190, 120)?;
+                add_static(parent, instance, "分離モード(&Q)", 28, 201, 92, 22)?;
+                self.controls.isolation =
+                    add_combo(parent, instance, 122, 197, 190, 120, control_id::ISOLATION)?;
                 for label in ["AppContainer（互換）", "LPAC（実験）"] {
                     combo_add(self.controls.isolation, label);
                 }
-                add_static(parent, instance, "時間（1–86400秒）", 340, 201, 142, 22)?;
-                self.controls.timeout_seconds =
-                    add_edit(parent, instance, 484, 197, 118, 25, true)?;
-                add_static(parent, instance, "メモリ（MiB）", 630, 201, 112, 22)?;
-                self.controls.memory_limit_mib =
-                    add_edit(parent, instance, 744, 197, 112, 25, true)?;
+                add_static(parent, instance, "時間(&T)（1–86400秒）", 340, 201, 142, 22)?;
+                self.controls.timeout_seconds = add_edit(
+                    parent,
+                    instance,
+                    484,
+                    197,
+                    118,
+                    25,
+                    true,
+                    control_id::TIMEOUT_SECONDS,
+                )?;
+                add_static(parent, instance, "メモリ(&Y)（MiB）", 630, 201, 112, 22)?;
+                self.controls.memory_limit_mib = add_edit(
+                    parent,
+                    instance,
+                    744,
+                    197,
+                    112,
+                    25,
+                    true,
+                    control_id::MEMORY_LIMIT_MIB,
+                )?;
 
                 add_group(parent, instance, "展開・作成の上限", 14, 247, 904, 194)?;
-                add_static(parent, instance, "入力書庫の上限", 28, 276, 164, 22)?;
-                self.controls.max_archive_bytes =
-                    add_edit(parent, instance, 194, 272, 222, 25, false)?;
-                add_static(parent, instance, "ファイル数", 478, 276, 150, 22)?;
-                self.controls.max_files = add_edit(parent, instance, 636, 272, 222, 25, true)?;
+                add_static(parent, instance, "入力書庫の上限(&Z)", 28, 276, 164, 22)?;
+                self.controls.max_archive_bytes = add_edit(
+                    parent,
+                    instance,
+                    194,
+                    272,
+                    222,
+                    25,
+                    false,
+                    control_id::MAX_ARCHIVE_BYTES,
+                )?;
+                add_static(parent, instance, "ファイル数(&N)", 478, 276, 150, 22)?;
+                self.controls.max_files = add_edit(
+                    parent,
+                    instance,
+                    636,
+                    272,
+                    222,
+                    25,
+                    true,
+                    control_id::MAX_FILES,
+                )?;
 
-                add_static(parent, instance, "ディレクトリ数", 28, 316, 164, 22)?;
-                self.controls.max_directories =
-                    add_edit(parent, instance, 194, 312, 222, 25, true)?;
-                add_static(parent, instance, "合計容量の上限", 478, 316, 150, 22)?;
-                self.controls.max_total_bytes =
-                    add_edit(parent, instance, 636, 312, 222, 25, false)?;
+                add_static(parent, instance, "ディレクトリ数(&G)", 28, 316, 164, 22)?;
+                self.controls.max_directories = add_edit(
+                    parent,
+                    instance,
+                    194,
+                    312,
+                    222,
+                    25,
+                    true,
+                    control_id::MAX_DIRECTORIES,
+                )?;
+                add_static(parent, instance, "合計容量の上限(&H)", 478, 316, 150, 22)?;
+                self.controls.max_total_bytes = add_edit(
+                    parent,
+                    instance,
+                    636,
+                    312,
+                    222,
+                    25,
+                    false,
+                    control_id::MAX_TOTAL_BYTES,
+                )?;
 
-                add_static(parent, instance, "単一ファイル上限", 28, 356, 164, 22)?;
-                self.controls.max_single_file_bytes =
-                    add_edit(parent, instance, 194, 352, 222, 25, false)?;
-                add_static(parent, instance, "パスの深さ", 478, 356, 150, 22)?;
-                self.controls.max_depth = add_edit(parent, instance, 636, 352, 222, 25, true)?;
+                add_static(parent, instance, "単一ファイル上限(&J)", 28, 356, 164, 22)?;
+                self.controls.max_single_file_bytes = add_edit(
+                    parent,
+                    instance,
+                    194,
+                    352,
+                    222,
+                    25,
+                    false,
+                    control_id::MAX_SINGLE_FILE_BYTES,
+                )?;
+                add_static(parent, instance, "パスの深さ(&K)", 478, 356, 150, 22)?;
+                self.controls.max_depth = add_edit(
+                    parent,
+                    instance,
+                    636,
+                    352,
+                    222,
+                    25,
+                    true,
+                    control_id::MAX_DEPTH,
+                )?;
 
-                add_static(parent, instance, "パス長（UTF-8 bytes）", 28, 396, 164, 22)?;
-                self.controls.max_path_bytes = add_edit(parent, instance, 194, 392, 222, 25, true)?;
+                add_static(
+                    parent,
+                    instance,
+                    "パス長(&V)（UTF-8 bytes）",
+                    28,
+                    396,
+                    164,
+                    22,
+                )?;
+                self.controls.max_path_bytes = add_edit(
+                    parent,
+                    instance,
+                    194,
+                    392,
+                    222,
+                    25,
+                    true,
+                    control_id::MAX_PATH_BYTES,
+                )?;
                 add_static(
                     parent,
                     instance,
@@ -234,28 +333,39 @@ mod windows_app {
                 self.controls.preserve_motw = add_checkbox(
                     parent,
                     instance,
-                    "Mark-of-the-Webを展開後のファイルへ引き継ぐ",
+                    "Mark-of-the-Webを展開後のファイルへ引き継ぐ(&X)",
                     30,
                     474,
                     350,
                     24,
+                    control_id::PRESERVE_MOTW,
                 )?;
                 self.controls.open_after_double_click = add_checkbox(
                     parent,
                     instance,
-                    "ダブルクリック展開後にフォルダを開く",
+                    "ダブルクリック展開後にフォルダを開く(&O)",
                     30,
                     498,
                     350,
                     24,
+                    control_id::OPEN_AFTER_DOUBLE_CLICK,
                 )?;
-                add_static(parent, instance, "既定の文字コード", 486, 481, 142, 22)?;
-                self.controls.encoding = add_combo(parent, instance, 636, 475, 222, 120)?;
+                add_static(parent, instance, "既定の文字コード(&E)", 486, 481, 142, 22)?;
+                self.controls.encoding =
+                    add_combo(parent, instance, 636, 475, 222, 120, control_id::ENCODING)?;
                 for label in ["自動判定", "UTF-8", "CP932（日本語）", "CP437"] {
                     combo_add(self.controls.encoding, label);
                 }
-                add_static(parent, instance, "Windows信頼連携", 486, 515, 142, 22)?;
-                self.controls.attachment_handoff = add_combo(parent, instance, 636, 509, 262, 120)?;
+                add_static(parent, instance, "Windows信頼連携(&W)", 486, 515, 142, 22)?;
+                self.controls.attachment_handoff = add_combo(
+                    parent,
+                    instance,
+                    636,
+                    509,
+                    262,
+                    120,
+                    control_id::ATTACHMENT_HANDOFF,
+                )?;
                 for label in [
                     "無効（既定）",
                     "best-effort（失敗を表示）",
@@ -273,7 +383,7 @@ mod windows_app {
                     583,
                     160,
                     29,
-                    ID_REGISTER,
+                    control_id::REGISTER,
                     false,
                 )?;
                 add_button(
@@ -284,7 +394,7 @@ mod windows_app {
                     583,
                     160,
                     29,
-                    ID_UNREGISTER,
+                    control_id::UNREGISTER,
                     false,
                 )?;
                 add_button(
@@ -295,7 +405,7 @@ mod windows_app {
                     583,
                     180,
                     29,
-                    ID_DEFAULT_APPS,
+                    control_id::DEFAULT_APPS,
                     false,
                 )?;
                 add_button(
@@ -306,7 +416,7 @@ mod windows_app {
                     583,
                     180,
                     29,
-                    ID_CONFIG_FOLDER,
+                    control_id::CONFIG_FOLDER,
                     false,
                 )?;
 
@@ -318,7 +428,7 @@ mod windows_app {
                     642,
                     150,
                     32,
-                    ID_DEFAULTS,
+                    control_id::DEFAULTS,
                     false,
                 )?;
                 add_button(
@@ -329,7 +439,7 @@ mod windows_app {
                     642,
                     110,
                     32,
-                    ID_SAVE,
+                    control_id::SAVE,
                     true,
                 )?;
                 add_button(
@@ -340,7 +450,7 @@ mod windows_app {
                     642,
                     110,
                     32,
-                    ID_CANCEL,
+                    control_id::CANCEL,
                     false,
                 )?;
                 self.controls.status =
@@ -350,6 +460,7 @@ mod windows_app {
             self.apply_config(&config);
             self.saved_config.replace(config);
             self.update_dirty_title(parent);
+            self.update_scrollbar(parent);
             Ok(())
         }
 
@@ -714,6 +825,206 @@ mod windows_app {
             }
         }
 
+        fn update_scrollbar(&self, parent: HWND) {
+            let mut client = RECT::default();
+            if unsafe { GetClientRect(parent, &raw mut client) }.is_err() {
+                return;
+            }
+            let page_width = (client.right - client.left).max(1);
+            let page_height = (client.bottom - client.top).max(1);
+            let content_width = scale_for_window(parent, CONTENT_WIDTH).max(1);
+            let content_height = scale_for_window(parent, CONTENT_HEIGHT).max(1);
+            let max_horizontal_scroll = (content_width - page_width).max(0);
+            let max_scroll = (content_height - page_height).max(0);
+            if self.scroll_x.get() > max_horizontal_scroll {
+                self.scroll_horizontal_to(parent, max_horizontal_scroll);
+            }
+            if self.scroll_y.get() > max_scroll {
+                self.scroll_vertical_to(parent, max_scroll);
+            }
+            let horizontal_info = SCROLLINFO {
+                cbSize: u32::try_from(size_of::<SCROLLINFO>()).unwrap_or(u32::MAX),
+                fMask: SIF_RANGE | SIF_PAGE | SIF_POS,
+                nMin: 0,
+                nMax: content_width - 1,
+                nPage: u32::try_from(page_width).unwrap_or(u32::MAX),
+                nPos: self.scroll_x.get(),
+                nTrackPos: 0,
+            };
+            unsafe {
+                SetScrollInfo(parent, SB_HORZ, &raw const horizontal_info, true);
+            }
+            let vertical_info = SCROLLINFO {
+                cbSize: u32::try_from(size_of::<SCROLLINFO>()).unwrap_or(u32::MAX),
+                fMask: SIF_RANGE | SIF_PAGE | SIF_POS,
+                nMin: 0,
+                nMax: content_height - 1,
+                nPage: u32::try_from(page_height).unwrap_or(u32::MAX),
+                nPos: self.scroll_y.get(),
+                nTrackPos: 0,
+            };
+            unsafe {
+                SetScrollInfo(parent, SB_VERT, &raw const vertical_info, true);
+            }
+        }
+
+        fn scroll_horizontal_to(&self, parent: HWND, requested: i32) {
+            let mut client = RECT::default();
+            if unsafe { GetClientRect(parent, &raw mut client) }.is_err() {
+                return;
+            }
+            let page_width = (client.right - client.left).max(1);
+            let content_width = scale_for_window(parent, CONTENT_WIDTH).max(1);
+            let target = requested.clamp(0, (content_width - page_width).max(0));
+            let previous = self.scroll_x.replace(target);
+            if previous != target {
+                unsafe {
+                    ScrollWindowEx(
+                        parent,
+                        previous - target,
+                        0,
+                        None,
+                        None,
+                        None,
+                        None,
+                        SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE,
+                    );
+                }
+            }
+            let info = SCROLLINFO {
+                cbSize: u32::try_from(size_of::<SCROLLINFO>()).unwrap_or(u32::MAX),
+                fMask: SIF_POS,
+                nPos: target,
+                ..Default::default()
+            };
+            unsafe {
+                SetScrollInfo(parent, SB_HORZ, &raw const info, true);
+            }
+        }
+
+        fn scroll_vertical_to(&self, parent: HWND, requested: i32) {
+            let mut client = RECT::default();
+            if unsafe { GetClientRect(parent, &raw mut client) }.is_err() {
+                return;
+            }
+            let page_height = (client.bottom - client.top).max(1);
+            let content_height = scale_for_window(parent, CONTENT_HEIGHT).max(1);
+            let target = requested.clamp(0, (content_height - page_height).max(0));
+            let previous = self.scroll_y.replace(target);
+            if previous != target {
+                unsafe {
+                    ScrollWindowEx(
+                        parent,
+                        0,
+                        previous - target,
+                        None,
+                        None,
+                        None,
+                        None,
+                        SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE,
+                    );
+                }
+            }
+            let info = SCROLLINFO {
+                cbSize: u32::try_from(size_of::<SCROLLINFO>()).unwrap_or(u32::MAX),
+                fMask: SIF_POS,
+                nPos: target,
+                ..Default::default()
+            };
+            unsafe {
+                SetScrollInfo(parent, SB_VERT, &raw const info, true);
+            }
+        }
+
+        fn handle_scroll(&self, parent: HWND, wparam: WPARAM, horizontal: bool) {
+            let bar = if horizontal { SB_HORZ } else { SB_VERT };
+            let mut info = SCROLLINFO {
+                cbSize: u32::try_from(size_of::<SCROLLINFO>()).unwrap_or(u32::MAX),
+                fMask: SIF_ALL,
+                ..Default::default()
+            };
+            if unsafe { GetScrollInfo(parent, bar, &raw mut info) }.is_err() {
+                return;
+            }
+            let command = i32::from(u16::try_from(wparam.0 & 0xffff).unwrap_or(0));
+            let line = scale_for_window(parent, 32).max(1);
+            let page = i32::try_from(info.nPage).unwrap_or(i32::MAX).max(line);
+            let requested = if command == SB_LINEUP.0 {
+                info.nPos - line
+            } else if command == SB_LINEDOWN.0 {
+                info.nPos + line
+            } else if command == SB_PAGEUP.0 {
+                info.nPos - page
+            } else if command == SB_PAGEDOWN.0 {
+                info.nPos + page
+            } else if command == SB_THUMBPOSITION.0 || command == SB_THUMBTRACK.0 {
+                info.nTrackPos
+            } else if command == SB_TOP.0 {
+                0
+            } else if command == SB_BOTTOM.0 {
+                i32::MAX
+            } else {
+                info.nPos
+            };
+            if horizontal {
+                self.scroll_horizontal_to(parent, requested);
+            } else {
+                self.scroll_vertical_to(parent, requested);
+            }
+        }
+
+        fn handle_mouse_wheel(&self, parent: HWND, wparam: WPARAM) {
+            let wheel_bits = u16::try_from((wparam.0 >> 16) & 0xffff).unwrap_or(0);
+            let delta = i32::from(wheel_bits.cast_signed());
+            if delta != 0 {
+                let line = scale_for_window(parent, 32).max(1);
+                self.scroll_vertical_to(parent, self.scroll_y.get() - delta.signum() * line * 3);
+            }
+        }
+
+        fn ensure_focus_visible(&self, parent: HWND) {
+            let focus = unsafe { GetFocus() };
+            if focus.is_invalid() || !unsafe { IsChild(parent, focus) }.as_bool() {
+                return;
+            }
+            let mut focus_rect = RECT::default();
+            let mut client = RECT::default();
+            if unsafe { GetWindowRect(focus, &raw mut focus_rect) }.is_err()
+                || unsafe { GetClientRect(parent, &raw mut client) }.is_err()
+            {
+                return;
+            }
+            let mut top_left = POINT {
+                x: focus_rect.left,
+                y: focus_rect.top,
+            };
+            let mut bottom_right = POINT {
+                x: focus_rect.right,
+                y: focus_rect.bottom,
+            };
+            unsafe {
+                let _ = ScreenToClient(parent, &raw mut top_left);
+                let _ = ScreenToClient(parent, &raw mut bottom_right);
+            }
+            let margin = scale_for_window(parent, 12).max(1);
+            if top_left.x < margin {
+                self.scroll_horizontal_to(parent, self.scroll_x.get() + top_left.x - margin);
+            } else if bottom_right.x > client.right - margin {
+                self.scroll_horizontal_to(
+                    parent,
+                    self.scroll_x.get() + bottom_right.x - client.right + margin,
+                );
+            }
+            if top_left.y < margin {
+                self.scroll_vertical_to(parent, self.scroll_y.get() + top_left.y - margin);
+            } else if bottom_right.y > client.bottom - margin {
+                self.scroll_vertical_to(
+                    parent,
+                    self.scroll_y.get() + bottom_right.y - client.bottom + margin,
+                );
+            }
+        }
+
         fn has_unsaved_changes(&self) -> bool {
             match self
                 .read_form()
@@ -767,16 +1078,19 @@ mod windows_app {
         }
 
         fn handle_command(&self, parent: HWND, id: usize) -> Result<(), String> {
-            match id {
-                ID_BACKEND_BROWSE => self.browse_backend(parent),
-                ID_BACKEND_DOCTOR => self.doctor(parent),
-                ID_BACKEND_IMPORT => self.import_backend(parent, false),
-                ID_BACKEND_MSYS2 => self.import_backend(parent, true),
-                ID_REGISTER => self.association(parent, true),
-                ID_UNREGISTER => self.association(parent, false),
-                ID_DEFAULT_APPS => self.open_default_apps(),
-                ID_CONFIG_FOLDER => self.open_config_folder(),
-                ID_DEFAULTS => {
+            let Some(action) = SettingsAction::from_control_id(id) else {
+                return Ok(());
+            };
+            match action {
+                SettingsAction::BrowseBackend => self.browse_backend(parent),
+                SettingsAction::DiagnoseBackend => self.doctor(parent),
+                SettingsAction::ImportBackendBundle => self.import_backend(parent, false),
+                SettingsAction::ImportMsys2Backend => self.import_backend(parent, true),
+                SettingsAction::RegisterAssociations => self.association(parent, true),
+                SettingsAction::UnregisterAssociations => self.association(parent, false),
+                SettingsAction::OpenDefaultApps => self.open_default_apps(),
+                SettingsAction::OpenConfigFolder => self.open_config_folder(),
+                SettingsAction::RestoreDefaults => {
                     if !confirm_action(
                         parent,
                         "画面上のすべての設定を安全な既定値へ戻します。保存するまで反映されません。続行しますか？",
@@ -790,9 +1104,8 @@ mod windows_app {
                     );
                     Ok(())
                 }
-                ID_SAVE => self.save(parent),
-                ID_CANCEL => self.request_close(parent),
-                _ => Ok(()),
+                SettingsAction::Save => self.save(parent),
+                SettingsAction::Cancel => self.request_close(parent),
             }
         }
     }
@@ -835,16 +1148,30 @@ mod windows_app {
         let app = Box::new(App::new(config_path));
         let app_pointer = Box::into_raw(app);
         let title = wide(&format!("{WINDOW_TITLE} — v{}", env!("CARGO_PKG_VERSION")));
+        let dpi = unsafe { GetDpiForSystem() }.max(BASE_DPI);
+        let screen_width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+        let screen_height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+        let available_width = (screen_width - scale_logical(32, dpi)).max(320);
+        let available_height = (screen_height - scale_logical(32, dpi)).max(320);
+        let window_width = scale_logical(950, dpi).min(available_width);
+        let window_height = scale_logical(760, dpi).min(available_height);
         let window = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 PCWSTR(class_name.as_ptr()),
                 PCWSTR(title.as_ptr()),
-                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                WS_OVERLAPPED
+                    | WS_CAPTION
+                    | WS_SYSMENU
+                    | WS_MINIMIZEBOX
+                    | WS_MAXIMIZEBOX
+                    | WS_THICKFRAME
+                    | WS_HSCROLL
+                    | WS_VSCROLL,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
-                950,
-                760,
+                window_width,
+                window_height,
                 None,
                 None,
                 Some(instance),
@@ -878,11 +1205,13 @@ mod windows_app {
                 break;
             }
             if unsafe { IsDialogMessageW(window, &raw const message) }.as_bool() {
+                unsafe { (*app_pointer).ensure_focus_visible(window) };
                 continue;
             }
             unsafe {
                 let _ = TranslateMessage(&raw const message);
                 DispatchMessageW(&raw const message);
+                (*app_pointer).ensure_focus_visible(window);
             }
         }
         unsafe { drop(Box::from_raw(app_pointer)) };
@@ -936,11 +1265,36 @@ mod windows_app {
                     }
                 }
                 if !app_pointer.is_null()
+                    && control_id::is_setting(id)
                     && (notification == EN_CHANGE as usize
                         || notification == CBN_SELCHANGE as usize
-                        || (notification == BN_CLICKED as usize && id == 0))
+                        || notification == BN_CLICKED as usize)
                 {
                     unsafe { (*app_pointer).update_dirty_title(window) };
+                }
+                LRESULT(0)
+            }
+            WM_SIZE => {
+                if !app_pointer.is_null() {
+                    unsafe { (*app_pointer).update_scrollbar(window) };
+                }
+                LRESULT(0)
+            }
+            WM_VSCROLL => {
+                if !app_pointer.is_null() && lparam.0 == 0 {
+                    unsafe { (*app_pointer).handle_scroll(window, wparam, false) };
+                }
+                LRESULT(0)
+            }
+            WM_HSCROLL => {
+                if !app_pointer.is_null() && lparam.0 == 0 {
+                    unsafe { (*app_pointer).handle_scroll(window, wparam, true) };
+                }
+                LRESULT(0)
+            }
+            WM_MOUSEWHEEL => {
+                if !app_pointer.is_null() {
+                    unsafe { (*app_pointer).handle_mouse_wheel(window, wparam) };
                 }
                 LRESULT(0)
             }
@@ -1012,6 +1366,7 @@ mod windows_app {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     unsafe fn add_edit(
         parent: HWND,
         instance: HINSTANCE,
@@ -1020,6 +1375,7 @@ mod windows_app {
         width: i32,
         height: i32,
         numeric: bool,
+        id: usize,
     ) -> Result<HWND, String> {
         let mut style = WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(ES_AUTOHSCROLL as u32);
         if numeric {
@@ -1037,7 +1393,7 @@ mod windows_app {
                 y,
                 width,
                 height,
-                None,
+                Some(id),
             )
         }
     }
@@ -1076,6 +1432,7 @@ mod windows_app {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     unsafe fn add_checkbox(
         parent: HWND,
         instance: HINSTANCE,
@@ -1084,6 +1441,7 @@ mod windows_app {
         y: i32,
         width: i32,
         height: i32,
+        id: usize,
     ) -> Result<HWND, String> {
         unsafe {
             add_control(
@@ -1097,7 +1455,7 @@ mod windows_app {
                 y,
                 width,
                 height,
-                None,
+                Some(id),
             )
         }
     }
@@ -1109,6 +1467,7 @@ mod windows_app {
         y: i32,
         width: i32,
         height: i32,
+        id: usize,
     ) -> Result<HWND, String> {
         unsafe {
             add_control(
@@ -1126,7 +1485,7 @@ mod windows_app {
                 y,
                 width,
                 height,
-                None,
+                Some(id),
             )
         }
     }
@@ -1148,6 +1507,10 @@ mod windows_app {
         let class = wide(class);
         let text = wide(text);
         let menu = id.map(|value| HMENU(value as *mut c_void));
+        let x = scale_for_window(parent, x);
+        let y = scale_for_window(parent, y);
+        let width = scale_for_window(parent, width);
+        let height = scale_for_window(parent, height);
         let control = unsafe {
             CreateWindowExW(
                 extended_style,
@@ -1175,6 +1538,11 @@ mod windows_app {
             );
         }
         Ok(control)
+    }
+
+    fn scale_for_window(window: HWND, value: i32) -> i32 {
+        let dpi = unsafe { GetDpiForWindow(window) }.max(BASE_DPI);
+        scale_logical(value, dpi)
     }
 
     fn set_control_text(control: HWND, text: &str) {

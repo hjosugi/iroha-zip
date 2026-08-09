@@ -169,6 +169,7 @@ impl Config {
 
     pub fn save(&self, path: &Path) -> Result<()> {
         let text = self.serialized()?;
+        let _save_guard = crate::platform::lock_config_save()?;
         let parent = configuration_parent(path);
         fs::create_dir_all(parent).map_err(|error| {
             IrohaZipError::io_path("cannot create configuration directory", parent, error)

@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -17,6 +18,19 @@ pub struct Sandbox {
 }
 
 pub struct AttachmentHandoffSession;
+
+static CONFIG_SAVE_LOCK: Mutex<()> = Mutex::new(());
+
+pub struct ConfigSaveGuard {
+    _guard: MutexGuard<'static, ()>,
+}
+
+pub fn lock_config_save() -> Result<ConfigSaveGuard> {
+    let guard = CONFIG_SAVE_LOCK
+        .lock()
+        .map_err(|_| IrohaZipError::Config("configuration save lock is poisoned".to_owned()))?;
+    Ok(ConfigSaveGuard { _guard: guard })
+}
 
 impl AttachmentHandoffSession {
     pub fn new() -> Result<Self> {
