@@ -37,6 +37,7 @@ pub struct BackendConfig {
 pub struct SandboxConfig {
     pub timeout_seconds: u64,
     pub memory_limit_mib: u64,
+    pub isolation: IsolationMode,
 }
 
 impl Default for SandboxConfig {
@@ -44,7 +45,29 @@ impl Default for SandboxConfig {
         Self {
             timeout_seconds: 300,
             memory_limit_mib: 768,
+            isolation: IsolationMode::AppContainer,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum IsolationMode {
+    #[default]
+    AppContainer,
+    Lpac,
+}
+
+impl IsolationMode {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::AppContainer => "AppContainer",
+            Self::Lpac => "LPAC",
+        }
+    }
+
+    pub fn is_lpac(self) -> bool {
+        self == Self::Lpac
     }
 }
 

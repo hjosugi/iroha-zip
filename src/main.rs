@@ -65,7 +65,10 @@ fn run() -> Result<()> {
             {
                 let version = probe_backend_in_sandbox(&backend, &config)?;
                 println!("version:       {version}");
-                println!("AppContainer:  available; backend execution succeeded");
+                println!(
+                    "isolation:     {}; backend execution succeeded",
+                    config.sandbox.isolation.display_name()
+                );
             }
             #[cfg(not(windows))]
             println!("AppContainer:  unavailable; backend execution was not attempted");
@@ -141,7 +144,11 @@ fn open_settings(_config_path: &std::path::Path) -> Result<()> {
 
 #[cfg(windows)]
 fn probe_backend_in_sandbox(backend: &BackendBundle, config: &Config) -> Result<String> {
-    let sandbox = Sandbox::new(config.sandbox.memory_limit_mib, false)?;
+    let sandbox = Sandbox::new(
+        config.sandbox.memory_limit_mib,
+        false,
+        config.sandbox.isolation,
+    )?;
     let sandbox_backend = backend.copy_verified_to(&sandbox.root().join("backend"))?;
     let stdout_log = sandbox.root().join("doctor.stdout.log");
     let stderr_log = sandbox.root().join("doctor.stderr.log");

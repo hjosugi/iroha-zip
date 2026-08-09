@@ -106,7 +106,7 @@ iroha-zipは次をfail-closedで拒否します。
 
 さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。作成時も圧縮元を監査・複製してからAppContainer内で処理します。
 
-詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。
+詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。通常AppContainerと実験的LPACの差、fail-closed条件、未完の検証matrixは[LPAC評価](docs/LPAC_EVALUATION.md)に分離しています。
 
 ## 必要環境
 
@@ -195,7 +195,7 @@ dist\iroha-zip\
 | 分類 | 設定・操作 |
 |---|---|
 | Backend | 保存先の選択、既存bundleの取り込み、MSYS2からの収集、SHA-256検証、AppContainer診断 |
-| AppContainer | timeout、Job Object memory limit |
+| AppContainer | 通常AppContainer／実験的LPAC、timeout、Job Object memory limit |
 | Resource limits | 入力書庫容量、ファイル数、ディレクトリ数、合計容量、単一ファイル容量、パス深さ、パス長 |
 | 展開動作 | Mark-of-the-Web伝播、ダブルクリック後に開く、既定のfilename encoding |
 | Windows統合 | 関連付け候補の登録・解除、既定のアプリ画面、設定フォルダ |
@@ -260,7 +260,7 @@ iroha-zip.exe doctor
 - 書庫内容を閲覧するファイラーUIはありません。現在は「ダブルクリックで安全側に即展開」が中心です。
 - ウイルス対策エンジンではありません。展開後の実行ファイルが安全であることは保証しません。
 - AppContainerやWindowsカーネル、libarchive自体の未知の脆弱性を防げる保証はありません。
-- 通常のAppContainerを使用しており、LPACではありません。
+- 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。
 - 同一ユーザー権限をすでに奪取した攻撃者との競合を完全には防げません。
 - Linuxでの全テスト、Clippy、Windows MSVC targetの型検査は実行済みです。実際のWindowsカーネルを使うAppContainer統合試験と実書庫corpus試験の状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
 

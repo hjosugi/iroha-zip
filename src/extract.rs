@@ -43,6 +43,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<PathBuf> {
     let sandbox = Sandbox::new(
         request.config.sandbox.memory_limit_mib,
         request.allow_unsandboxed,
+        request.config.sandbox.isolation,
     )?;
     let backend_dir = sandbox.root().join("backend");
     let input_dir = sandbox.root().join("input");

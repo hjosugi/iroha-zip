@@ -38,7 +38,11 @@ pub fn create_archive(
         )));
     }
 
-    let sandbox = Sandbox::new(config.sandbox.memory_limit_mib, allow_unsandboxed)?;
+    let sandbox = Sandbox::new(
+        config.sandbox.memory_limit_mib,
+        allow_unsandboxed,
+        config.sandbox.isolation,
+    )?;
     let backend_dir = sandbox.root().join("backend");
     let source_dir = sandbox.root().join("source");
     let output_dir = sandbox.root().join("output");

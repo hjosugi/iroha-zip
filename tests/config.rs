@@ -1,6 +1,6 @@
 use std::fs;
 
-use iroha_zip::config::{Config, FilenameEncoding};
+use iroha_zip::config::{Config, FilenameEncoding, IsolationMode};
 use iroha_zip::util;
 
 #[test]
@@ -24,6 +24,7 @@ fn default_config_round_trips_through_toml() {
         decoded.sandbox.memory_limit_mib,
         original.sandbox.memory_limit_mib
     );
+    assert_eq!(decoded.sandbox.isolation, original.sandbox.isolation);
     assert_eq!(decoded.limits.max_files, original.limits.max_files);
     assert_eq!(
         decoded.behavior.preserve_mark_of_the_web,
@@ -44,6 +45,7 @@ fn documented_example_is_complete_and_valid() {
         config.behavior.default_filename_encoding,
         FilenameEncoding::Auto
     );
+    assert_eq!(config.sandbox.isolation, IsolationMode::AppContainer);
 }
 
 #[test]
@@ -67,6 +69,25 @@ open_after_double_click = false
         config.behavior.default_filename_encoding,
         FilenameEncoding::Auto
     );
+    assert_eq!(config.sandbox.isolation, IsolationMode::AppContainer);
+}
+
+#[test]
+fn lpac_mode_is_explicit_and_unknown_modes_are_rejected() {
+    let lpac: Config = toml::from_str(
+        r#"
+[sandbox]
+isolation = "lpac"
+"#,
+    )
+    .unwrap();
+    assert_eq!(lpac.sandbox.isolation, IsolationMode::Lpac);
+
+    let invalid = r#"
+[sandbox]
+isolation = "automatic"
+"#;
+    assert!(toml::from_str::<Config>(invalid).is_err());
 }
 
 #[test]
@@ -96,6 +117,7 @@ fn save_replaces_configuration_and_preserves_all_settings() {
     config.backend.directory = Some("custom/backend".into());
     config.sandbox.timeout_seconds = 42;
     config.sandbox.memory_limit_mib = 1_024;
+    config.sandbox.isolation = IsolationMode::Lpac;
     config.limits.max_files = 123_456;
     config.behavior.open_after_double_click = false;
     config.behavior.default_filename_encoding = FilenameEncoding::Cp932;

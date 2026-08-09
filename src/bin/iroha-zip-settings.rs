@@ -5,7 +5,7 @@
 #[cfg(windows)]
 mod windows_app {
     use iroha_zip::backend::BackendBundle;
-    use iroha_zip::config::{Config, FilenameEncoding, default_config_path};
+    use iroha_zip::config::{Config, FilenameEncoding, IsolationMode, default_config_path};
     use iroha_zip::settings::{SettingsField, SettingsForm};
     use iroha_zip::util;
     use std::cell::RefCell;
@@ -69,6 +69,7 @@ mod windows_app {
         backend: HWND,
         timeout_seconds: HWND,
         memory_limit_mib: HWND,
+        isolation: HWND,
         max_archive_bytes: HWND,
         max_files: HWND,
         max_directories: HWND,
@@ -182,28 +183,17 @@ mod windows_app {
                 )?;
 
                 add_group(parent, instance, "AppContainer", 14, 174, 904, 67)?;
-                add_static(
-                    parent,
-                    instance,
-                    "タイムアウト（1–86400秒）",
-                    28,
-                    201,
-                    190,
-                    22,
-                )?;
+                add_static(parent, instance, "分離モード", 28, 201, 92, 22)?;
+                self.controls.isolation = add_combo(parent, instance, 122, 197, 190, 120)?;
+                for label in ["AppContainer（互換）", "LPAC（実験）"] {
+                    combo_add(self.controls.isolation, label);
+                }
+                add_static(parent, instance, "時間（1–86400秒）", 340, 201, 142, 22)?;
                 self.controls.timeout_seconds =
-                    add_edit(parent, instance, 220, 197, 180, 25, true)?;
-                add_static(
-                    parent,
-                    instance,
-                    "メモリ上限（64 MiB以上）",
-                    480,
-                    201,
-                    190,
-                    22,
-                )?;
+                    add_edit(parent, instance, 484, 197, 118, 25, true)?;
+                add_static(parent, instance, "メモリ（MiB）", 630, 201, 112, 22)?;
                 self.controls.memory_limit_mib =
-                    add_edit(parent, instance, 676, 197, 180, 25, true)?;
+                    add_edit(parent, instance, 744, 197, 112, 25, true)?;
 
                 add_group(parent, instance, "展開・作成の上限", 14, 247, 904, 194)?;
                 add_static(parent, instance, "入力書庫の上限", 28, 276, 164, 22)?;
@@ -356,6 +346,18 @@ mod windows_app {
             set_control_text(self.controls.backend, &form.backend_directory);
             set_control_text(self.controls.timeout_seconds, &form.timeout_seconds);
             set_control_text(self.controls.memory_limit_mib, &form.memory_limit_mib);
+            let isolation_index = match form.isolation {
+                IsolationMode::AppContainer => 0,
+                IsolationMode::Lpac => 1,
+            };
+            unsafe {
+                SendMessageW(
+                    self.controls.isolation,
+                    CB_SETCURSEL,
+                    Some(WPARAM(isolation_index)),
+                    Some(LPARAM(0)),
+                );
+            }
             set_control_text(self.controls.max_archive_bytes, &form.max_archive_bytes);
             set_control_text(self.controls.max_files, &form.max_files);
             set_control_text(self.controls.max_directories, &form.max_directories);
@@ -399,6 +401,7 @@ mod windows_app {
                 backend_directory: control_text(self.controls.backend)?,
                 timeout_seconds: control_text(self.controls.timeout_seconds)?,
                 memory_limit_mib: control_text(self.controls.memory_limit_mib)?,
+                isolation: IsolationMode::AppContainer,
                 max_archive_bytes: control_text(self.controls.max_archive_bytes)?,
                 max_files: control_text(self.controls.max_files)?,
                 max_directories: control_text(self.controls.max_directories)?,
@@ -409,6 +412,20 @@ mod windows_app {
                 preserve_mark_of_the_web: is_checked(self.controls.preserve_motw),
                 open_after_double_click: is_checked(self.controls.open_after_double_click),
                 default_filename_encoding: FilenameEncoding::Auto,
+            };
+            let isolation = unsafe {
+                SendMessageW(
+                    self.controls.isolation,
+                    CB_GETCURSEL,
+                    Some(WPARAM(0)),
+                    Some(LPARAM(0)),
+                )
+                .0
+            };
+            form.isolation = match isolation {
+                0 => IsolationMode::AppContainer,
+                1 => IsolationMode::Lpac,
+                _ => return Err("分離モードを選択してください。".to_owned()),
             };
             let encoding = unsafe {
                 SendMessageW(

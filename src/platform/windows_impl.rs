@@ -23,7 +23,10 @@ use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeleteAppContainerProfile, GetAppContainerFolderPath,
 };
-use windows::Win32::Security::{FreeSid, PSID, SECURITY_CAPABILITIES};
+use windows::Win32::Security::{
+    FreeSid, GetTokenInformation, PSID, SECURITY_CAPABILITIES, TOKEN_QUERY, TokenIsAppContainer,
+    TokenIsLessPrivilegedAppContainer,
+};
 use windows::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_FLAG_SEQUENTIAL_SCAN, FILE_SHARE_READ, FindClose, FindFirstStreamW, FindNextStreamW,
@@ -38,13 +41,15 @@ use windows::Win32::System::JobObjects::{
 use windows::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
     EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, InitializeProcThreadAttributeList,
-    LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
-    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW, UpdateProcThreadAttribute,
-    WaitForSingleObject,
+    LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY,
+    PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROC_THREAD_ATTRIBUTE_JOB_LIST,
+    PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
+    STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
 };
+use windows::Win32::System::WindowsProgramming::PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
 use windows::core::{Error as WindowsError, HRESULT, PCWSTR, PWSTR};
 
+use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
 use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
@@ -59,12 +64,20 @@ pub struct Sandbox {
 }
 
 enum Mode {
-    AppContainer { profile_name: String, sid: PSID },
+    AppContainer {
+        profile_name: String,
+        sid: PSID,
+        isolation: IsolationMode,
+    },
     Unsandboxed,
 }
 
 impl Sandbox {
-    pub fn new(memory_limit_mib: u64, allow_unsandboxed: bool) -> Result<Self> {
+    pub fn new(
+        memory_limit_mib: u64,
+        allow_unsandboxed: bool,
+        isolation: IsolationMode,
+    ) -> Result<Self> {
         let bytes = memory_limit_mib
             .checked_mul(1024 * 1024)
             .and_then(|value| usize::try_from(value).ok())
@@ -79,7 +92,11 @@ impl Sandbox {
             Ok((profile_name, sid, root)) => Ok(Self {
                 root,
                 memory_limit_bytes: bytes,
-                mode: Mode::AppContainer { profile_name, sid },
+                mode: Mode::AppContainer {
+                    profile_name,
+                    sid,
+                    isolation,
+                },
             }),
             Err(error) if allow_unsandboxed => {
                 eprintln!(
@@ -103,8 +120,8 @@ impl Sandbox {
 
     pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult> {
         match &self.mode {
-            Mode::AppContainer { sid, .. } => {
-                run_in_appcontainer(*sid, self.memory_limit_bytes, spec)
+            Mode::AppContainer { sid, isolation, .. } => {
+                run_in_appcontainer(*sid, *isolation, self.memory_limit_bytes, spec)
             }
             Mode::Unsandboxed => run_unsandboxed(spec),
         }
@@ -114,7 +131,9 @@ impl Sandbox {
 impl Drop for Sandbox {
     fn drop(&mut self) {
         match &self.mode {
-            Mode::AppContainer { profile_name, sid } => unsafe {
+            Mode::AppContainer {
+                profile_name, sid, ..
+            } => unsafe {
                 let name = wide_null(OsStr::new(profile_name));
                 let _ = DeleteAppContainerProfile(PCWSTR(name.as_ptr()));
                 let _ = fs::remove_dir_all(&self.root);
@@ -190,6 +209,7 @@ fn appcontainer_folder(sid: PSID) -> Result<PathBuf> {
 
 fn run_in_appcontainer(
     sid: PSID,
+    isolation: IsolationMode,
     memory_limit_bytes: usize,
     spec: ProcessSpec,
 ) -> Result<ProcessResult> {
@@ -234,7 +254,8 @@ fn run_in_appcontainer(
     }
     .map_err(|error| windows_error("SetInformationJobObject", error))?;
 
-    let attributes = AttributeList::new(3)?;
+    let attribute_count = if isolation.is_lpac() { 4 } else { 3 };
+    let attributes = AttributeList::new(attribute_count)?;
     let capabilities = SECURITY_CAPABILITIES {
         AppContainerSid: sid,
         Capabilities: null_mut(),
@@ -253,6 +274,26 @@ fn run_in_appcontainer(
         )
     }
     .map_err(|error| windows_error("set AppContainer process attribute", error))?;
+
+    let all_application_packages_policy = PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
+    if isolation.is_lpac() {
+        unsafe {
+            UpdateProcThreadAttribute(
+                attributes.list,
+                0,
+                PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY as usize,
+                Some(
+                    (&raw const all_application_packages_policy)
+                        .cast::<c_void>()
+                        .cast_mut(),
+                ),
+                size_of_val(&all_application_packages_policy),
+                None,
+                None,
+            )
+        }
+        .map_err(|error| windows_error("set LPAC process attribute", error))?;
+    }
 
     let jobs = [job.handle()];
     unsafe {
@@ -321,7 +362,60 @@ fn run_in_appcontainer(
     let thread_handle = OwnedHandle::new(process_info.hThread);
     drop(thread_handle);
 
+    if let Err(error) = verify_process_isolation(process.handle(), isolation) {
+        let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0004) };
+        let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
+        return Err(error);
+    }
+
     wait_for_process(&process, &job, &spec)
+}
+
+fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result<()> {
+    let mut token = HANDLE::default();
+    unsafe {
+        windows::Win32::System::Threading::OpenProcessToken(process, TOKEN_QUERY, &raw mut token)
+    }
+    .map_err(|error| windows_error("OpenProcessToken", error))?;
+    let token = OwnedHandle::new(token);
+    if query_token_flag(token.handle(), TokenIsAppContainer)? == 0 {
+        return Err(IrohaZipError::Sandbox(
+            "created process does not have an AppContainer token".to_owned(),
+        ));
+    }
+    if isolation.is_lpac()
+        && query_token_flag(token.handle(), TokenIsLessPrivilegedAppContainer)? == 0
+    {
+        return Err(IrohaZipError::Sandbox(
+            "LPAC was requested but the created process token is not less privileged".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn query_token_flag(
+    token: HANDLE,
+    information_class: windows::Win32::Security::TOKEN_INFORMATION_CLASS,
+) -> Result<u32> {
+    let mut value = 0u32;
+    let mut returned = 0u32;
+    unsafe {
+        GetTokenInformation(
+            token,
+            information_class,
+            Some((&raw mut value).cast::<c_void>()),
+            u32::try_from(size_of_val(&value))
+                .map_err(|_| IrohaZipError::Sandbox("token flag size overflow".to_owned()))?,
+            &raw mut returned,
+        )
+    }
+    .map_err(|error| windows_error("GetTokenInformation", error))?;
+    if returned != u32::try_from(size_of_val(&value)).unwrap_or(u32::MAX) {
+        return Err(IrohaZipError::Sandbox(format!(
+            "unexpected token flag size: {returned}"
+        )));
+    }
+    Ok(value)
 }
 
 fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {

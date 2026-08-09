@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
 use crate::platform::{FileIdentity, ProcessResult, ProcessSpec};
@@ -16,7 +17,11 @@ pub struct Sandbox {
 }
 
 impl Sandbox {
-    pub fn new(_memory_limit_mib: u64, allow_unsandboxed: bool) -> Result<Self> {
+    pub fn new(
+        _memory_limit_mib: u64,
+        allow_unsandboxed: bool,
+        _isolation: IsolationMode,
+    ) -> Result<Self> {
         if !allow_unsandboxed {
             return Err(IrohaZipError::Unsupported(
                 "AppContainer isolation is only implemented on Windows. Pass --allow-unsandboxed only for controlled testing."

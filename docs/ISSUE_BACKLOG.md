@@ -48,6 +48,8 @@ Prototype LPAC, document OS-version behavior, and measure whether required backe
 
 Acceptance: default isolation is never weakened on fallback; unsupported systems fail closed; the threat model documents verified ACL/capability differences.
 
+Progress (2026-08-09): an opt-in, zero-capability LPAC prototype is selectable from the settings screen. It adds the documented All Application Packages opt-out process attribute and verifies both AppContainer and LPAC token flags after process creation. Attribute, process, or token verification failure is fail closed and never retries as a regular AppContainer. Cross-compilation and platform-neutral configuration tests pass; real Windows backend/capability and ACL measurements remain open.
+
 ### [SAFE-007: Secure encrypted-archive input](https://github.com/hjosugi/iroha-zip/issues/9)
 
 Support passwords without command-line, environment, log, crash-report, or persistent-config exposure.

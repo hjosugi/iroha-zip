@@ -5,6 +5,8 @@ directory = "backend/libarchive"
 [sandbox]
 timeout_seconds = 300
 memory_limit_mib = 768
+# appcontainer / lpac。LPACは実験的で、利用不能時はfail closedになります。
+isolation = "appcontainer"
 
 [limits]
 max_archive_bytes = 17179869184

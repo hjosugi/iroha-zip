@@ -35,7 +35,7 @@ iroha-zipの中心目標は、攻撃者が作成した書庫を展開すると�
 
 | 攻撃 | 対策 |
 |---|---|
-| libarchiveのメモリ破壊からコード実行 | capabilityなしの一時AppContainerでbsdtarを起動 |
+| libarchiveのメモリ破壊からコード実行 | capabilityなしの一時AppContainerでbsdtarを起動。検証環境ではLPACを明示選択可能 |
 | パーサーからネットワークへ接続 | network capabilityを付与しない |
 | ユーザーファイルや資格情報の読み取り | 入力とバックエンドをAppContainer専用領域へコピーし、通常データへのACLを付与しない |
 | 子プロセスによる回避 | Job Objectのactive process limitを1に設定 |
@@ -60,7 +60,7 @@ iroha-zipの中心目標は、攻撃者が作成した書庫を展開すると�
 通常プロセス
   1. 入力を書庫としてではなく通常ファイルとして検査
   2. バックエンドの全ファイルを検証
-  3. capabilityなしAppContainerを作成
+  3. capabilityなしの選択済みAppContainerモードを作成
   4. 入力とバックエンドをAppContainer領域へコピー
 
 AppContainerプロセス
@@ -81,7 +81,7 @@ AppContainerプロセス
 ```text
 通常プロセス
   1. 圧縮元ツリーを再帰監査
-  2. capabilityなしAppContainerを作成
+  2. capabilityなしの選択済みAppContainerモードを作成
   3. 検査済みの通常ファイルだけをAppContainer領域へコピー
   4. バックエンドをコピー後に再ハッシュ
 
@@ -99,7 +99,13 @@ AppContainerプロセス
 
 ### AppContainer escape
 
-WindowsカーネルやAppContainerの脆弱性は本プロジェクトだけでは防げません。通常AppContainerはLPACよりアクセス範囲が広いため、将来はLPAC化を検討します。
+WindowsカーネルやAppContainerの脆弱性は本プロジェクトだけでは防げません。既定は互換性を確認済みの通常AppContainerで、設定画面から実験的LPACを明示選択できます。どちらもcapabilityは0件で、ネットワークcapabilityを付けません。
+
+通常AppContainerは、そのPackage SID／capability SIDに明示されたアクセスに加え、Windowsの多くのシステム資源が`ALL APPLICATION PACKAGES`へ与えているアクセスを利用できます。LPACは`PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT`を指定するため、その暗黙アクセスを利用できず、通常AppContainerより狭い境界になります。iroha-zipはLPACで`registryRead`、`lpacCom`などの補完capabilityを追加しません。
+
+LPAC指定時はprocess attributeを付けた後、生成した子プロセスの`TokenIsAppContainer`と`TokenIsLessPrivilegedAppContainer`を検査します。属性設定、process生成、token照合のいずれかが失敗しても通常AppContainerとして再試行しません。OS build番号による推測ではなくruntime検査でfail closedにします。`--allow-unsandboxed`は利用者がコマンドごとに明示した場合だけ存在する別の危険な診断経路です。
+
+対象のlibarchive bundleがLPACで必要形式を処理できるか、通常AppContainerが持つACL差分のどれを実際に必要とするかはWindows実機matrixで未検証です。設定画面の診断は、選択したモードで`bsdtar --version`を実行してtoken照合も通過した場合だけ成功します。詳細は[`LPAC_EVALUATION.md`](LPAC_EVALUATION.md)で追跡します。
 
 ### 悪意ある展開後ファイル
 
@@ -127,7 +133,7 @@ v0.1では安全なパスワード受け渡しを実装していません。標�
 
 ## 7. 将来の強化候補
 
-- LPAC化と必要最小限の明示capability
+- LPACの実書庫・ACL・network denial matrixと必要capability 0件の実証
 - Authenticode署名と署名済みアップデート
 - Windows Defenderの`IAttachmentExecute`／スキャン連携
 - AppLocker／WDAC向けpublisher rule

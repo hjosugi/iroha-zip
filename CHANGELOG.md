@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added an opt-in zero-capability LPAC prototype, exposed in the settings screen and configuration file.
+- Verify the created child token is an AppContainer and, when requested, a less-privileged AppContainer; unsupported or downgraded launches fail closed.
+
 ## 0.3.1 - 2026-08-09
 
 - Added handle-retaining SHA-256 snapshots for input archives and compression source files.

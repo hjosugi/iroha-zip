@@ -2,8 +2,8 @@ use std::fmt;
 use std::path::PathBuf;
 
 use crate::config::{
-    Config, FilenameEncoding, MAX_MEMORY_LIMIT_MIB, MAX_TIMEOUT_SECONDS, MIN_MEMORY_LIMIT_MIB,
-    MIN_TIMEOUT_SECONDS,
+    Config, FilenameEncoding, IsolationMode, MAX_MEMORY_LIMIT_MIB, MAX_TIMEOUT_SECONDS,
+    MIN_MEMORY_LIMIT_MIB, MIN_TIMEOUT_SECONDS,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -67,6 +67,7 @@ pub struct SettingsForm {
     pub backend_directory: String,
     pub timeout_seconds: String,
     pub memory_limit_mib: String,
+    pub isolation: IsolationMode,
     pub max_archive_bytes: String,
     pub max_files: String,
     pub max_directories: String,
@@ -90,6 +91,7 @@ impl SettingsForm {
             backend_directory: backend.to_string_lossy().into_owned(),
             timeout_seconds: config.sandbox.timeout_seconds.to_string(),
             memory_limit_mib: config.sandbox.memory_limit_mib.to_string(),
+            isolation: config.sandbox.isolation,
             max_archive_bytes: format_byte_count(config.limits.max_archive_bytes),
             max_files: config.limits.max_files.to_string(),
             max_directories: config.limits.max_directories.to_string(),
@@ -124,6 +126,7 @@ impl SettingsForm {
             MIN_MEMORY_LIMIT_MIB,
             MAX_MEMORY_LIMIT_MIB,
         )?;
+        config.sandbox.isolation = self.isolation;
         config.limits.max_archive_bytes =
             parse_byte_count(&self.max_archive_bytes, SettingsField::MaxArchiveBytes)?;
         config.limits.max_files = parse_positive_u64(&self.max_files, SettingsField::MaxFiles)?;
