@@ -13,7 +13,7 @@ The exporter:
 3. creates an isolated pacman database configured with `SigLevel = Required TrustedOnly` and refreshes its signed `msys` and `ucrt64` databases;
 4. requires the installed version to equal the freshly signature-verified repository version and takes all source metadata from that isolated database;
 5. downloads each exact package through pacman under the same required/trusted-only policy;
-6. compares the downloaded archive SHA-256 with the signed repository metadata and records the embedded package signature;
+6. compares the downloaded archive SHA-256 with the signed repository metadata and records the detached package signature that pacman verified and retained;
 7. runs pacman's detailed installed-file check and compares every selected installed file with the corresponding file extracted from the verified archive;
 8. imports the archive-derived bytes and the package's standard license files.
 
@@ -48,7 +48,7 @@ backend/libarchive/
     licenses/<package-id>/...
 ```
 
-- `backend-provenance.json` records the UTC import time, source classification, enforced verification method, installed `msys2-keyring` version, manifest digest, package versions, repository/archive hashes, embedded signatures, distributor license metadata, and exact package owner of every payload file.
+- `backend-provenance.json` records the UTC import time, source classification, enforced verification method, installed `msys2-keyring` version, manifest digest, package versions, repository/archive hashes, verified detached signatures, distributor license metadata, and exact package owner of every payload file.
 - `backend.spdx.json` is an SPDX 2.3 JSON document. It includes every payload file and SHA-256, one analyzed SPDX package per recorded owner, SPDX package verification codes, and exact `DESCRIBES`/`CONTAINS` relationships. See the [SPDX 2.3 package rules](https://spdx.github.io/spdx-spec/v2.3/package-information/) and [relationship rules](https://spdx.github.io/spdx-spec/v2.3/relationships-between-SPDX-elements/).
 - `backend-license-inventory.json` repeats the exact payload-to-package mapping and hashes the generated notice and every copied license file.
 - `THIRD-PARTY-NOTICES.md` presents the recorded package/version/license data and makes the unsupported-source warning visible without a JSON reader. It preserves distributor metadata and is not an independent legal conclusion.

@@ -205,9 +205,6 @@ Include = /etc/pacman.d/mirrorlist.mingw
         $archiveSha256 = (Invoke-Msys2Scalar `
             'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
             @($secureConfigUnix, "%h", $packageName)).ToLowerInvariant()
-        $signature = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
-            @($secureConfigUnix, "%g", $packageName)
         $licenses = @(
             Invoke-Msys2 `
                 'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
@@ -220,9 +217,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
         }
         if ($repository -ne "ucrt64" -or
             $downloadUrl -notmatch '^https://' -or
-            $archiveSha256 -notmatch '^[0-9a-f]{64}$' -or
-            $signature.Length -lt 32 -or
-            $signature -notmatch '^[A-Za-z0-9+/=]+$') {
+            $archiveSha256 -notmatch '^[0-9a-f]{64}$') {
             throw "Incomplete or unsupported signed repository metadata for package: $packageName"
         }
         if ($licenses.Count -eq 0) {
@@ -237,7 +232,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
             repository = $repository
             downloadUrl = $downloadUrl
             archiveSha256 = $archiveSha256
-            signature = $signature
+            signature = $null
             licenses = @($licenses)
         }
     }
@@ -265,6 +260,21 @@ Include = /etc/pacman.d/mirrorlist.mingw
         if ($actualArchiveHash -ne [string]$package.archiveSha256) {
             throw "Downloaded package SHA-256 does not match signed repository metadata: $($package.name)"
         }
+        # Required TrustedOnly makes pacman download and validate the detached
+        # signature before the download-only transaction succeeds.
+        $signaturePath = $archive + ".sig"
+        if (-not (Test-Path -LiteralPath $signaturePath -PathType Leaf)) {
+            throw "pacman did not retain the required package signature: $signaturePath"
+        }
+        $signature = [System.Convert]::ToBase64String(
+            [System.IO.File]::ReadAllBytes($signaturePath)
+        )
+        if ($signature.Length -lt 32 -or
+            $signature.Length -gt 32768 -or
+            $signature -notmatch '^[A-Za-z0-9+/=]+$') {
+            throw "Verified package signature is missing or unbounded: $($package.name)"
+        }
+        $package.signature = $signature
         $archiveByPackage[[string]$package.name] = $archive
 
         $packageExtract = Join-Path $packageExtractRoot ([string]$package.id)
