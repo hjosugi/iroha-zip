@@ -954,21 +954,28 @@ fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result
     }
     .map_err(|error| windows_error("OpenProcessToken", error))?;
     let token = OwnedHandle::new(token);
-    let is_app_container = query_token_flag(token.handle(), TokenIsAppContainer)? != 0;
-    let is_lpac = query_token_flag(token.handle(), TokenIsLessPrivilegedAppContainer)? != 0;
+    let is_app_container =
+        query_token_flag(token.handle(), TokenIsAppContainer, "TokenIsAppContainer")? != 0;
     if !is_app_container {
         return Err(IrohaZipError::Sandbox(
             "created process does not have an AppContainer token".to_owned(),
         ));
     }
+    // TokenIsLessPrivilegedAppContainer is not accepted for a regular AppContainer
+    // token on every supported Windows build. Query it only when LPAC was requested;
+    // that path remains fail-closed and must positively prove the stronger token mode.
+    let is_lpac = if isolation.is_lpac() {
+        query_token_flag(
+            token.handle(),
+            TokenIsLessPrivilegedAppContainer,
+            "TokenIsLessPrivilegedAppContainer",
+        )? != 0
+    } else {
+        false
+    };
     if isolation.is_lpac() && !is_lpac {
         return Err(IrohaZipError::Sandbox(
             "LPAC was requested but the created process token is not less privileged".to_owned(),
-        ));
-    }
-    if !isolation.is_lpac() && is_lpac {
-        return Err(IrohaZipError::Sandbox(
-            "regular AppContainer was requested but the created token is LPAC".to_owned(),
         ));
     }
     let capability_count = query_token_capability_count(token.handle())?;
@@ -1023,6 +1030,7 @@ fn query_token_capability_count(token: HANDLE) -> Result<u32> {
 fn query_token_flag(
     token: HANDLE,
     information_class: windows::Win32::Security::TOKEN_INFORMATION_CLASS,
+    information_name: &str,
 ) -> Result<u32> {
     let mut value = 0u32;
     let mut returned = 0u32;
@@ -1036,10 +1044,10 @@ fn query_token_flag(
             &raw mut returned,
         )
     }
-    .map_err(|error| windows_error("GetTokenInformation", error))?;
+    .map_err(|error| windows_error(&format!("GetTokenInformation({information_name})"), error))?;
     if returned != u32::try_from(size_of_val(&value)).unwrap_or(u32::MAX) {
         return Err(IrohaZipError::Sandbox(format!(
-            "unexpected token flag size: {returned}"
+            "unexpected {information_name} size: {returned}"
         )));
     }
     Ok(value)
