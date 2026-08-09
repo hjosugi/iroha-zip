@@ -6,7 +6,9 @@
 mod windows_app {
     use safearc::backend::BackendBundle;
     use safearc::config::{Config, FilenameEncoding, default_config_path};
+    use safearc::settings::{SettingsField, SettingsForm};
     use safearc::util;
+    use std::cell::RefCell;
     use std::ffi::{OsStr, OsString, c_void};
     use std::fs;
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -22,6 +24,7 @@ mod windows_app {
         CoTaskMemFree, CoUninitialize,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, SetFocus};
     use windows::Win32::UI::Shell::{
         FOS_DONTADDTORECENT, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS,
         FileOpenDialog, IFileOpenDialog, IShellItem, SHCreateItemFromParsingName,
@@ -29,12 +32,13 @@ mod windows_app {
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         BM_GETCHECK, BM_SETCHECK, BN_CLICKED, BS_AUTOCHECKBOX, BS_DEFPUSHBUTTON, BS_GROUPBOX,
-        BS_PUSHBUTTON, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CBS_DROPDOWNLIST, CBS_HASSTRINGS,
-        CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW,
-        DestroyWindow, DispatchMessageW, ES_AUTOHSCROLL, ES_NUMBER, GWLP_USERDATA, GetMessageW,
-        GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, HMENU, IDC_ARROW, LoadCursorW,
-        MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MESSAGEBOX_STYLE, MSG, MessageBoxW,
-        PostQuitMessage, RegisterClassW, SW_SHOWNORMAL, SendMessageW, SetWindowLongPtrW,
+        BS_PUSHBUTTON, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CBN_SELCHANGE, CBS_DROPDOWNLIST,
+        CBS_HASSTRINGS, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW,
+        DefWindowProcW, DestroyWindow, DispatchMessageW, EN_CHANGE, ES_AUTOHSCROLL, ES_NUMBER,
+        GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, HMENU,
+        IDC_ARROW, IDC_WAIT, IDYES, IsDialogMessageW, LoadCursorW, MB_ICONERROR,
+        MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_YESNO, MESSAGEBOX_STYLE, MSG, MessageBoxW,
+        PostQuitMessage, RegisterClassW, SW_SHOWNORMAL, SendMessageW, SetCursor, SetWindowLongPtrW,
         SetWindowTextW, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
         WM_COMMAND, WM_CREATE, WM_DESTROY, WM_NCCREATE, WM_SETFONT, WNDCLASSW, WS_CAPTION,
         WS_CHILD, WS_EX_CLIENTEDGE, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP,
@@ -56,8 +60,9 @@ mod windows_app {
     const ID_DEFAULT_APPS: usize = 1103;
     const ID_CONFIG_FOLDER: usize = 1104;
     const ID_DEFAULTS: usize = 1201;
-    const ID_SAVE: usize = 1202;
-    const ID_CANCEL: usize = 1203;
+    // IDOK and IDCANCEL let IsDialogMessageW map Enter and Escape naturally.
+    const ID_SAVE: usize = 1;
+    const ID_CANCEL: usize = 2;
 
     #[derive(Default)]
     struct Controls {
@@ -80,6 +85,7 @@ mod windows_app {
     struct App {
         config_path: PathBuf,
         controls: Controls,
+        saved_config: RefCell<Config>,
     }
 
     impl App {
@@ -87,6 +93,7 @@ mod windows_app {
             Self {
                 config_path,
                 controls: Controls::default(),
+                saved_config: RefCell::new(Config::default()),
             }
         }
 
@@ -101,7 +108,7 @@ mod windows_app {
                 add_static(
                     parent,
                     instance,
-                    "安全性に関わる項目を含むすべての設定と初期セットアップを管理します。",
+                    "安全性に関わる全設定とWindows統合を、ここから検証・管理できます。",
                     18,
                     12,
                     888,
@@ -123,7 +130,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "選択...",
+                    "選択(&B)...",
                     690,
                     81,
                     96,
@@ -134,7 +141,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "診断",
+                    "診断(&D)",
                     796,
                     81,
                     104,
@@ -145,7 +152,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "bundleを取り込む...",
+                    "bundleを取り込む(&I)...",
                     122,
                     119,
                     190,
@@ -156,7 +163,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "MSYS2から取り込む...",
+                    "MSYS2から取り込む(&M)...",
                     322,
                     119,
                     190,
@@ -175,35 +182,60 @@ mod windows_app {
                 )?;
 
                 add_group(parent, instance, "AppContainer", 14, 174, 904, 67)?;
-                add_static(parent, instance, "タイムアウト（秒）", 28, 201, 150, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    "タイムアウト（1–86400秒）",
+                    28,
+                    201,
+                    190,
+                    22,
+                )?;
                 self.controls.timeout_seconds =
-                    add_edit(parent, instance, 180, 197, 180, 25, true)?;
-                add_static(parent, instance, "メモリ上限（MiB）", 480, 201, 150, 22)?;
+                    add_edit(parent, instance, 220, 197, 180, 25, true)?;
+                add_static(
+                    parent,
+                    instance,
+                    "メモリ上限（64 MiB以上）",
+                    480,
+                    201,
+                    190,
+                    22,
+                )?;
                 self.controls.memory_limit_mib =
-                    add_edit(parent, instance, 636, 197, 180, 25, true)?;
+                    add_edit(parent, instance, 676, 197, 180, 25, true)?;
 
                 add_group(parent, instance, "展開・作成の上限", 14, 247, 904, 194)?;
-                add_static(parent, instance, "入力書庫（bytes）", 28, 276, 164, 22)?;
+                add_static(parent, instance, "入力書庫の上限", 28, 276, 164, 22)?;
                 self.controls.max_archive_bytes =
-                    add_edit(parent, instance, 194, 272, 222, 25, true)?;
+                    add_edit(parent, instance, 194, 272, 222, 25, false)?;
                 add_static(parent, instance, "ファイル数", 478, 276, 150, 22)?;
                 self.controls.max_files = add_edit(parent, instance, 636, 272, 222, 25, true)?;
 
                 add_static(parent, instance, "ディレクトリ数", 28, 316, 164, 22)?;
                 self.controls.max_directories =
                     add_edit(parent, instance, 194, 312, 222, 25, true)?;
-                add_static(parent, instance, "合計容量（bytes）", 478, 316, 150, 22)?;
+                add_static(parent, instance, "合計容量の上限", 478, 316, 150, 22)?;
                 self.controls.max_total_bytes =
-                    add_edit(parent, instance, 636, 312, 222, 25, true)?;
+                    add_edit(parent, instance, 636, 312, 222, 25, false)?;
 
-                add_static(parent, instance, "単一ファイル（bytes）", 28, 356, 164, 22)?;
+                add_static(parent, instance, "単一ファイル上限", 28, 356, 164, 22)?;
                 self.controls.max_single_file_bytes =
-                    add_edit(parent, instance, 194, 352, 222, 25, true)?;
+                    add_edit(parent, instance, 194, 352, 222, 25, false)?;
                 add_static(parent, instance, "パスの深さ", 478, 356, 150, 22)?;
                 self.controls.max_depth = add_edit(parent, instance, 636, 352, 222, 25, true)?;
 
                 add_static(parent, instance, "パス長（UTF-8 bytes）", 28, 396, 164, 22)?;
                 self.controls.max_path_bytes = add_edit(parent, instance, 194, 392, 222, 25, true)?;
+                add_static(
+                    parent,
+                    instance,
+                    "容量は 16 GiB / 512 MiB のように入力できます。",
+                    478,
+                    396,
+                    380,
+                    22,
+                )?;
 
                 add_group(parent, instance, "展開時の動作", 14, 447, 904, 78)?;
                 self.controls.preserve_motw = add_checkbox(
@@ -234,7 +266,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "関連付けを登録",
+                    "関連付けを登録(&A)",
                     30,
                     557,
                     160,
@@ -245,7 +277,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "関連付けを解除",
+                    "関連付けを解除(&U)",
                     200,
                     557,
                     160,
@@ -256,7 +288,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "既定のアプリを開く",
+                    "既定のアプリを開く(&P)",
                     370,
                     557,
                     180,
@@ -267,7 +299,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "設定フォルダを開く",
+                    "設定フォルダを開く(&F)",
                     560,
                     557,
                     180,
@@ -279,7 +311,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "既定値に戻す",
+                    "既定値に戻す(&R)",
                     18,
                     616,
                     150,
@@ -287,11 +319,21 @@ mod windows_app {
                     ID_DEFAULTS,
                     false,
                 )?;
-                add_button(parent, instance, "保存", 670, 616, 110, 32, ID_SAVE, true)?;
                 add_button(
                     parent,
                     instance,
-                    "キャンセル",
+                    "保存(&S)",
+                    670,
+                    616,
+                    110,
+                    32,
+                    ID_SAVE,
+                    true,
+                )?;
+                add_button(
+                    parent,
+                    instance,
+                    "閉じる(&C)",
                     790,
                     616,
                     110,
@@ -304,61 +346,32 @@ mod windows_app {
             }
 
             self.apply_config(&config);
+            self.saved_config.replace(config);
+            self.update_dirty_title(parent);
             Ok(())
         }
 
         fn apply_config(&self, config: &Config) {
-            let backend = config
-                .backend
-                .directory
-                .as_deref()
-                .unwrap_or_else(|| Path::new("backend/libarchive"));
-            set_control_os_text(self.controls.backend, backend.as_os_str());
-            set_control_text(
-                self.controls.timeout_seconds,
-                &config.sandbox.timeout_seconds.to_string(),
-            );
-            set_control_text(
-                self.controls.memory_limit_mib,
-                &config.sandbox.memory_limit_mib.to_string(),
-            );
-            set_control_text(
-                self.controls.max_archive_bytes,
-                &config.limits.max_archive_bytes.to_string(),
-            );
-            set_control_text(
-                self.controls.max_files,
-                &config.limits.max_files.to_string(),
-            );
-            set_control_text(
-                self.controls.max_directories,
-                &config.limits.max_directories.to_string(),
-            );
-            set_control_text(
-                self.controls.max_total_bytes,
-                &config.limits.max_total_bytes.to_string(),
-            );
+            let form = SettingsForm::from_config(config);
+            set_control_text(self.controls.backend, &form.backend_directory);
+            set_control_text(self.controls.timeout_seconds, &form.timeout_seconds);
+            set_control_text(self.controls.memory_limit_mib, &form.memory_limit_mib);
+            set_control_text(self.controls.max_archive_bytes, &form.max_archive_bytes);
+            set_control_text(self.controls.max_files, &form.max_files);
+            set_control_text(self.controls.max_directories, &form.max_directories);
+            set_control_text(self.controls.max_total_bytes, &form.max_total_bytes);
             set_control_text(
                 self.controls.max_single_file_bytes,
-                &config.limits.max_single_file_bytes.to_string(),
+                &form.max_single_file_bytes,
             );
-            set_control_text(
-                self.controls.max_depth,
-                &config.limits.max_depth.to_string(),
-            );
-            set_control_text(
-                self.controls.max_path_bytes,
-                &config.limits.max_path_bytes.to_string(),
-            );
-            set_check(
-                self.controls.preserve_motw,
-                config.behavior.preserve_mark_of_the_web,
-            );
+            set_control_text(self.controls.max_depth, &form.max_depth);
+            set_control_text(self.controls.max_path_bytes, &form.max_path_bytes);
+            set_check(self.controls.preserve_motw, form.preserve_mark_of_the_web);
             set_check(
                 self.controls.open_after_double_click,
-                config.behavior.open_after_double_click,
+                form.open_after_double_click,
             );
-            let encoding_index = match config.behavior.default_filename_encoding {
+            let encoding_index = match form.default_filename_encoding {
                 FilenameEncoding::Auto => 0,
                 FilenameEncoding::Utf8 => 1,
                 FilenameEncoding::Cp932 => 2,
@@ -375,31 +388,28 @@ mod windows_app {
         }
 
         fn collect_config(&self) -> Result<Config, String> {
-            let backend_text = control_text(self.controls.backend)?;
-            let backend = backend_text.trim();
-            let mut config = Config::default();
-            config.backend.directory = if backend.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(backend))
+            self.read_form()?.into_config().map_err(|error| {
+                self.focus_field(error.field);
+                error.to_string()
+            })
+        }
+
+        fn read_form(&self) -> Result<SettingsForm, String> {
+            let mut form = SettingsForm {
+                backend_directory: control_text(self.controls.backend)?,
+                timeout_seconds: control_text(self.controls.timeout_seconds)?,
+                memory_limit_mib: control_text(self.controls.memory_limit_mib)?,
+                max_archive_bytes: control_text(self.controls.max_archive_bytes)?,
+                max_files: control_text(self.controls.max_files)?,
+                max_directories: control_text(self.controls.max_directories)?,
+                max_total_bytes: control_text(self.controls.max_total_bytes)?,
+                max_single_file_bytes: control_text(self.controls.max_single_file_bytes)?,
+                max_depth: control_text(self.controls.max_depth)?,
+                max_path_bytes: control_text(self.controls.max_path_bytes)?,
+                preserve_mark_of_the_web: is_checked(self.controls.preserve_motw),
+                open_after_double_click: is_checked(self.controls.open_after_double_click),
+                default_filename_encoding: FilenameEncoding::Auto,
             };
-            config.sandbox.timeout_seconds =
-                parse_u64(self.controls.timeout_seconds, "タイムアウト")?;
-            config.sandbox.memory_limit_mib =
-                parse_u64(self.controls.memory_limit_mib, "メモリ上限")?;
-            config.limits.max_archive_bytes =
-                parse_u64(self.controls.max_archive_bytes, "入力書庫の上限")?;
-            config.limits.max_files = parse_u64(self.controls.max_files, "ファイル数")?;
-            config.limits.max_directories =
-                parse_u64(self.controls.max_directories, "ディレクトリ数")?;
-            config.limits.max_total_bytes = parse_u64(self.controls.max_total_bytes, "合計容量")?;
-            config.limits.max_single_file_bytes =
-                parse_u64(self.controls.max_single_file_bytes, "単一ファイル容量")?;
-            config.limits.max_depth = parse_usize(self.controls.max_depth, "パスの深さ")?;
-            config.limits.max_path_bytes = parse_usize(self.controls.max_path_bytes, "パス長")?;
-            config.behavior.preserve_mark_of_the_web = is_checked(self.controls.preserve_motw);
-            config.behavior.open_after_double_click =
-                is_checked(self.controls.open_after_double_click);
             let encoding = unsafe {
                 SendMessageW(
                     self.controls.encoding,
@@ -409,15 +419,14 @@ mod windows_app {
                 )
                 .0
             };
-            config.behavior.default_filename_encoding = match encoding {
+            form.default_filename_encoding = match encoding {
                 0 => FilenameEncoding::Auto,
                 1 => FilenameEncoding::Utf8,
                 2 => FilenameEncoding::Cp932,
                 3 => FilenameEncoding::Cp437,
                 _ => return Err("既定の文字コードを選択してください。".to_owned()),
             };
-            config.validate().map_err(|error| error.to_string())?;
-            Ok(config)
+            Ok(form)
         }
 
         fn save(&self, parent: HWND) -> Result<(), String> {
@@ -425,6 +434,8 @@ mod windows_app {
             config
                 .save(&self.config_path)
                 .map_err(|error| error.to_string())?;
+            self.saved_config.replace(config);
+            self.update_dirty_title(parent);
             set_control_text(self.controls.status, "設定を保存しました。");
             show_message(
                 Some(parent),
@@ -450,30 +461,37 @@ mod windows_app {
 
         fn doctor(&self, parent: HWND) -> Result<(), String> {
             let config = self.collect_config()?;
-            let backend_dir = config
-                .backend_directory()
-                .map_err(|error| error.to_string())?;
-            BackendBundle::verify(&backend_dir).map_err(|error| error.to_string())?;
+            let details = self.run_busy(
+                parent,
+                "バックエンドとAppContainerを診断しています...",
+                || {
+                    let backend_dir = config
+                        .backend_directory()
+                        .map_err(|error| error.to_string())?;
+                    BackendBundle::verify(&backend_dir).map_err(|error| error.to_string())?;
 
-            let executable = sibling("safearc.exe")?;
-            let temporary_config =
-                std::env::temp_dir().join(format!("safearc-doctor-{}.toml", util::unique_token()));
-            config
-                .save(&temporary_config)
-                .map_err(|error| error.to_string())?;
-            let output_result = Command::new(&executable)
-                .arg("--config")
-                .arg(&temporary_config)
-                .arg("doctor")
-                .stdin(Stdio::null())
-                .creation_flags(CREATE_NO_WINDOW)
-                .output();
-            let _ = fs::remove_file(&temporary_config);
-            let output = output_result.map_err(|error| format!("診断を開始できません: {error}"))?;
-            if !output.status.success() {
-                return Err(command_failure("診断", &output));
-            }
-            let details = decoded_output(&output);
+                    let executable = sibling("safearc.exe")?;
+                    let temporary_config = std::env::temp_dir()
+                        .join(format!("safearc-doctor-{}.toml", util::unique_token()));
+                    config
+                        .save(&temporary_config)
+                        .map_err(|error| error.to_string())?;
+                    let output_result = Command::new(&executable)
+                        .arg("--config")
+                        .arg(&temporary_config)
+                        .arg("doctor")
+                        .stdin(Stdio::null())
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .output();
+                    let _ = fs::remove_file(&temporary_config);
+                    let output =
+                        output_result.map_err(|error| format!("診断を開始できません: {error}"))?;
+                    if !output.status.success() {
+                        return Err(command_failure("診断", &output));
+                    }
+                    Ok(decoded_output(&output))
+                },
+            )?;
             set_control_text(self.controls.status, "診断に成功しました。");
             show_message(
                 Some(parent),
@@ -496,28 +514,50 @@ mod windows_app {
             let destination = config
                 .backend_directory()
                 .map_err(|error| error.to_string())?;
+            if destination.exists()
+                && !confirm_action(
+                    parent,
+                    "現在のバックエンドを検証済みの新しいbundleで置き換えます。続行しますか？",
+                )
+            {
+                set_control_text(
+                    self.controls.status,
+                    "バックエンドの取り込みを中止しました。",
+                );
+                return Ok(());
+            }
 
             let (script, source_argument) = if from_msys2 {
                 ("export-msys2-backend.ps1", "-Msys2Root")
             } else {
                 ("install-backend.ps1", "-SourceDirectory")
             };
-            let output = run_script(
-                script,
-                &[
-                    OsString::from(source_argument),
-                    source.into_os_string(),
-                    OsString::from("-DestinationDirectory"),
-                    destination.as_os_str().to_owned(),
-                ],
+            let bundle = self.run_busy(
+                parent,
+                "バックエンドを取り込み、検証しています...",
+                || {
+                    let output = run_script(
+                        script,
+                        &[
+                            OsString::from(source_argument),
+                            source.into_os_string(),
+                            OsString::from("-DestinationDirectory"),
+                            destination.as_os_str().to_owned(),
+                        ],
+                    )?;
+                    if !output.status.success() {
+                        return Err(command_failure("バックエンド取り込み", &output));
+                    }
+                    let bundle =
+                        BackendBundle::verify(&destination).map_err(|error| error.to_string())?;
+                    config
+                        .save(&self.config_path)
+                        .map_err(|error| error.to_string())?;
+                    Ok(bundle)
+                },
             )?;
-            if !output.status.success() {
-                return Err(command_failure("バックエンド取り込み", &output));
-            }
-            let bundle = BackendBundle::verify(&destination).map_err(|error| error.to_string())?;
-            config
-                .save(&self.config_path)
-                .map_err(|error| error.to_string())?;
+            self.saved_config.replace(config);
+            self.update_dirty_title(parent);
             set_control_text(
                 self.controls.status,
                 "バックエンドを取り込み、検証しました。",
@@ -535,19 +575,35 @@ mod windows_app {
         }
 
         fn association(&self, parent: HWND, register: bool) -> Result<(), String> {
-            let output = if register {
-                let install_dir = executable_directory()?;
-                run_script(
-                    "register-associations.ps1",
-                    &[
-                        OsString::from("-InstallDirectory"),
-                        install_dir.into_os_string(),
-                        OsString::from("-DoNotOpenSettings"),
-                    ],
-                )?
+            if !register
+                && !confirm_action(
+                    parent,
+                    "現在のユーザーからSafeArcの関連付け候補を解除します。続行しますか？",
+                )
+            {
+                set_control_text(self.controls.status, "関連付けの解除を中止しました。");
+                return Ok(());
+            }
+            let progress = if register {
+                "関連付け候補を登録しています..."
             } else {
-                run_script("unregister-associations.ps1", &[])?
+                "関連付け候補を解除しています..."
             };
+            let output = self.run_busy(parent, progress, || {
+                if register {
+                    let install_dir = executable_directory()?;
+                    run_script(
+                        "register-associations.ps1",
+                        &[
+                            OsString::from("-InstallDirectory"),
+                            install_dir.into_os_string(),
+                            OsString::from("-DoNotOpenSettings"),
+                        ],
+                    )
+                } else {
+                    run_script("unregister-associations.ps1", &[])
+                }
+            })?;
             if !output.status.success() {
                 return Err(command_failure("関連付け", &output));
             }
@@ -582,6 +638,76 @@ mod windows_app {
             Ok(())
         }
 
+        fn focus_field(&self, field: SettingsField) {
+            let control = match field {
+                SettingsField::General | SettingsField::BackendDirectory => self.controls.backend,
+                SettingsField::TimeoutSeconds => self.controls.timeout_seconds,
+                SettingsField::MemoryLimitMib => self.controls.memory_limit_mib,
+                SettingsField::MaxArchiveBytes => self.controls.max_archive_bytes,
+                SettingsField::MaxFiles => self.controls.max_files,
+                SettingsField::MaxDirectories => self.controls.max_directories,
+                SettingsField::MaxTotalBytes => self.controls.max_total_bytes,
+                SettingsField::MaxSingleFileBytes => self.controls.max_single_file_bytes,
+                SettingsField::MaxDepth => self.controls.max_depth,
+                SettingsField::MaxPathBytes => self.controls.max_path_bytes,
+            };
+            if !control.is_invalid() {
+                let _ = unsafe { SetFocus(Some(control)) };
+            }
+        }
+
+        fn has_unsaved_changes(&self) -> bool {
+            match self
+                .read_form()
+                .and_then(|form| form.into_config().map_err(|error| error.to_string()))
+            {
+                Ok(config) => config != *self.saved_config.borrow(),
+                Err(_) => true,
+            }
+        }
+
+        fn update_dirty_title(&self, parent: HWND) {
+            let dirty = self.has_unsaved_changes();
+            let marker = if dirty { " *" } else { "" };
+            set_control_text(
+                parent,
+                &format!("{WINDOW_TITLE} — v{}{marker}", env!("CARGO_PKG_VERSION")),
+            );
+        }
+
+        fn request_close(&self, parent: HWND) -> Result<(), String> {
+            if self.has_unsaved_changes()
+                && !confirm_action(parent, "保存していない変更を破棄して閉じますか？")
+            {
+                return Ok(());
+            }
+            unsafe { DestroyWindow(parent).map_err(|error| error.to_string()) }
+        }
+
+        fn run_busy<T>(
+            &self,
+            parent: HWND,
+            status: &str,
+            operation: impl FnOnce() -> Result<T, String>,
+        ) -> Result<T, String> {
+            set_control_text(self.controls.status, status);
+            unsafe {
+                let _ = EnableWindow(parent, false);
+                let _ = UpdateWindow(parent);
+                if let Ok(cursor) = LoadCursorW(None, IDC_WAIT) {
+                    SetCursor(Some(cursor));
+                }
+            }
+            let result = operation();
+            unsafe {
+                let _ = EnableWindow(parent, true);
+                if let Ok(cursor) = LoadCursorW(None, IDC_ARROW) {
+                    SetCursor(Some(cursor));
+                }
+            }
+            result
+        }
+
         fn handle_command(&self, parent: HWND, id: usize) -> Result<(), String> {
             match id {
                 ID_BACKEND_BROWSE => self.browse_backend(parent),
@@ -593,6 +719,12 @@ mod windows_app {
                 ID_DEFAULT_APPS => self.open_default_apps(),
                 ID_CONFIG_FOLDER => self.open_config_folder(),
                 ID_DEFAULTS => {
+                    if !confirm_action(
+                        parent,
+                        "画面上のすべての設定を安全な既定値へ戻します。保存するまで反映されません。続行しますか？",
+                    ) {
+                        return Ok(());
+                    }
                     self.apply_config(&Config::default());
                     set_control_text(
                         self.controls.status,
@@ -601,7 +733,7 @@ mod windows_app {
                     Ok(())
                 }
                 ID_SAVE => self.save(parent),
-                ID_CANCEL => unsafe { DestroyWindow(parent).map_err(|error| error.to_string()) },
+                ID_CANCEL => self.request_close(parent),
                 _ => Ok(()),
             }
         }
@@ -644,7 +776,7 @@ mod windows_app {
 
         let app = Box::new(App::new(config_path));
         let app_pointer = Box::into_raw(app);
-        let title = wide(WINDOW_TITLE);
+        let title = wide(&format!("{WINDOW_TITLE} — v{}", env!("CARGO_PKG_VERSION")));
         let window = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
@@ -686,6 +818,9 @@ mod windows_app {
             }
             if result.0 == 0 {
                 break;
+            }
+            if unsafe { IsDialogMessageW(window, &raw const message) }.as_bool() {
+                continue;
             }
             unsafe {
                 let _ = TranslateMessage(&raw const message);
@@ -742,10 +877,21 @@ mod windows_app {
                         );
                     }
                 }
+                if !app_pointer.is_null()
+                    && (notification == EN_CHANGE as usize
+                        || notification == CBN_SELCHANGE as usize
+                        || (notification == BN_CLICKED as usize && id == 0))
+                {
+                    unsafe { (*app_pointer).update_dirty_title(window) };
+                }
                 LRESULT(0)
             }
             WM_CLOSE => {
-                let _ = unsafe { DestroyWindow(window) };
+                if app_pointer.is_null() {
+                    let _ = unsafe { DestroyWindow(window) };
+                } else if let Err(error) = unsafe { (*app_pointer).request_close(window) } {
+                    show_error(Some(window), &error);
+                }
                 LRESULT(0)
             }
             WM_DESTROY => {
@@ -999,18 +1145,6 @@ mod windows_app {
         Ok(String::from_utf16_lossy(&buffer))
     }
 
-    fn parse_u64(control: HWND, label: &str) -> Result<u64, String> {
-        let text = control_text(control)?;
-        text.trim()
-            .parse::<u64>()
-            .map_err(|_| format!("{label}には0以上の整数を入力してください。"))
-    }
-
-    fn parse_usize(control: HWND, label: &str) -> Result<usize, String> {
-        let value = parse_u64(control, label)?;
-        usize::try_from(value).map_err(|_| format!("{label}が大きすぎます。"))
-    }
-
     fn set_check(control: HWND, checked: bool) {
         let state = if checked { BUTTON_CHECKED } else { 0 };
         unsafe {
@@ -1188,6 +1322,19 @@ mod windows_app {
 
     fn show_error(owner: Option<HWND>, message: &str) {
         show_message(owner, message, MB_OK | MB_ICONERROR);
+    }
+
+    fn confirm_action(owner: HWND, message: &str) -> bool {
+        let message = wide(message);
+        let title = wide(WINDOW_TITLE);
+        unsafe {
+            MessageBoxW(
+                Some(owner),
+                PCWSTR(message.as_ptr()),
+                PCWSTR(title.as_ptr()),
+                MB_YESNO | MB_ICONWARNING,
+            ) == IDYES
+        }
     }
 
     fn show_message(owner: Option<HWND>, message: &str, style: MESSAGEBOX_STYLE) {

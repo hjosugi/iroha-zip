@@ -9,6 +9,7 @@ pub mod extract;
 pub mod monitor;
 pub mod platform;
 pub mod policy;
+pub mod settings;
 pub mod transfer;
 pub mod util;
 

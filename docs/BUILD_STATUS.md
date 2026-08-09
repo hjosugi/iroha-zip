@@ -9,6 +9,7 @@ Updated: 2026-08-09
 - Rust 1.97.1 `cargo clippy --all-targets --locked` on Linux
 - `cargo check --all-targets --target x86_64-pc-windows-msvc --locked`
 - Configuration serialization, backward compatibility, validation, rollback-safe replacement, and path-policy tests
+- Platform-neutral settings-form round trips, human-readable byte-unit parsing, and field-specific validation tests
 - Native settings application type-check against `windows` 0.62.2 APIs
 - TOML and GitHub Actions workflow parsing
 - `cargo-deny` advisory, license, ban, and source policy checks
