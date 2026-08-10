@@ -167,11 +167,22 @@ Include = /etc/pacman.d/mirrorlist.mingw
         throw "Cannot identify the MSYS2 keyring used for package verification: $keyringInstalled"
     }
 
+    # Batch package queries. Starting a fresh MSYS2 shell and reopening the
+    # package databases for every DLL dominates export time on hosted runners.
+    $runtimePaths = @($seen | Sort-Object)
+    $owners = @(
+        Invoke-Msys2 `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman -Qqo -- "$@"' `
+            @($runtimePaths)
+    )
+    if ($owners.Count -ne $runtimePaths.Count) {
+        throw "Cannot map every runtime file to exactly one installed package. Paths=$($runtimePaths.Count) owners=$($owners.Count)"
+    }
+
     $ownerByUnixPath = @{}
-    foreach ($unixPath in @($seen | Sort-Object)) {
-        $owner = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman -Qqo -- "$1"' `
-            @($unixPath)
+    for ($index = 0; $index -lt $runtimePaths.Count; $index++) {
+        $unixPath = [string]$runtimePaths[$index]
+        $owner = [string]$owners[$index]
         if ($owner -notmatch '^mingw-w64-ucrt-x86_64-[A-Za-z0-9@._+-]+$') {
             throw "Runtime file is not owned by a supported UCRT64 package: $unixPath -> $owner"
         }
@@ -179,41 +190,66 @@ Include = /etc/pacman.d/mirrorlist.mingw
     }
 
     $packageNames = @($ownerByUnixPath.Values | Sort-Object -Unique)
+    $installedVersions = @{}
+    foreach ($installed in @(
+        Invoke-Msys2 `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman -Q -- "$@"' `
+            @($packageNames)
+    )) {
+        $installedParts = ([string]$installed) -split '\s+', 2
+        if ($installedParts.Count -ne 2 -or
+            $installedParts[0] -notmatch '^mingw-w64-ucrt-x86_64-[A-Za-z0-9@._+-]+$' -or
+            $installedVersions.ContainsKey($installedParts[0])) {
+            throw "Cannot parse installed package version: $installed"
+        }
+        $installedVersions[$installedParts[0]] = $installedParts[1]
+    }
+    if ($installedVersions.Count -ne $packageNames.Count) {
+        throw "Cannot identify every installed runtime package version. Expected=$($packageNames.Count) found=$($installedVersions.Count)"
+    }
+
+    $printFormat = "%n`t%v`t%r`t%a`t%l`t%h`t%L"
+    $repositoryMetadata = @{}
+    foreach ($metadataLine in @(
+        Invoke-Msys2 `
+            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "${@:3}"' `
+            @($secureConfigUnix, $printFormat, $packageNames)
+    )) {
+        $parts = ([string]$metadataLine) -split "`t", 7
+        if ($parts.Count -ne 7 -or
+            $parts[0] -notmatch '^mingw-w64-ucrt-x86_64-[A-Za-z0-9@._+-]+$' -or
+            $repositoryMetadata.ContainsKey($parts[0])) {
+            throw "Cannot parse signed repository package metadata: $metadataLine"
+        }
+        $repositoryMetadata[$parts[0]] = [pscustomobject][ordered]@{
+            version = $parts[1]
+            repository = $parts[2]
+            architecture = $parts[3]
+            downloadUrl = $parts[4]
+            archiveSha256 = $parts[5].ToLowerInvariant()
+            licenses = @(
+                $parts[6].Trim() |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            )
+        }
+    }
+    if ($repositoryMetadata.Count -ne $packageNames.Count) {
+        throw "Cannot identify every signed repository package. Expected=$($packageNames.Count) found=$($repositoryMetadata.Count)"
+    }
+
     $packageMetadata = @()
     $archiveByPackage = @{}
     $packageIdByName = @{}
     foreach ($packageName in $packageNames) {
-        $installed = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman -Q -- "$1"' `
-            @($packageName)
-        $installedParts = $installed -split '\s+', 2
-        if ($installedParts.Count -ne 2 -or $installedParts[0] -ne $packageName) {
-            throw "Cannot parse installed package version: $installed"
-        }
-        $version = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
-            @($secureConfigUnix, "%v", $packageName)
-        $repository = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
-            @($secureConfigUnix, "%r", $packageName)
-        $architecture = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
-            @($secureConfigUnix, "%a", $packageName)
-        $downloadUrl = Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
-            @($secureConfigUnix, "%l", $packageName)
-        $archiveSha256 = (Invoke-Msys2Scalar `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
-            @($secureConfigUnix, "%h", $packageName)).ToLowerInvariant()
-        $licenses = @(
-            Invoke-Msys2 `
-                'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "$3"' `
-                @($secureConfigUnix, "%L", $packageName) |
-                ForEach-Object { ([string]$_).Trim() } |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-        )
-        if ($installedParts[1] -ne $version) {
-            throw "Installed package is not the current signed repository version: $packageName installed=$($installedParts[1]) repository=$version. Update MSYS2 first."
+        $repositoryPackage = $repositoryMetadata[$packageName]
+        $version = [string]$repositoryPackage.version
+        $repository = [string]$repositoryPackage.repository
+        $architecture = [string]$repositoryPackage.architecture
+        $downloadUrl = [string]$repositoryPackage.downloadUrl
+        $archiveSha256 = [string]$repositoryPackage.archiveSha256
+        $licenses = @($repositoryPackage.licenses)
+        if ([string]$installedVersions[$packageName] -ne $version) {
+            throw "Installed package is not the current signed repository version: $packageName installed=$($installedVersions[$packageName]) repository=$version. Update MSYS2 first."
         }
         if ($repository -ne "ucrt64" -or
             $downloadUrl -notmatch '^https://' -or
@@ -237,14 +273,16 @@ Include = /etc/pacman.d/mirrorlist.mingw
         }
     }
 
-    foreach ($package in $packageMetadata) {
-        Invoke-Msys2 `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddw --noconfirm --cachedir "$2" -- "$3"' `
-            @($secureConfigUnix, $packageCacheUnix, [string]$package.name) | Out-Null
-        Invoke-Msys2 `
-            'LANG=C PATH=/usr/bin /usr/bin/pacman -Qkk -- "$1"' `
-            @([string]$package.name) | Out-Null
+    # One download transaction preserves the same Required/TrustedOnly checks
+    # while avoiding a separate repository transaction for every package.
+    Invoke-Msys2 `
+        'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddw --noconfirm --cachedir "$2" -- "${@:3}"' `
+        @($secureConfigUnix, $packageCacheUnix, $packageNames) | Out-Null
+    Invoke-Msys2 `
+        'LANG=C PATH=/usr/bin /usr/bin/pacman -Qkk -- "$@"' `
+        @($packageNames) | Out-Null
 
+    foreach ($package in $packageMetadata) {
         $uri = [System.Uri]::new([string]$package.downloadUrl)
         $archiveName = [System.Uri]::UnescapeDataString([System.IO.Path]::GetFileName($uri.AbsolutePath))
         if ([string]::IsNullOrWhiteSpace($archiveName) -or
