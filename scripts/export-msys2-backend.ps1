@@ -173,7 +173,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
     $owners = @(
         Invoke-Msys2 `
             'LANG=C PATH=/usr/bin /usr/bin/pacman -Qqo -- "$@"' `
-            @($runtimePaths)
+            -Arguments $runtimePaths
     )
     if ($owners.Count -ne $runtimePaths.Count) {
         throw "Cannot map every runtime file to exactly one installed package. Paths=$($runtimePaths.Count) owners=$($owners.Count)"
@@ -194,7 +194,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
     foreach ($installed in @(
         Invoke-Msys2 `
             'LANG=C PATH=/usr/bin /usr/bin/pacman -Q -- "$@"' `
-            @($packageNames)
+            -Arguments $packageNames
     )) {
         $installedParts = ([string]$installed) -split '\s+', 2
         if ($installedParts.Count -ne 2 -or
@@ -209,11 +209,12 @@ Include = /etc/pacman.d/mirrorlist.mingw
     }
 
     $printFormat = "%n`t%v`t%r`t%a`t%l`t%h`t%L"
+    $repositoryQueryArguments = @($secureConfigUnix, $printFormat) + $packageNames
     $repositoryMetadata = @{}
     foreach ($metadataLine in @(
         Invoke-Msys2 `
             'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddp --print-format "$2" -- "${@:3}"' `
-            @($secureConfigUnix, $printFormat, $packageNames)
+            -Arguments $repositoryQueryArguments
     )) {
         $parts = ([string]$metadataLine) -split "`t", 7
         if ($parts.Count -ne 7 -or
@@ -275,12 +276,13 @@ Include = /etc/pacman.d/mirrorlist.mingw
 
     # One download transaction preserves the same Required/TrustedOnly checks
     # while avoiding a separate repository transaction for every package.
+    $downloadArguments = @($secureConfigUnix, $packageCacheUnix) + $packageNames
     Invoke-Msys2 `
         'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddw --noconfirm --cachedir "$2" -- "${@:3}"' `
-        @($secureConfigUnix, $packageCacheUnix, $packageNames) | Out-Null
+        -Arguments $downloadArguments | Out-Null
     Invoke-Msys2 `
         'LANG=C PATH=/usr/bin /usr/bin/pacman -Qkk -- "$@"' `
-        @($packageNames) | Out-Null
+        -Arguments $packageNames | Out-Null
 
     foreach ($package in $packageMetadata) {
         $uri = [System.Uri]::new([string]$package.downloadUrl)
