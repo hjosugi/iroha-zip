@@ -20,7 +20,7 @@ Updated: 2026-08-10
 - Five pinned fuzz targets, a successful initial bounded sanitizer campaign, isolated seeds, and deterministic minimized-regression promotion
 - Handle-retaining input/source snapshots and deterministic source-tree race tests for identity replacement, same-size mutation, rename, hardlinks, and symbolic links
 - Bounded Windows `GetFileInformationByHandleEx` directory enumeration, before/after directory-handle identity checks, and empty-directory replacement rejection between audit and copy
-- Created-archive full-root re-extraction in a second sandbox, before/after source and archive fingerprints, handle-retained create-new publication, eight deterministic root/mutation/mismatch tests, and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip
+- Deterministic, path/count/single-file/total-byte-bounded PAX creation input; staged-tree and PAX-stream post-backend fingerprints; created-archive full-root re-extraction in a second sandbox; handle-retained create-new publication; ten deterministic root/mutation/mismatch/budget tests; and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip through the production PAX path
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Safe UI Automation button paths for three folder-picker cancellations, Restore Defaults, and unsaved-change Cancel
@@ -38,7 +38,7 @@ Updated: 2026-08-10
 - Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
 - Split build/sign/package release boundary, strict three-EXE Authenticode publisher/EKU/timestamp verification, deterministic signature evidence, pinned SLSA provenance generation, and fail-closed immutable-release workflow parsing
 
-The current Linux suite contains 91 passing default-feature tests, plus the feature-gated minimized fuzz-regression gate (92 with all features). Windows CI additionally runs source-file and directory-handle sharing tests that verify open snapshots block writes and renames, plus two independent processes saving one configuration path.
+The current Linux suite contains 95 passing default-feature tests plus one explicitly invoked system-libarchive compatibility test. The feature-gated minimized fuzz-regression gate brings the normal all-feature count to 96. Windows CI additionally runs source-file and directory-handle sharing tests that verify open snapshots block writes and renames, plus two independent processes saving one configuration path.
 
 ## Performed by GitHub Actions
 

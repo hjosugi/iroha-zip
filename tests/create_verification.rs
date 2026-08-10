@@ -51,6 +51,7 @@ set -eu
 mode=
 archive=
 directory=
+source_archive=
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -c) mode=create ;;
@@ -64,6 +65,10 @@ while [ "$#" -gt 0 ]; do
             shift
             directory=$1
             ;;
+        @*)
+            source_archive=${{1#@}}
+            directory=${{source_archive%/*}}/source
+            ;;
     esac
     shift
 done
@@ -72,6 +77,9 @@ case "$mode" in
     create)
         if [ "{behavior}" = "mutate-source" ]; then
             printf 'bravo' > "$directory/alpha.txt"
+        fi
+        if [ "{behavior}" = "mutate-stream" ]; then
+            printf 'corrupt' > "$source_archive"
         fi
         printf 'archive-{behavior}' > "$archive"
         ;;
@@ -142,6 +150,21 @@ fn created_archive_is_reextracted_and_matched_before_publication() {
     assert_eq!(created, output);
     assert_eq!(fs::read(&created).unwrap(), b"archive-match");
     assert_eq!(fs::read(source.join("alpha.txt")).unwrap(), b"alpha");
+}
+
+#[test]
+fn pax_container_overhead_does_not_consume_the_source_single_file_limit() {
+    let directory = TestDirectory::new();
+    let source = source_tree(directory.path());
+    let backend = fake_backend(directory.path(), "match");
+    let output = directory.path().join("verified.zip");
+    let mut config = Config::default();
+    config.limits.max_single_file_bytes = 5;
+    config.limits.max_total_bytes = 9;
+
+    create::create_archive(&backend, &config, CreateFormat::Zip, &source, &output, true).unwrap();
+
+    assert!(output.exists());
 }
 
 #[test]
@@ -230,6 +253,64 @@ fn backend_source_mutation_cannot_publish() {
     assert!(error.contains("modified the staged source tree"));
     assert!(!output.exists());
     assert_eq!(fs::read(source.join("alpha.txt")).unwrap(), b"alpha");
+}
+
+#[test]
+fn backend_pax_stream_mutation_cannot_publish() {
+    let directory = TestDirectory::new();
+    let source = source_tree(directory.path());
+    let backend = fake_backend(directory.path(), "mutate-stream");
+    let output = directory.path().join("rejected.zip");
+
+    let error = create::create_archive(
+        &backend,
+        &Config::default(),
+        CreateFormat::Zip,
+        &source,
+        &output,
+        true,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("modified the bounded PAX source stream"));
+    assert!(!output.exists());
+}
+
+#[test]
+#[ignore = "requires /usr/bin/bsdtar from a system libarchive installation"]
+fn real_libarchive_accepts_the_bounded_pax_stream_for_all_create_formats() {
+    let directory = TestDirectory::new();
+    let source = source_tree(directory.path());
+    fs::create_dir(source.join("empty")).unwrap();
+    fs::write(source.join("日本語.txt"), "いろは".as_bytes()).unwrap();
+
+    let backend_root = directory.path().join("real-backend");
+    fs::create_dir(&backend_root).unwrap();
+    let executable = backend_root.join("bsdtar");
+    fs::copy("/usr/bin/bsdtar", &executable).unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o500)).unwrap();
+    let hash = backend::sha256_file(&executable).unwrap();
+    fs::write(
+        backend_root.join("backend-manifest.tsv"),
+        format!("IROHA-ZIP-BACKEND-MANIFEST\t1\nexecutable\tbsdtar\nsha256\t{hash}\tbsdtar\n"),
+    )
+    .unwrap();
+    let backend = BackendBundle::verify(&backend_root).unwrap();
+
+    for format in [
+        CreateFormat::Zip,
+        CreateFormat::SevenZip,
+        CreateFormat::Tar,
+        CreateFormat::TarGz,
+    ] {
+        let output = directory
+            .path()
+            .join(format!("verified.{}", format.expected_extension()));
+        create::create_archive(&backend, &Config::default(), format, &source, &output, true)
+            .unwrap();
+        assert!(fs::metadata(output).unwrap().len() > 0);
+    }
 }
 
 #[test]

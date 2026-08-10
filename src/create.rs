@@ -9,7 +9,7 @@ use crate::config::{Config, FilenameEncoding};
 use crate::error::{IrohaZipError, Result};
 use crate::platform::{ProcessSpec, Sandbox};
 use crate::snapshot::FileFingerprint;
-use crate::{monitor, policy, staging, transfer, util};
+use crate::{monitor, pax, policy, staging, transfer, util};
 
 pub fn create_archive(
     backend: &BackendBundle,
@@ -59,6 +59,9 @@ pub fn create_archive(
         let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
         let expected_source =
             transfer::copy_audited_tree_fingerprint(&source, &source_dir, &config.limits)?;
+        let source_archive = sandbox.root().join("source.pax.tar");
+        let source_archive_fingerprint =
+            pax::write_tree_archive(&source_dir, &source_archive, &config.limits)?;
         let _source_write_sealed = sandbox.seal_staged_source(&source_dir)?;
 
         let sandbox_archive = output_dir.join("archive.bin");
@@ -67,9 +70,9 @@ pub fn create_archive(
         let mut args = create_arguments(format);
         args.push(OsString::from("-f"));
         args.push(sandbox_archive.as_os_str().to_owned());
-        args.push(OsString::from("-C"));
-        args.push(source_dir.as_os_str().to_owned());
-        args.push(OsString::from("."));
+        let mut source_archive_argument = OsString::from("@");
+        source_archive_argument.push(source_archive.as_os_str());
+        args.push(source_archive_argument);
 
         let baseline = policy::measure_tree(sandbox.root())?;
         let transient_bytes = config
@@ -87,7 +90,8 @@ pub fn create_archive(
             config
                 .limits
                 .max_single_file_bytes
-                .max(config.limits.max_archive_bytes),
+                .max(config.limits.max_archive_bytes)
+                .max(source_archive_fingerprint.length()),
         )?;
 
         let result = sandbox.run(ProcessSpec {
@@ -115,6 +119,11 @@ pub fn create_archive(
             &config.limits,
             &expected_source,
             "backend modified the staged source tree while creating the archive",
+        )?;
+        require_file_fingerprint(
+            &source_archive,
+            &source_archive_fingerprint,
+            "backend modified the bounded PAX source stream while creating the archive",
         )?;
 
         let verified_archive = verify_created_archive(
@@ -146,6 +155,14 @@ pub fn create_archive(
         }
         Err(error) => sandbox.fail_after_cleanup(error),
     }
+}
+
+fn require_file_fingerprint(path: &Path, expected: &FileFingerprint, message: &str) -> Result<()> {
+    let observed = crate::snapshot::AuditedFile::open(path, expected.length())?;
+    if observed.fingerprint() != expected {
+        return Err(IrohaZipError::Policy(message.to_owned()));
+    }
+    Ok(())
 }
 
 fn open_verified_archive_for_publication(

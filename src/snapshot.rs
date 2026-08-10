@@ -117,11 +117,39 @@ impl AuditedFile {
     }
 
     fn copy_to_new_inner(&mut self, target: &Path) -> Result<u64> {
+        let mut output = platform::create_snapshot_target(target)?;
+        let copied = self.copy_to_writer(&mut output)?;
+        output
+            .flush()
+            .and_then(|()| output.sync_all())
+            .map_err(|error| {
+                IrohaZipError::io_path("cannot flush snapshot target", target, error)
+            })?;
+
+        platform::validate_open_snapshot_source(target, &output)?;
+        let target_state = metadata_state(target, &output)?;
+        if target_state.length != self.fingerprint.length {
+            return Err(IrohaZipError::Policy(format!(
+                "snapshot target length mismatch: {}",
+                target.display()
+            )));
+        }
+        verify_current_path(target, target_state.identity.as_ref())?;
+        let (target_length, target_hash) = hash_open_file(target, &mut output, copied)?;
+        if target_length != copied || target_hash != self.fingerprint.sha256 {
+            return Err(IrohaZipError::Policy(format!(
+                "snapshot target content mismatch: {}",
+                target.display()
+            )));
+        }
+        Ok(copied)
+    }
+
+    pub fn copy_to_writer<W: Write>(&mut self, output: &mut W) -> Result<u64> {
         self.verify_unchanged()?;
         self.file.seek(SeekFrom::Start(0)).map_err(|error| {
             IrohaZipError::io_path("cannot rewind snapshot source", &self.path, error)
         })?;
-        let mut output = platform::create_snapshot_target(target)?;
         let mut hasher = Sha256::new();
         let mut copied = 0u64;
         let mut buffer = [0u8; 128 * 1024];
@@ -139,38 +167,15 @@ impl AuditedFile {
                 return Err(changed_error(&self.path));
             }
             hasher.update(&buffer[..read]);
-            output.write_all(&buffer[..read]).map_err(|error| {
-                IrohaZipError::io_path("cannot write snapshot target", target, error)
-            })?;
+            output
+                .write_all(&buffer[..read])
+                .map_err(|error| IrohaZipError::io("cannot write snapshot bytes", error))?;
         }
         let copied_hash: [u8; 32] = hasher.finalize().into();
         if copied != self.fingerprint.length || copied_hash != self.fingerprint.sha256 {
             return Err(changed_error(&self.path));
         }
-        output
-            .flush()
-            .and_then(|()| output.sync_all())
-            .map_err(|error| {
-                IrohaZipError::io_path("cannot flush snapshot target", target, error)
-            })?;
-
         self.verify_unchanged()?;
-        platform::validate_open_snapshot_source(target, &output)?;
-        let target_state = metadata_state(target, &output)?;
-        if target_state.length != self.fingerprint.length {
-            return Err(IrohaZipError::Policy(format!(
-                "snapshot target length mismatch: {}",
-                target.display()
-            )));
-        }
-        verify_current_path(target, target_state.identity.as_ref())?;
-        let (target_length, target_hash) = hash_open_file(target, &mut output, copied)?;
-        if target_length != copied || target_hash != copied_hash {
-            return Err(IrohaZipError::Policy(format!(
-                "snapshot target content mismatch: {}",
-                target.display()
-            )));
-        }
         Ok(copied)
     }
 

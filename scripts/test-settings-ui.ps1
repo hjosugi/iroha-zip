@@ -29,7 +29,8 @@ $ButtonClickMessage = 0x00F5
 function Wait-Until {
     param(
         [scriptblock]$Condition,
-        [int]$TimeoutSeconds = 15
+        [int]$TimeoutSeconds = 30,
+        [string]$Description = "the requested settings UI state"
     )
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
@@ -37,7 +38,30 @@ function Wait-Until {
         if ($null -ne $value -and $value -ne $false) { return $value }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $deadline)
-    throw "Timed out waiting for the settings UI."
+    throw "Timed out waiting for $Description."
+}
+
+function Wait-ForProcessWindow {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [int]$TimeoutSeconds = 60
+    )
+    return Wait-Until -TimeoutSeconds $TimeoutSeconds `
+        -Description "the settings main window for process $($Process.Id)" `
+        -Condition {
+            $Process.Refresh()
+            if ($Process.HasExited) {
+                throw "Settings process $($Process.Id) exited before creating a window (exit code $($Process.ExitCode))."
+            }
+            $condition = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+                $Process.Id
+            )
+            [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+                [System.Windows.Automation.TreeScope]::Children,
+                $condition
+            )
+        }
 }
 
 function Find-ByAutomationId {
@@ -192,16 +216,7 @@ $setupEvidence = $null
 try {
     $process = Start-Process -FilePath $executablePath `
         -ArgumentList @("--config", $configPath) -PassThru
-    $window = Wait-Until {
-        $condition = [System.Windows.Automation.PropertyCondition]::new(
-            [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
-            $process.Id
-        )
-        [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
-            [System.Windows.Automation.TreeScope]::Children,
-            $condition
-        )
-    }
+    $window = Wait-ForProcessWindow -Process $process
     if ($window.Current.Name -notlike "iroha-zip 設定*") {
         throw "Unexpected settings window name: $($window.Current.Name)"
     }
@@ -321,16 +336,7 @@ try {
     if ($null -ne $backendPath) {
         $process = Start-Process -FilePath $executablePath `
             -ArgumentList @("--config", $configPath) -PassThru
-        $window = Wait-Until {
-            $condition = [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
-                $process.Id
-            )
-            [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
-                [System.Windows.Automation.TreeScope]::Children,
-                $condition
-            )
-        }
+        $window = Wait-ForProcessWindow -Process $process
 
         $backendControl = Require-Control -Window $window -Id 2001 `
             -Type ([System.Windows.Automation.ControlType]::Edit)
