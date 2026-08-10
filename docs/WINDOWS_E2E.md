@@ -2,7 +2,7 @@
 
 Updated: 2026-08-10
 
-This document defines the automated SAFE-001 evidence contract. The workflow and harness are implemented, but the current local branch has not yet produced a GitHub Actions artifact. A parsed workflow is not a passing Windows result.
+This document defines the automated SAFE-001 evidence contract. The workflow and harness have run on both fixed-label GitHub runners, but the archive matrix currently stops at a reproducible MSYS2 `bsdtar.exe` access violation during the first sandboxed ZIP creation. A failing diagnostic artifact is not a passing Windows result.
 
 ## Automated matrix
 
@@ -13,7 +13,7 @@ Primary runner references:
 - [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 - [GitHub Actions runner images and labels](https://github.com/actions/runner-images#available-images)
 
-Each job builds the release executables, exports a current MSYS2 UCRT64 libarchive bundle through the signed-package evidence path, and runs:
+Each job builds the release executables, exports a current MSYS2 UCRT64 libarchive bundle through the signed-package evidence path, and runs the matrix below. The Server 2025 job also reuses that export for supported/unsupported provenance, rollback, strict-source, and evidence-tamper gates; CI does not perform a redundant third export in the fast test matrix.
 
 ```powershell
 ./scripts/test-windows-e2e.ps1 `

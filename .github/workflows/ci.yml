@@ -23,16 +23,6 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
-      - name: Install a current MSYS2 UCRT64 libarchive source
-        if: runner.os == 'Windows'
-        id: msys2
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
-        with:
-          msystem: UCRT64
-          update: true
-          cache: true
-          install: mingw-w64-ucrt-x86_64-libarchive
-
       - name: Install pinned Rust toolchain
         shell: bash
         run: |
@@ -66,19 +56,67 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets --locked
 
-      - name: Build release binaries
-        run: cargo build --release --all-targets --locked
-
-      - name: Verify supported and unsupported backend evidence flows
+      - name: Build Windows UI binary
         if: runner.os == 'Windows'
+        run: cargo build --bins --locked
+
+      - name: Exercise native settings accessibility contract
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          ./scripts/test-settings-ui.ps1
+          -Executable ./target/debug/iroha-zip-settings.exe
+
+  windows-e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install a current MSYS2 UCRT64 libarchive source
+        id: msys2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: UCRT64
+          update: true
+          cache: true
+          install: mingw-w64-ucrt-x86_64-libarchive
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: ci-e2e-${{ matrix.os }}
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build release binaries
+        run: cargo build --release --locked
+
+      - name: Export a verified backend
         shell: pwsh
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: >-
+          ./scripts/export-msys2-backend.ps1
+          -Msys2Root $env:MSYS2_ROOT
+          -DestinationDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
+
+      - name: Verify supported and unsupported backend evidence flows
+        if: matrix.os == 'windows-2025'
+        shell: pwsh
         run: |
-          $verified = Join-Path $env:RUNNER_TEMP 'iroha-zip-verified-backend'
-          ./scripts/export-msys2-backend.ps1 `
-            -Msys2Root $env:MSYS2_ROOT `
-            -DestinationDirectory $verified
+          $verified = Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend'
           ./target/release/iroha-zip.exe verify-backend-evidence `
             $verified --require-supported
           if ($LASTEXITCODE -ne 0) {
@@ -155,58 +193,6 @@ jobs:
             throw 'Tampered evidence unexpectedly passed validation.'
           }
           $global:LASTEXITCODE = 0
-
-      - name: Exercise native settings accessibility contract
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: >-
-          ./scripts/test-settings-ui.ps1
-          -Executable ./target/release/iroha-zip-settings.exe
-
-  windows-e2e:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2022, windows-2025]
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-
-      - name: Install a current MSYS2 UCRT64 libarchive source
-        id: msys2
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
-        with:
-          msystem: UCRT64
-          update: true
-          cache: true
-          install: mingw-w64-ucrt-x86_64-libarchive
-
-      - name: Install pinned Rust toolchain
-        shell: bash
-        run: |
-          rustup toolchain install 1.97.1 --profile minimal
-          rustup default 1.97.1
-
-      - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: ci-e2e-${{ matrix.os }}
-          cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Build release binaries
-        run: cargo build --release --locked
-
-      - name: Export a verified backend
-        shell: pwsh
-        env:
-          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: >-
-          ./scripts/export-msys2-backend.ps1
-          -Msys2Root $env:MSYS2_ROOT
-          -DestinationDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
 
       - name: Enable failure-only backend crash evidence
         shell: pwsh
