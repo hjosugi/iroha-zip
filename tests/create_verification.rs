@@ -82,7 +82,11 @@ case "$mode" in
             printf 'bravo' > "$directory/alpha.txt"
         fi
         if [ "{behavior}" = "mutate-stream" ]; then
-            printf 'corrupt' > "$source_archive"
+            if [ "$source_archive" = "-" ]; then
+                printf 'corrupt' > "$PWD/source.pax.tar"
+            else
+                printf 'corrupt' > "$source_archive"
+            fi
         fi
         printf 'archive-{behavior}' > "$archive"
         ;;

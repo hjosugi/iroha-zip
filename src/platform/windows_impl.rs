@@ -880,10 +880,7 @@ fn run_in_appcontainer(
     let stderr = File::create(&spec.stderr_log).map_err(|error| {
         IrohaZipError::io_path("cannot create process stderr log", &spec.stderr_log, error)
     })?;
-    let stdin = OpenOptions::new()
-        .read(true)
-        .open("NUL")
-        .map_err(|error| IrohaZipError::io("cannot open NUL for sandbox stdin", error))?;
+    let stdin = open_child_stdin(&spec)?;
 
     let stdout_handle = raw_handle(&stdout);
     let stderr_handle = raw_handle(&stderr);
@@ -1155,6 +1152,7 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
     let stderr = File::create(&spec.stderr_log).map_err(|error| {
         IrohaZipError::io_path("cannot create process stderr log", &spec.stderr_log, error)
     })?;
+    let stdin = open_child_stdin(&spec)?;
 
     let mut command = Command::new(&spec.program);
     command
@@ -1162,7 +1160,7 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
         .current_dir(&spec.current_dir)
         .env_clear()
         .envs(minimal_environment_pairs(&spec.program, &spec.current_dir))
-        .stdin(Stdio::null())
+        .stdin(Stdio::from(stdin))
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr))
         .creation_flags(CREATE_NO_WINDOW_RAW);
@@ -1205,6 +1203,19 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
         }
         thread::sleep(Duration::from_millis(200));
     }
+}
+
+fn open_child_stdin(spec: &ProcessSpec) -> Result<File> {
+    let Some(path) = spec.stdin_file.as_deref() else {
+        return OpenOptions::new()
+            .read(true)
+            .open("NUL")
+            .map_err(|error| IrohaZipError::io("cannot open NUL for sandbox stdin", error));
+    };
+    validate_regular_file_security(path)?;
+    let file = open_snapshot_source(path)?;
+    validate_open_snapshot_source(path, &file)?;
+    Ok(file)
 }
 
 fn wait_for_process(

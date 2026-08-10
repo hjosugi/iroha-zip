@@ -174,6 +174,14 @@ impl Sandbox {
         let stderr = File::create(&spec.stderr_log).map_err(|error| {
             IrohaZipError::io_path("cannot create process stderr log", &spec.stderr_log, error)
         })?;
+        let stdin = if let Some(path) = spec.stdin_file.as_deref() {
+            validate_regular_file_security(path)?;
+            let file = open_snapshot_source(path)?;
+            validate_open_snapshot_source(path, &file)?;
+            Some(file)
+        } else {
+            None
+        };
 
         let mut environment = BTreeMap::<OsString, OsString>::new();
         environment.insert(OsString::from("LC_ALL"), OsString::from("C.UTF-8"));
@@ -184,18 +192,22 @@ impl Sandbox {
             environment.insert(OsString::from("PATH"), parent.as_os_str().to_owned());
         }
 
-        let mut child = Command::new(&spec.program)
+        let mut command = Command::new(&spec.program);
+        command
             .args(&spec.args)
             .current_dir(&spec.current_dir)
             .env_clear()
             .envs(environment)
-            .stdin(Stdio::null())
             .stdout(Stdio::from(stdout))
-            .stderr(Stdio::from(stderr))
-            .spawn()
-            .map_err(|error| {
-                IrohaZipError::io_path("cannot start archive backend", &spec.program, error)
-            })?;
+            .stderr(Stdio::from(stderr));
+        if let Some(stdin) = stdin {
+            command.stdin(Stdio::from(stdin));
+        } else {
+            command.stdin(Stdio::null());
+        }
+        let mut child = command.spawn().map_err(|error| {
+            IrohaZipError::io_path("cannot start archive backend", &spec.program, error)
+        })?;
 
         let started = Instant::now();
         loop {

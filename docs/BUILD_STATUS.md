@@ -20,7 +20,7 @@ Updated: 2026-08-10
 - Five pinned fuzz targets, a successful initial bounded sanitizer campaign, isolated seeds, and deterministic minimized-regression promotion
 - Handle-retaining input/source snapshots and deterministic source-tree race tests for identity replacement, same-size mutation, rename, hardlinks, and symbolic links
 - Bounded Windows `GetFileInformationByHandleEx` directory enumeration, before/after directory-handle identity checks, and empty-directory replacement rejection between audit and copy
-- Deterministic, path/count/single-file/total-byte-bounded PAX creation input; staged-tree and PAX-stream post-backend fingerprints; created-archive full-root re-extraction in a second sandbox; handle-retained create-new publication; ten deterministic root/mutation/mismatch/budget tests; and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip through the production PAX path
+- Deterministic, path/count/single-file/total-byte-bounded PAX creation input delivered as an audited inherited stdin handle (`@-`); staged-tree and PAX-stream post-backend fingerprints; created-archive full-root re-extraction in a second sandbox; handle-retained create-new publication; ten deterministic root/mutation/mismatch/budget tests; and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip through the production PAX path
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Safe UI Automation button paths for three folder-picker cancellations, Restore Defaults, and unsaved-change Cancel
