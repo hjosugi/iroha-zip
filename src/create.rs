@@ -70,9 +70,7 @@ pub fn create_archive(
         let mut args = create_arguments(format);
         args.push(OsString::from("-f"));
         args.push(sandbox_archive.as_os_str().to_owned());
-        let mut source_archive_argument = OsString::from("@");
-        source_archive_argument.push(source_archive.as_os_str());
-        args.push(source_archive_argument);
+        args.push(OsString::from("@source.pax.tar"));
 
         let baseline = policy::measure_tree(sandbox.root())?;
         let transient_bytes = config

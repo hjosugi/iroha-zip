@@ -67,7 +67,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         @*)
             source_archive=${{1#@}}
-            directory=${{source_archive%/*}}/source
+            case "$source_archive" in
+                */*) directory=${{source_archive%/*}}/source ;;
+                *) directory=$PWD/source ;;
+            esac
             ;;
     esac
     shift

@@ -21,10 +21,14 @@ public static class IrohaZipUiAutomationNative {
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessageW(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetParent(IntPtr window);
 }
 "@
 
 $ButtonClickMessage = 0x00F5
+$CommandMessage = 0x0111
 
 function Wait-Until {
     param(
@@ -155,11 +159,16 @@ function Invoke-Control {
     param([System.Windows.Automation.AutomationElement]$Control)
     $Control.SetFocus()
     Start-Sleep -Milliseconds 100
+    $controlHandle = [IntPtr]$Control.Current.NativeWindowHandle
+    $parentHandle = [IrohaZipUiAutomationNative]::GetParent($controlHandle)
+    if ($parentHandle -eq [IntPtr]::Zero) {
+        throw "Control $($Control.Current.AutomationId) has no native parent window."
+    }
     if (-not [IrohaZipUiAutomationNative]::PostMessageW(
-        [IntPtr]$Control.Current.NativeWindowHandle,
-        $ButtonClickMessage,
-        [UIntPtr]::Zero,
-        [IntPtr]::Zero
+        $parentHandle,
+        $CommandMessage,
+        [UIntPtr]([uint64]$Control.Current.AutomationId),
+        $controlHandle
     )) {
         throw "Cannot activate control $($Control.Current.AutomationId)."
     }
