@@ -41,7 +41,6 @@ fn write_tree_archive_inner(
 ) -> Result<FileFingerprint> {
     let file = platform::create_snapshot_target(output)?;
     let mut archive = ArchiveWriter::new(file);
-    archive.write_entry(source_root, None, EntryKind::Directory, 0, limits)?;
     for (relative, kind) in entries {
         let path = source_root.join(relative);
         match kind {
@@ -56,13 +55,13 @@ fn write_tree_archive_inner(
                         path.display()
                     )));
                 }
-                archive.write_entry(&path, Some(relative), *kind, 0, limits)?;
+                archive.write_entry(&path, relative, *kind, 0, limits)?;
             }
             EntryKind::File => {
                 let mut snapshot = AuditedFile::open(&path, limits.max_single_file_bytes)?;
                 archive.write_entry(
                     &path,
-                    Some(relative),
+                    relative,
                     *kind,
                     snapshot.fingerprint().length(),
                     limits,
@@ -195,17 +194,15 @@ impl ArchiveWriter {
     fn write_entry(
         &mut self,
         path: &Path,
-        relative: Option<&Path>,
+        relative: &Path,
         kind: EntryKind,
         size: u64,
         limits: &Limits,
     ) -> Result<()> {
-        if relative.is_some() {
-            let metadata = fs::symlink_metadata(path).map_err(|error| {
-                IrohaZipError::io_path("cannot recheck PAX source entry", path, error)
-            })?;
-            platform::validate_extracted_entry_security(path, &metadata)?;
-        }
+        let metadata = fs::symlink_metadata(path).map_err(|error| {
+            IrohaZipError::io_path("cannot recheck PAX source entry", path, error)
+        })?;
+        platform::validate_extracted_entry_security(path, &metadata)?;
         let archive_path = archive_path(relative, kind, limits)?;
         let mut attributes = pax_record("path", &archive_path)?;
         if matches!(kind, EntryKind::File) {
@@ -299,30 +296,28 @@ impl Write for ArchiveWriter {
     }
 }
 
-fn archive_path(relative: Option<&Path>, kind: EntryKind, limits: &Limits) -> Result<String> {
+fn archive_path(relative: &Path, kind: EntryKind, limits: &Limits) -> Result<String> {
     let mut value = String::from("./");
-    if let Some(relative) = relative {
-        policy::validate_relative_path(relative, limits)?;
-        let mut first = true;
-        for component in relative.components() {
-            let Component::Normal(name) = component else {
-                return Err(IrohaZipError::Policy(format!(
-                    "invalid PAX path component: {}",
-                    relative.display()
-                )));
-            };
-            if !first {
-                value.push('/');
-            }
-            let text = name.to_str().ok_or_else(|| {
-                IrohaZipError::Policy(format!(
-                    "non-Unicode PAX path is rejected: {}",
-                    relative.display()
-                ))
-            })?;
-            value.push_str(text);
-            first = false;
+    policy::validate_relative_path(relative, limits)?;
+    let mut first = true;
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return Err(IrohaZipError::Policy(format!(
+                "invalid PAX path component: {}",
+                relative.display()
+            )));
+        };
+        if !first {
+            value.push('/');
         }
+        let text = name.to_str().ok_or_else(|| {
+            IrohaZipError::Policy(format!(
+                "non-Unicode PAX path is rejected: {}",
+                relative.display()
+            ))
+        })?;
+        value.push_str(text);
+        first = false;
     }
     if matches!(kind, EntryKind::Directory) && !value.ends_with('/') {
         value.push('/');
@@ -408,16 +403,12 @@ mod tests {
     fn archive_paths_use_portable_separators_and_directory_markers() {
         let limits = Limits::default();
         assert_eq!(
-            archive_path(Some(Path::new("nested/file.txt")), EntryKind::File, &limits).unwrap(),
+            archive_path(Path::new("nested/file.txt"), EntryKind::File, &limits).unwrap(),
             "./nested/file.txt"
         );
         assert_eq!(
-            archive_path(Some(Path::new("nested")), EntryKind::Directory, &limits).unwrap(),
+            archive_path(Path::new("nested"), EntryKind::Directory, &limits).unwrap(),
             "./nested/"
-        );
-        assert_eq!(
-            archive_path(None, EntryKind::Directory, &limits).unwrap(),
-            "./"
         );
     }
 }

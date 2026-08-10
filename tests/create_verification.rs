@@ -311,6 +311,20 @@ fn real_libarchive_accepts_the_bounded_pax_stream_for_all_create_formats() {
             .unwrap();
         assert!(fs::metadata(output).unwrap().len() > 0);
     }
+
+    let empty_source = directory.path().join("empty-source");
+    fs::create_dir(&empty_source).unwrap();
+    let empty_output = directory.path().join("empty.zip");
+    create::create_archive(
+        &backend,
+        &Config::default(),
+        CreateFormat::Zip,
+        &empty_source,
+        &empty_output,
+        true,
+    )
+    .unwrap();
+    assert!(fs::metadata(empty_output).unwrap().len() > 0);
 }
 
 #[test]

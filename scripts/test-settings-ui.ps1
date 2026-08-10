@@ -153,6 +153,8 @@ function Invoke-DialogButton {
 
 function Invoke-Control {
     param([System.Windows.Automation.AutomationElement]$Control)
+    $Control.SetFocus()
+    Start-Sleep -Milliseconds 100
     if (-not [IrohaZipUiAutomationNative]::PostMessageW(
         [IntPtr]$Control.Current.NativeWindowHandle,
         $ButtonClickMessage,
@@ -170,7 +172,7 @@ function Wait-ForNoSecondaryWindow {
     )
     Wait-Until {
         $null -eq (Find-SecondaryWindow -Process $Process -MainWindow $MainWindow)
-    } | Out-Null
+    } -Description "the secondary settings window to close" | Out-Null
 }
 
 function Invoke-AndCancelFolderPicker {
@@ -179,10 +181,11 @@ function Invoke-AndCancelFolderPicker {
         [System.Windows.Automation.AutomationElement]$MainWindow,
         [System.Windows.Automation.AutomationElement]$Control
     )
+    Write-Host "Opening and cancelling folder picker for control $($Control.Current.AutomationId)."
     Invoke-Control $Control
     $dialog = Wait-Until {
         Find-SecondaryWindow -Process $Process -MainWindow $MainWindow
-    }
+    } -Description "folder picker for control $($Control.Current.AutomationId)"
     if ($dialog.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
         throw "Folder picker was not exposed as an accessible window."
     }
@@ -267,7 +270,7 @@ try {
             [System.Windows.Automation.AutomationElement]::NameProperty
         )
         $name -match '\s\*$'
-    } | Out-Null
+    } -Description "the settings title to show unsaved changes" | Out-Null
     if (Test-Path -LiteralPath $configPath) {
         throw "The UI automation smoke test must not save its temporary configuration."
     }
@@ -275,7 +278,7 @@ try {
     Invoke-Control $controls[1201]
     $restoreConfirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
-    }
+    } -Description "Restore Defaults cancellation confirmation"
     Invoke-DialogButton -Dialog $restoreConfirmation -Id 7
     Wait-ForNoSecondaryWindow -Process $process -MainWindow $window
     if ($timeoutPattern.Current.Value -ne "301") {
@@ -285,19 +288,20 @@ try {
     Invoke-Control $controls[1201]
     $restoreConfirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
-    }
+    } -Description "Restore Defaults acceptance confirmation"
     Invoke-DialogButton -Dialog $restoreConfirmation -Id 6
     Wait-ForNoSecondaryWindow -Process $process -MainWindow $window
-    Wait-Until { $timeoutPattern.Current.Value -eq "300" } | Out-Null
+    Wait-Until { $timeoutPattern.Current.Value -eq "300" } `
+        -Description "the restored timeout value" | Out-Null
     Wait-Until {
         $motwPattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On
-    } | Out-Null
+    } -Description "the restored Mark-of-the-Web setting" | Out-Null
     Wait-Until {
         $name = $window.GetCurrentPropertyValue(
             [System.Windows.Automation.AutomationElement]::NameProperty
         )
         $name -notmatch '\s\*$'
-    } | Out-Null
+    } -Description "the clean settings title after restoring defaults" | Out-Null
 
     $pathPattern.SetValue($longDirectory)
     $timeoutPattern.SetValue("301")
@@ -307,12 +311,12 @@ try {
             [System.Windows.Automation.AutomationElement]::NameProperty
         )
         $name -match '\s\*$'
-    } | Out-Null
+    } -Description "the second unsaved settings title" | Out-Null
 
     Invoke-Control $controls[2]
     $confirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
-    }
+    } -Description "unsaved-change cancellation confirmation"
     if ($confirmation.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
         throw "Unsaved-change confirmation was not exposed as an accessible window."
     }
@@ -325,7 +329,7 @@ try {
     Invoke-Control $controls[2]
     $confirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
-    }
+    } -Description "unsaved-change discard confirmation"
     Invoke-DialogButton -Dialog $confirmation -Id 6
     if (-not $process.WaitForExit(15000)) {
         throw "Settings did not exit after confirming unsaved-change discard."
@@ -350,12 +354,13 @@ try {
         Invoke-Control $save
         $savedMessage = Wait-Until {
             Find-SecondaryWindow -Process $process -MainWindow $window
-        }
+        } -Description "configuration-saved message"
         Dismiss-Message $savedMessage
         Wait-Until {
             $null -eq (Find-SecondaryWindow -Process $process -MainWindow $window)
-        } | Out-Null
-        Wait-Until { Test-Path -LiteralPath $configPath -PathType Leaf } | Out-Null
+        } -Description "the configuration-saved message to close" | Out-Null
+        Wait-Until { Test-Path -LiteralPath $configPath -PathType Leaf } `
+            -Description "the saved configuration file" | Out-Null
         $savedConfig = [System.IO.File]::ReadAllText($configPath)
         $escapedBackendPath = $backendPath.Replace(
             [string][char]92,
@@ -372,7 +377,7 @@ try {
         Invoke-Control $doctor
         $doctorMessage = Wait-Until -TimeoutSeconds 90 -Condition {
             Find-SecondaryWindow -Process $process -MainWindow $window
-        }
+        } -Description "the backend/AppContainer diagnosis result"
         $textCondition = [System.Windows.Automation.PropertyCondition]::new(
             [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
             [System.Windows.Automation.ControlType]::Text
@@ -389,7 +394,7 @@ try {
         Dismiss-Message $doctorMessage
         Wait-Until {
             $null -eq (Find-SecondaryWindow -Process $process -MainWindow $window)
-        } | Out-Null
+        } -Description "the diagnosis result to close" | Out-Null
 
         $setupEvidence = [ordered]@{
             schemaVersion = 1
