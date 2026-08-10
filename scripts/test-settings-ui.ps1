@@ -24,6 +24,9 @@ public static class IrohaZipUiAutomationNative {
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetParent(IntPtr window);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetLastActivePopup(IntPtr window);
 }
 "@
 
@@ -115,6 +118,12 @@ function Find-SecondaryWindow {
         [System.Diagnostics.Process]$Process,
         [System.Windows.Automation.AutomationElement]$MainWindow
     )
+    $mainHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
+    $popupHandle = [IrohaZipUiAutomationNative]::GetLastActivePopup($mainHandle)
+    if ($popupHandle -ne [IntPtr]::Zero -and $popupHandle -ne $mainHandle) {
+        $popup = [System.Windows.Automation.AutomationElement]::FromHandle($popupHandle)
+        if ($null -ne $popup) { return $popup }
+    }
     $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
         [System.Windows.Automation.TreeScope]::Children,
         [System.Windows.Automation.Condition]::TrueCondition
@@ -156,16 +165,20 @@ function Invoke-DialogButton {
 }
 
 function Invoke-Control {
-    param([System.Windows.Automation.AutomationElement]$Control)
+    param(
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [System.Windows.Automation.AutomationElement]$Control
+    )
     $Control.SetFocus()
     Start-Sleep -Milliseconds 100
     $controlHandle = [IntPtr]$Control.Current.NativeWindowHandle
+    $mainHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
     $parentHandle = [IrohaZipUiAutomationNative]::GetParent($controlHandle)
-    if ($parentHandle -eq [IntPtr]::Zero) {
-        throw "Control $($Control.Current.AutomationId) has no native parent window."
+    if ($parentHandle -ne $mainHandle) {
+        throw "Control $($Control.Current.AutomationId) is not owned by the expected main window."
     }
     if (-not [IrohaZipUiAutomationNative]::PostMessageW(
-        $parentHandle,
+        $mainHandle,
         $CommandMessage,
         [UIntPtr]([uint64]$Control.Current.AutomationId),
         $controlHandle
@@ -191,7 +204,7 @@ function Invoke-AndCancelFolderPicker {
         [System.Windows.Automation.AutomationElement]$Control
     )
     Write-Host "Opening and cancelling folder picker for control $($Control.Current.AutomationId)."
-    Invoke-Control $Control
+    Invoke-Control -MainWindow $MainWindow -Control $Control
     $dialog = Wait-Until {
         Find-SecondaryWindow -Process $Process -MainWindow $MainWindow
     } -Description "folder picker for control $($Control.Current.AutomationId)"
@@ -284,7 +297,7 @@ try {
         throw "The UI automation smoke test must not save its temporary configuration."
     }
 
-    Invoke-Control $controls[1201]
+    Invoke-Control -MainWindow $window -Control $controls[1201]
     $restoreConfirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
     } -Description "Restore Defaults cancellation confirmation"
@@ -294,7 +307,7 @@ try {
         throw "Cancelling Restore Defaults unexpectedly changed the timeout."
     }
 
-    Invoke-Control $controls[1201]
+    Invoke-Control -MainWindow $window -Control $controls[1201]
     $restoreConfirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
     } -Description "Restore Defaults acceptance confirmation"
@@ -322,7 +335,7 @@ try {
         $name -match '\s\*$'
     } -Description "the second unsaved settings title" | Out-Null
 
-    Invoke-Control $controls[2]
+    Invoke-Control -MainWindow $window -Control $controls[2]
     $confirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
     } -Description "unsaved-change cancellation confirmation"
@@ -335,7 +348,7 @@ try {
         throw "Cancelling the unsaved-change confirmation unexpectedly closed settings."
     }
 
-    Invoke-Control $controls[2]
+    Invoke-Control -MainWindow $window -Control $controls[2]
     $confirmation = Wait-Until {
         Find-SecondaryWindow -Process $process -MainWindow $window
     } -Description "unsaved-change discard confirmation"
@@ -360,7 +373,7 @@ try {
 
         $save = Require-Control -Window $window -Id 1 `
             -Type ([System.Windows.Automation.ControlType]::Button)
-        Invoke-Control $save
+        Invoke-Control -MainWindow $window -Control $save
         $savedMessage = Wait-Until {
             Find-SecondaryWindow -Process $process -MainWindow $window
         } -Description "configuration-saved message"
@@ -383,7 +396,7 @@ try {
         $doctor = Require-Control -Window $window -Id 1002 `
             -Type ([System.Windows.Automation.ControlType]::Button)
         $doctorStarted = [DateTime]::UtcNow
-        Invoke-Control $doctor
+        Invoke-Control -MainWindow $window -Control $doctor
         $doctorMessage = Wait-Until -TimeoutSeconds 90 -Condition {
             Find-SecondaryWindow -Process $process -MainWindow $window
         } -Description "the backend/AppContainer diagnosis result"
