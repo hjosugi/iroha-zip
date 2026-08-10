@@ -28,6 +28,15 @@ fn form_round_trip_preserves_every_configuration_field() {
 }
 
 #[test]
+fn default_backend_display_round_trips_without_a_false_dirty_change() {
+    let config = Config::default();
+    assert_eq!(
+        SettingsForm::from_config(&config).into_config().unwrap(),
+        config
+    );
+}
+
+#[test]
 fn byte_fields_accept_binary_units_and_underscores() {
     let mut form = SettingsForm::from_config(&Config::default());
     form.max_archive_bytes = "1_024 MiB".to_owned();

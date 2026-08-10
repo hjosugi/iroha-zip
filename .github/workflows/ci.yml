@@ -208,6 +208,17 @@ jobs:
           -Msys2Root $env:MSYS2_ROOT
           -DestinationDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
 
+      - name: Enable failure-only backend crash evidence
+        shell: pwsh
+        run: |
+          $dumpRoot = Join-Path $env:RUNNER_TEMP 'bsdtar-crash-dumps'
+          New-Item -ItemType Directory -Path $dumpRoot -Force | Out-Null
+          $key = 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\bsdtar.exe'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpFolder -PropertyType ExpandString -Value $dumpRoot -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpCount -PropertyType DWord -Value 2 -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpType -PropertyType DWord -Value 1 -Force | Out-Null
+
       - name: Exercise archive and isolation matrix
         shell: pwsh
         run: >-
@@ -235,6 +246,30 @@ jobs:
           -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
           -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'settings-e2e.json')
 
+      - name: Summarize backend crash evidence
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-WinEvent -FilterHashtable @{
+            LogName = 'Application'
+            StartTime = [DateTime]::UtcNow.AddMinutes(-30)
+          } -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match 'bsdtar' } |
+            Select-Object -First 10 TimeCreated, ProviderName, Id, Message |
+            Format-List
+          $dumpRoot = Join-Path $env:RUNNER_TEMP 'bsdtar-crash-dumps'
+          $dumps = @(Get-ChildItem -LiteralPath $dumpRoot -Filter '*.dmp' -ErrorAction SilentlyContinue)
+          $debugger = @(
+            "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe",
+            "$env:ProgramFiles\Windows Kits\10\Debuggers\x64\cdb.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          foreach ($dump in $dumps) {
+            Write-Host "Crash dump: $($dump.FullName) ($($dump.Length) bytes)"
+            if ($null -ne $debugger) {
+              & $debugger -z $dump.FullName -c '!analyze -v; .ecxr; k; q'
+            }
+          }
+
       - name: Upload machine-readable Windows evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -244,6 +279,7 @@ jobs:
             ${{ runner.temp }}/windows-e2e.json
             ${{ runner.temp }}/settings-e2e.json
             ${{ runner.temp }}/malicious-corpus.json
+            ${{ runner.temp }}/bsdtar-crash-dumps/*.dmp
           if-no-files-found: warn
           retention-days: 14
 

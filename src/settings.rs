@@ -2,8 +2,8 @@ use std::fmt;
 use std::path::PathBuf;
 
 use crate::config::{
-    AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode, MAX_MEMORY_LIMIT_MIB,
-    MAX_TIMEOUT_SECONDS, MIN_MEMORY_LIMIT_MIB, MIN_TIMEOUT_SECONDS,
+    AttachmentHandoffPolicy, Config, DEFAULT_BACKEND_DIRECTORY, FilenameEncoding, IsolationMode,
+    MAX_MEMORY_LIMIT_MIB, MAX_TIMEOUT_SECONDS, MIN_MEMORY_LIMIT_MIB, MIN_TIMEOUT_SECONDS,
 };
 
 pub const BASE_DPI: u32 = 96;
@@ -225,7 +225,7 @@ impl SettingsForm {
             .backend
             .directory
             .as_deref()
-            .unwrap_or_else(|| std::path::Path::new("backend/libarchive"));
+            .unwrap_or_else(|| std::path::Path::new(DEFAULT_BACKEND_DIRECTORY));
         Self {
             backend_directory: backend.to_string_lossy().into_owned(),
             timeout_seconds: config.sandbox.timeout_seconds.to_string(),
@@ -248,7 +248,7 @@ impl SettingsForm {
     pub fn into_config(self) -> Result<Config, SettingsValidationError> {
         let mut config = Config::default();
         let backend = self.backend_directory.trim();
-        config.backend.directory = if backend.is_empty() {
+        config.backend.directory = if backend.is_empty() || backend == DEFAULT_BACKEND_DIRECTORY {
             None
         } else {
             Some(PathBuf::from(backend))

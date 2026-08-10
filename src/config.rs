@@ -14,6 +14,7 @@ pub const MIN_MEMORY_LIMIT_MIB: u64 = 64;
 pub const MAX_MEMORY_LIMIT_MIB: u64 = 1_048_576;
 pub const MIN_TIMEOUT_SECONDS: u64 = 1;
 pub const MAX_TIMEOUT_SECONDS: u64 = 86_400;
+pub const DEFAULT_BACKEND_DIRECTORY: &str = "backend/libarchive";
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -289,7 +290,7 @@ impl Config {
             .backend
             .directory
             .clone()
-            .unwrap_or_else(|| PathBuf::from("backend/libarchive"));
+            .unwrap_or_else(|| PathBuf::from(DEFAULT_BACKEND_DIRECTORY));
         let joined = if configured.is_absolute() {
             configured
         } else {
