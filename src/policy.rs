@@ -259,7 +259,7 @@ fn validate_archive_listing_inner(
 
     for raw_line in text.split_terminator('\n') {
         let member = raw_line.strip_suffix('\r').unwrap_or(raw_line);
-        if allow_created_root && member == "./" {
+        if allow_created_root && matches!(member, "." | "./") {
             if saw_created_root {
                 return Err(IrohaZipError::Policy(
                     "duplicate created-archive root marker is rejected".to_owned(),
@@ -268,6 +268,11 @@ fn validate_archive_listing_inner(
             saw_created_root = true;
             continue;
         }
+        let member = if allow_created_root {
+            member.strip_prefix("./").unwrap_or(member)
+        } else {
+            member
+        };
         validate_archive_member_name(member, limits)?;
         entries = checked_add(entries, 1, "archive entry count")?;
         if entries > max_entries {
@@ -400,8 +405,17 @@ mod tests {
             validate_created_archive_listing(b"./\nfile.txt\n", &limits).unwrap(),
             1
         );
+        assert_eq!(
+            validate_created_archive_listing(b".\nfile.txt\n", &limits).unwrap(),
+            1
+        );
         assert!(validate_created_archive_listing(b"./\n./\nfile.txt\n", &limits).is_err());
-        assert!(validate_created_archive_listing(b"./file.txt\n", &limits).is_err());
+        assert!(validate_created_archive_listing(b".\n./\nfile.txt\n", &limits).is_err());
+        assert_eq!(
+            validate_created_archive_listing(b"./file.txt\n", &limits).unwrap(),
+            1
+        );
+        assert!(validate_created_archive_listing(b"././file.txt\n", &limits).is_err());
         assert!(validate_created_archive_listing(b".\\\nfile.txt\n", &limits).is_err());
     }
 }

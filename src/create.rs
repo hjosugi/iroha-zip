@@ -253,10 +253,7 @@ fn create_arguments(format: CreateFormat) -> Vec<OsString> {
             "--no-fflags",
         ],
     };
-    let mut arguments: Vec<OsString> = values.iter().map(|value| OsString::from(*value)).collect();
-    arguments.push(OsString::from("-s"));
-    arguments.push(OsString::from(r",^\./,,"));
-    arguments
+    values.iter().map(|value| OsString::from(*value)).collect()
 }
 
 fn normalized_output(path: &Path) -> Result<PathBuf> {
@@ -305,6 +302,19 @@ mod tests {
     impl Drop for TestDirectory {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn bounded_pax_input_needs_no_backend_path_rewrite() {
+        for format in [
+            CreateFormat::Zip,
+            CreateFormat::SevenZip,
+            CreateFormat::Tar,
+            CreateFormat::TarGz,
+        ] {
+            let arguments = create_arguments(format);
+            assert!(!arguments.iter().any(|argument| argument == "-s"));
         }
     }
 

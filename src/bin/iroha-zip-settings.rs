@@ -1120,6 +1120,7 @@ mod windows_app {
                         return Ok(());
                     }
                     self.apply_config(&Config::default());
+                    self.update_dirty_title(parent);
                     set_control_text(
                         self.controls.status,
                         "既定値を表示しています。保存すると反映されます。",
