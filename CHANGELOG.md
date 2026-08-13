@@ -9,6 +9,7 @@
 - Updated the SHA-1/SHA-256 implementation dependencies to the compatible
   `sha1`/`sha2` 0.11.0 generation.
 - Replaced the crashing AppContainer `bsdtar @archive` conversion with a bounded two-pass path: materialize and fingerprint the parent-generated PAX tree, recopy the verified backend, seal that tree read-only, then archive relative `.`.
+- Pin the Windows backend locale to libarchive-compatible `.utf8` spelling so PAX paths remain readable when the host ANSI code page cannot represent Japanese names.
 
 - Added an accessible Japanese/English GitHub Pages site and complete English project guide.
 - Publish a stable unsigned Windows x64 release with the ZIP, three individual executables, SHA-256 inventories, and GitHub artifact attestations.

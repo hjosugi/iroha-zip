@@ -1786,8 +1786,12 @@ fn minimal_environment_pairs(program: &Path, root: &Path) -> Vec<(OsString, OsSt
     let backend_dir = program.parent().unwrap_or(root).as_os_str().to_owned();
     let root_os = root.as_os_str().to_owned();
     vec![
-        (OsString::from("LANG"), OsString::from(".UTF8")),
-        (OsString::from("LC_ALL"), OsString::from(".UTF8")),
+        // Keep this spelling lowercase.  libarchive's native-Windows
+        // current-codepage detector recognizes `utf8` and `UTF-8`, but not
+        // the otherwise UCRT-equivalent `UTF8`.  The latter makes PAX UTF-8
+        // names unreadable when the host ACP cannot represent them.
+        (OsString::from("LANG"), OsString::from(".utf8")),
+        (OsString::from("LC_ALL"), OsString::from(".utf8")),
         (OsString::from("LOCALAPPDATA"), root_os.clone()),
         (OsString::from("PATH"), backend_dir),
         (OsString::from("SystemRoot"), system_root.clone()),
@@ -1841,6 +1845,21 @@ mod tests {
     impl Drop for TestDirectory {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn backend_environment_uses_libarchive_compatible_utf8_locale_spelling() {
+        let pairs = minimal_environment_pairs(
+            Path::new(r"C:\backend\bsdtar.exe"),
+            Path::new(r"C:\sandbox"),
+        );
+        for key in ["LANG", "LC_ALL"] {
+            let value = pairs
+                .iter()
+                .find_map(|(candidate, value)| (candidate == key).then_some(value))
+                .expect("UTF-8 locale variable must be present");
+            assert_eq!(value, ".utf8");
         }
     }
 

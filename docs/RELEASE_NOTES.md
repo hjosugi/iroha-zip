@@ -21,7 +21,7 @@ iroha-zip 0.4.0 は、Windows x64 向けの最初の安定版扱いリリース�
 ### 主な変更
 
 - 生成書庫を別のsandboxで再展開し、監査済み圧縮元と完全一致するまで公開しない作成経路。
-- AppContainerのPackage SIDに対するread-only staging ACLと、handleを保持したTOCTOU対策。
+- 上限付きPAXをmaterialize・照合し、backendを再コピーしてtreeをread-only封印してから作成する二段階経路と、handleを保持したTOCTOU対策。
 - raw member名を検査するbounded preflight、悪性書庫回帰コーパス、5つのbounded fuzz target。
 - policy-safe previewと、全書庫監査後に行う選択展開。
 - backend provenance、SPDX SBOM、license evidenceの厳格な検証。
@@ -54,7 +54,7 @@ iroha-zip 0.4.0 is the first release presented as a stable Windows x64 download.
 ### Highlights
 
 - Creation re-extracts every generated archive in a second sandbox and refuses publication unless it exactly reproduces the audited source.
-- Read-only staging ACLs for the AppContainer Package SID and retained-handle TOCTOU defenses.
+- A two-pass creation path that materializes and verifies bounded PAX input, recopies the backend, seals the tree read-only, and retains handles across TOCTOU-sensitive boundaries.
 - Bounded raw-member preflight, a generated hostile-archive regression corpus, and five bounded fuzz targets.
 - Policy-safe preview and selective extraction only after auditing the complete archive.
 - Strict backend provenance, SPDX SBOM, and license-evidence verification.

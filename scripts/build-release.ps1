@@ -184,6 +184,8 @@ try {
     foreach ($file in @(
         "README.md",
         "README.en.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
         "SECURITY.md",
         "config.example.toml",
         "LICENSE-MIT",
