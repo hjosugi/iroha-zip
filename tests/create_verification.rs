@@ -82,11 +82,7 @@ case "$mode" in
             printf 'bravo' > "$directory/alpha.txt"
         fi
         if [ "{behavior}" = "mutate-stream" ]; then
-            if [ "$source_archive" = "-" ]; then
-                printf 'corrupt' > "$PWD/source.pax.tar"
-            else
-                printf 'corrupt' > "$source_archive"
-            fi
+            printf 'corrupt' > "$source_archive"
         fi
         printf 'archive-{behavior}' > "$archive"
         ;;
@@ -286,7 +282,7 @@ fn backend_pax_stream_mutation_cannot_publish() {
 
 #[test]
 #[ignore = "requires /usr/bin/bsdtar from a system libarchive installation"]
-fn real_libarchive_accepts_the_bounded_pax_stream_for_all_create_formats() {
+fn real_libarchive_accepts_the_bounded_pax_archive_for_all_create_formats() {
     let directory = TestDirectory::new();
     let source = source_tree(directory.path());
     fs::create_dir(source.join("empty")).unwrap();

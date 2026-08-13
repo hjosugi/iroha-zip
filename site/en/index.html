@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="iroha-zip — a security-oriented Windows archive wrapper that isolates libarchive in AppContainer.">
+    <meta name="theme-color" content="#3858c9">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="iroha-zip — archives with fewer privileges">
+    <meta property="og:description" content="Inspect inputs and outputs while isolating libarchive in an ephemeral Windows AppContainer.">
+    <meta property="og:url" content="https://hjosugi.github.io/iroha-zip/en/">
+    <link rel="canonical" href="https://hjosugi.github.io/iroha-zip/en/">
+    <link rel="alternate" hreflang="ja" href="https://hjosugi.github.io/iroha-zip/ja/">
+    <link rel="alternate" hreflang="en" href="https://hjosugi.github.io/iroha-zip/en/">
+    <title>iroha-zip — archives with fewer privileges</title>
+    <link rel="stylesheet" href="../assets/styles.css">
+    <script defer src="../assets/site.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="./" aria-label="iroha-zip home">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>iroha-zip</span>
+        </a>
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <a href="#how">How it works</a>
+          <a href="#setup">Setup</a>
+          <a href="#security">Security</a>
+          <a href="#status">Status</a>
+          <a class="language-link" href="../ja/" hreflang="ja" data-language-choice="ja">日本語</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="section hero-grid">
+          <div>
+            <p class="eyebrow">Windows archive isolation</p>
+            <h1>Archives,<br>with fewer privileges.</h1>
+            <p class="hero-copy">
+              iroha-zip is a Windows archive wrapper that isolates libarchive in an ephemeral AppContainer and inspects both inputs and outputs in Rust.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
+                Download for Windows x64
+              </a>
+              <a class="button" href="https://github.com/hjosugi/iroha-zip">View source on GitHub</a>
+            </div>
+          </div>
+
+          <aside class="release-card" aria-label="Latest release">
+            <div class="release-card-head">Latest stable release</div>
+            <div class="release-card-body">
+              <p class="release-version" data-release-version>v0.4.0</p>
+              <p class="release-meta">
+                Windows x64 · <span data-release-date>Aug 2026</span> · unsigned
+              </p>
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
+                <span data-download-label>Get the complete ZIP</span>
+              </a>
+              <ul class="release-list">
+                <li>ZIP and three standalone EXEs</li>
+                <li>SHA-256 inventory</li>
+                <li>GitHub artifact attestation</li>
+                <li>Japanese and English guides</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <div class="section" style="padding-top: 0">
+        <div class="notice" role="note">
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <div>
+            <strong>The current official binaries are not Authenticode-signed.</strong>
+            <p>Do not disable SmartScreen warnings. Verify SHA-256 and the GitHub artifact attestation. libarchive / bsdtar is not bundled.</p>
+          </div>
+        </div>
+      </div>
+
+      <section class="section" id="how">
+        <div class="section-heading">
+          <h2>Separate boundaries.<br>Inspect before publish.</h2>
+          <p>
+            Untrusted archives never run directly with the user's normal privileges. The backend, working storage, and final destination have distinct boundaries, and no failure silently falls back to a weaker path.
+          </p>
+        </div>
+
+        <div class="flow" aria-label="Extraction flow">
+          <div class="flow-step"><strong>1. Pin</strong><span>Match the complete bsdtar bundle against its SHA-256 manifest</span></div>
+          <div class="flow-step"><strong>2. Isolate</strong><span>Ephemeral AppContainer with no capabilities or network access</span></div>
+          <div class="flow-step"><strong>3. Bound</strong><span>Limit time, memory, process count, entries, and expanded bytes</span></div>
+          <div class="flow-step"><strong>4. Recheck</strong><span>Audit paths, links, ADS, reserved names, identity, and content</span></div>
+          <div class="flow-step"><strong>5. Publish</strong><span>Atomically publish only inspected regular files to a new directory</span></div>
+        </div>
+
+        <div class="card-grid" style="margin-top: 1rem">
+          <article class="card">
+            <span class="card-number">A</span>
+            <h3>Fail closed</h3>
+            <p>If AppContainer setup, hash verification, audit, or cleanup fails, processing stops instead of dropping to normal privileges.</p>
+          </article>
+          <article class="card">
+            <span class="card-number">B</span>
+            <h3>Creation is isolated too</h3>
+            <p>The source is audited and copied, and output is re-extracted in a second sandbox. Nothing publishes until the trees match.</p>
+          </article>
+          <article class="card">
+            <span class="card-number">C</span>
+            <h3>Provenance is pinned</h3>
+            <p>Validate a backend manifest, source provenance, SPDX SBOM, and license evidence as one exact inventory.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="setup">
+        <div class="section-heading">
+          <h2>Set up in three steps.</h2>
+          <p>Most users should choose the complete ZIP. The backend is deliberately separate, so import a libarchive build you trust once during initial setup.</p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <span class="card-number">01</span>
+            <h3>Download</h3>
+            <p>Get the Windows x64 ZIP from the <a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>latest release</a> and extract it into a new folder.</p>
+          </article>
+          <article class="card">
+            <span class="card-number">02</span>
+            <h3>Verify</h3>
+            <p>Compare <code>SHA256SUMS.txt</code> with <code>Get-FileHash</code>. Verify the GitHub attestation when appropriate.</p>
+          </article>
+          <article class="card">
+            <span class="card-number">03</span>
+            <h3>Configure backend</h3>
+            <p>Open <code>iroha-zip.exe settings</code>, import MSYS2 or a trusted bundle, and run the diagnosis.</p>
+          </article>
+        </div>
+
+        <div class="two-column" style="margin-top: 1.2rem">
+          <div class="panel">
+            <h3>Check the digest</h3>
+            <pre><code>Get-FileHash `
+  .\iroha-zip-0.4.0-windows-x64.zip `
+  -Algorithm SHA256</code></pre>
+          </div>
+          <div class="panel">
+            <h3>Configure and diagnose</h3>
+            <pre><code>.\iroha-zip.exe settings
+.\iroha-zip.exe doctor</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="formats">
+        <div class="section-heading">
+          <h2>Including legacy Japanese archives.</h2>
+          <p>libarchive automatically detects enabled formats. Old Japanese ZIP and LZH archives that omit encoding metadata can explicitly use CP932.</p>
+        </div>
+
+        <table class="format-table">
+          <tbody>
+            <tr><th scope="row">Extract</th><td>ZIP / ZIPX, 7z, RAR / RAR5, LHA / LZH, TAR, GZ, BZ2, XZ, Zstandard, .Z, CAB, and more</td></tr>
+            <tr><th scope="row">Create</th><td>ZIP, 7z, TAR, TAR.GZ</td></tr>
+            <tr><th scope="row">Filename encoding</th><td>auto, UTF-8, CP932, CP437</td></tr>
+            <tr><th scope="row">Operating system</th><td>Windows 10 or later; normal use targets Windows 11 x64</td></tr>
+          </tbody>
+        </table>
+
+        <pre><code>iroha-zip.exe extract .\old-japanese.zip --encoding cp932
+iroha-zip.exe create seven-zip .\folder .\folder.7z</code></pre>
+      </section>
+
+      <section class="section" id="security">
+        <div class="section-heading">
+          <h2>Explicit rejection,<br>not silent normalization.</h2>
+          <p>Ambiguous archive structures never become output for convenience. A failed audit publishes nothing and cleans the partial tree.</p>
+        </div>
+
+        <div class="two-column">
+          <div class="panel">
+            <h3>Important rejection rules</h3>
+            <ul class="check-list">
+              <li><code>..</code>, absolute, drive-prefixed, and UNC paths</li>
+              <li>Symlinks, junctions, reparse points, and hard links</li>
+              <li>NTFS Alternate Data Streams</li>
+              <li>Duplicate members and case/separator aliases</li>
+              <li>Windows reserved names and trailing dots/spaces</li>
+              <li>Configured byte, entry, depth, and path limits</li>
+              <li>Overwriting any existing output</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Inspect the evidence</h3>
+            <ul class="plain-list">
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/THREAT_MODEL.md">Threat model</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/WINDOWS_E2E.md">Windows E2E contract</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/MALICIOUS_CORPUS.md">Malicious archive corpus</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/BACKEND_EVIDENCE.md">Backend evidence</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/security">Security policy</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="usage">
+        <div class="section-heading">
+          <h2>Double-click or CLI.</h2>
+          <p>Register file-association candidates from Settings. The CLI exposes preview, selective extraction, creation, and diagnosis through the same policy boundaries.</p>
+        </div>
+
+        <div class="two-column">
+          <div class="panel">
+            <h3>Extract and preview</h3>
+            <pre><code>iroha-zip.exe preview .\archive.zip
+iroha-zip.exe extract .\archive.zip
+iroha-zip.exe extract .\archive.zip `
+  --select "docs\index.txt"</code></pre>
+          </div>
+          <div class="panel">
+            <h3>Create</h3>
+            <pre><code>iroha-zip.exe create zip `
+  .\folder .\folder.zip
+
+iroha-zip.exe create tar-gz `
+  .\folder .\folder.tar.gz</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="status">
+        <div class="section-heading">
+          <h2>Publish what works.<br>Track what remains.</h2>
+          <p>This site does not declare security “finished.” Automated evidence and work that still needs physical devices, longer campaigns, or independent review remain visibly separate.</p>
+        </div>
+
+        <div class="status-grid">
+          <div class="status-card done">
+            <h3>Automated</h3>
+            <ul class="check-list">
+              <li>Rust unit/integration tests and Clippy</li>
+              <li>Windows MSVC build and native UI automation</li>
+              <li>Five bounded fuzz targets</li>
+              <li>Backend manifest, SBOM, and license validation</li>
+              <li>Generated hostile-archive regressions</li>
+              <li>Release digests and artifact attestations</li>
+            </ul>
+          </div>
+          <div class="status-card open">
+            <h3>Continuing validation</h3>
+            <ul class="plain-list">
+              <li>Complete Windows 10/11 device and format matrix</li>
+              <li>Experimental LPAC compatibility and denial measurements</li>
+              <li>Long fuzz campaigns and independent security audit</li>
+              <li>Protected input for encrypted archives</li>
+              <li>Windows ARM64 package</li>
+              <li>Future Authenticode signing</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <a class="button" href="https://github.com/hjosugi/iroha-zip/issues">View open issues</a>
+          <a class="button" href="https://github.com/hjosugi/iroha-zip/blob/main/docs/BUILD_STATUS.md">Read detailed validation status</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div>
+          <a class="brand" href="./" style="color: white">
+            <span class="brand-mark" aria-hidden="true"></span><span>iroha-zip</span>
+          </a>
+          <p>MIT OR Apache-2.0. Not a security-audited product. Continue to apply normal operating-system and organizational defenses to untrusted files.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer">
+          <a href="https://github.com/hjosugi/iroha-zip">Source</a>
+          <a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>Release</a>
+          <a href="https://github.com/hjosugi/iroha-zip/issues">Issues</a>
+          <a href="../ja/" hreflang="ja" data-language-choice="ja">日本語</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

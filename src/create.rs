@@ -11,6 +11,8 @@ use crate::platform::{ProcessSpec, Sandbox};
 use crate::snapshot::FileFingerprint;
 use crate::{monitor, pax, policy, staging, transfer, util};
 
+const SOURCE_ARCHIVE_ARGUMENT: &str = "@source.pax.tar";
+
 pub fn create_archive(
     backend: &BackendBundle,
     config: &Config,
@@ -70,7 +72,11 @@ pub fn create_archive(
         let mut args = create_arguments(format);
         args.push(OsString::from("-f"));
         args.push(sandbox_archive.as_os_str().to_owned());
-        args.push(OsString::from("@-"));
+        // Keep the audited file inherited as stdin so Windows denies write/delete
+        // sharing for the lifetime of the child, but let bsdtar reopen the same
+        // file for reading by its fixed sandbox-local name. MSYS2 UCRT64 bsdtar
+        // reproducibly faults in AppContainer while converting from @-.
+        args.push(OsString::from(SOURCE_ARCHIVE_ARGUMENT));
 
         let baseline = policy::measure_tree(sandbox.root())?;
         let transient_bytes = config
@@ -316,6 +322,8 @@ mod tests {
             let arguments = create_arguments(format);
             assert!(!arguments.iter().any(|argument| argument == "-s"));
         }
+
+        assert_eq!(SOURCE_ARCHIVE_ARGUMENT, "@source.pax.tar");
     }
 
     #[test]

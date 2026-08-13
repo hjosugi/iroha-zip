@@ -1,6 +1,6 @@
 # Build and validation status
 
-Updated: 2026-08-10
+Updated: 2026-08-14
 
 ## Completed locally
 
@@ -20,7 +20,7 @@ Updated: 2026-08-10
 - Five pinned fuzz targets, a successful initial bounded sanitizer campaign, isolated seeds, and deterministic minimized-regression promotion
 - Handle-retaining input/source snapshots and deterministic source-tree race tests for identity replacement, same-size mutation, rename, hardlinks, and symbolic links
 - Bounded Windows `GetFileInformationByHandleEx` directory enumeration, before/after directory-handle identity checks, and empty-directory replacement rejection between audit and copy
-- Deterministic, path/count/single-file/total-byte-bounded PAX creation input delivered as an audited inherited stdin handle (`@-`); staged-tree and PAX-stream post-backend fingerprints; created-archive full-root re-extraction in a second sandbox; handle-retained create-new publication; ten deterministic root/mutation/mismatch/budget tests; and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip through the production PAX path
+- Deterministic, path/count/single-file/total-byte-bounded PAX creation input held open without Windows write/delete sharing and exposed only through fixed sandbox-local `@source.pax.tar`; staged-tree and PAX post-backend fingerprints; created-archive full-root re-extraction in a second sandbox; handle-retained create-new publication; ten deterministic root/mutation/mismatch/budget tests; and a local libarchive 3.8.9 ZIP/7z/TAR/TAR.GZ round trip through the production PAX path
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Safe UI Automation button paths for three folder-picker cancellations, Restore Defaults, and unsaved-change Cancel
@@ -35,8 +35,10 @@ Updated: 2026-08-10
 - `cargo-deny` advisory, license, ban, and source policy checks
 - `cargo-about` third-party license inventory generation from the locked dependency graph
 - All PowerShell scripts parsed with the official PowerShell 7.6.4 parser; unsupported-source evidence generation, explicit-approval failure/rollback, Rust round-trip validation, strict-mode unsupported-source rejection, and notice-tamper rejection executed on Linux PowerShell
-- Release inventory policy: official packages do not bundle EXE, DLL, MSI, PDB, or a backend manifest
-- Split build/sign/package release boundary, strict three-EXE Authenticode publisher/EKU/timestamp verification, deterministic signature evidence, pinned SLSA provenance generation, and fail-closed immutable-release workflow parsing
+- Release inventory policy: official packages include the three iroha-zip executables but no third-party backend EXE/DLL, MSI, PDB, or backend manifest
+- Tag/version/main-commit release gates, three standalone PE assets plus a complete ZIP, SHA-256 inventories, pinned GitHub artifact attestations, and exact stable-release inventory verification
+- Future split build/sign/package boundary with strict three-EXE Authenticode publisher/EKU/timestamp verification retained for an owner-configured signing identity
+- Japanese and English static Pages rendered at desktop and mobile sizes, with all three public routes passing an automated WCAG 2 AA audit
 
 The current Linux suite contains 95 passing default-feature tests plus one explicitly invoked system-libarchive compatibility test. The feature-gated minimized fuzz-regression gate brings the normal all-feature count to 96. Windows CI additionally runs source-file and directory-handle sharing tests that verify open snapshots block writes and renames, plus two independent processes saving one configuration path.
 
@@ -46,7 +48,7 @@ The fast CI matrix runs formatting, tests, and Clippy on both `ubuntu-latest` an
 
 A separate fixed-label `windows-2022` / `windows-2025` x64 matrix builds the production release binaries once per supported Server image, exports the verified backend once per image, and produces machine-readable archive/isolation, malicious-corpus, and settings artifacts. The Server 2025 path reuses that already-exported backend to validate supported evidence, the explicit unsupported-bundle path, `--require-supported`, rollback, and evidence-tamper failures. This removes a redundant release build and signed-package export from the fast matrix without dropping a gate. The Server matrix is designed to exercise token/capability inspection, loopback denial, timeout, memory limit, explicit cleanup, four create/read formats, Japanese and long paths, generated hostile ZIP/TAR inputs, native hardlink/ADS/junction fixtures, invalid input, shell invocation, settings save, and settings diagnosis. Both fixed-label jobs have run on GitHub Actions; the archive matrix currently reaches a reproducible MSYS2 `bsdtar.exe` access violation during its first sandboxed ZIP creation, so no passing archive artifact is claimed. The Server matrix is not Windows 10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md) and [corpus contract](MALICIOUS_CORPUS.md).
 
-A `v*` tag whose value matches `Cargo.toml` and points to the current `main` commit enters the protected `release-signing` environment. The workflow requires Azure OIDC configuration and release immutability, signs and verifies all three executables, writes ZIP/SHA-256/signature evidence, verifies a local SLSA provenance bundle, checks a complete draft, publishes it, and then requires GitHub to report the release immutable. This workflow has been implemented and parsed locally but has not produced a signed release. The 2026-08-10 read-only audit found no release environment or Actions variables and found release immutability disabled; owner setup remains deliberately outstanding.
+A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to the current `main` commit builds an unsigned Windows x64 package and three standalone executables, produces SHA-256 inventories and GitHub artifact attestations, publishes a stable release without overwriting an existing version, and reads back the six-asset inventory. The future Authenticode verification path remains available locally but is not active until the owner configures and independently reviews a signing identity. See [release verification](RELEASE_VERIFICATION.md).
 
 ## Still requires a real Windows validation machine
 
@@ -61,6 +63,6 @@ A `v*` tag whose value matches `Cargo.toml` and points to the current `main` com
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring
 - Real-Windows reparse point race stress tests, native child open relative to a parent handle, and first Windows evidence for handle enumeration, the staging-tree DACL seal, and internal created-archive re-extraction
 - Attachment Services with Defender enabled/disabled/unavailable, third-party providers, quarantine/deletion, ADS inventory, and MotW preservation across publication
-- First successful reviewed Authenticode/SLSA/immutable release after owner-managed Azure identity validation and repository settings, plus independent security review
+- First successful reviewed Authenticode release after owner-managed signing identity validation, plus independent security review
 
-Until those Windows integration checks are complete, treat `v0.3.1` as a security-oriented preview rather than an audited security product.
+Until those Windows integration checks are complete, treat `v0.4.0` as a security-oriented preview rather than an audited security product.

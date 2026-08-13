@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Nothing yet.
+
+## 0.4.0 - 2026-08-14
+
+- Added an accessible Japanese/English GitHub Pages site and complete English project guide.
+- Publish a stable unsigned Windows x64 release with the ZIP, three individual executables, SHA-256 inventories, and GitHub artifact attestations.
+- Document unsigned-binary and SmartScreen expectations without weakening verification guidance.
+
 - Re-extract every generated archive through a second sandbox before publication; require safe raw members, exact source-tree reproduction, unchanged staging/source fingerprints, and the same generated-archive identity/hash through final create-new copy.
 - Seal the Windows staging source against its ephemeral AppContainer Package SID before archive creation, and record read success plus root/nested write, create, rename, delete, attribute, DACL, and owner denial in machine-readable isolation evidence.
 - Enumerate Windows tree members through bounded directory handles, compare directory identities before/after enumeration and between audit/copy, and reject same-name empty-directory replacement.

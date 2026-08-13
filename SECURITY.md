@@ -1,6 +1,6 @@
 # Security policy
 
-iroha-zip v0.3.1はセキュリティ指向のpreview実装であり、第三者監査済みではありません。
+iroha-zip v0.4.0はセキュリティ指向のpreview実装であり、第三者監査済みではありません。
 
 ## Supported versions
 

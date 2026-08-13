@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="iroha-zip — AppContainerでlibarchiveを隔離する、Windows向けの安全志向アーカイブラッパー。">
+    <meta name="theme-color" content="#3858c9">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="iroha-zip — Windowsアーカイブを小さい権限で">
+    <meta property="og:description" content="展開前後を検査し、libarchiveを一時AppContainerに隔離するWindows向けツール。">
+    <meta property="og:url" content="https://hjosugi.github.io/iroha-zip/ja/">
+    <link rel="canonical" href="https://hjosugi.github.io/iroha-zip/ja/">
+    <link rel="alternate" hreflang="ja" href="https://hjosugi.github.io/iroha-zip/ja/">
+    <link rel="alternate" hreflang="en" href="https://hjosugi.github.io/iroha-zip/en/">
+    <title>iroha-zip — Windowsアーカイブを小さい権限で</title>
+    <link rel="stylesheet" href="../assets/styles.css">
+    <script defer src="../assets/site.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="./" aria-label="iroha-zip ホーム">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>iroha-zip</span>
+        </a>
+        <nav class="primary-nav" aria-label="メインナビゲーション">
+          <a href="#how">仕組み</a>
+          <a href="#setup">導入</a>
+          <a href="#security">安全設計</a>
+          <a href="#status">状況</a>
+          <a class="language-link" href="../en/" hreflang="en" data-language-choice="en">English</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="section hero-grid">
+          <div>
+            <p class="eyebrow">Windows archive isolation</p>
+            <h1>書庫を、<br>小さい権限で。</h1>
+            <p class="hero-copy">
+              iroha-zipは、libarchiveを一時AppContainerに隔離し、展開前後と圧縮元をRust側で検査するWindows用アーカイブラッパーです。
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
+                Windows x64をダウンロード
+              </a>
+              <a class="button" href="https://github.com/hjosugi/iroha-zip">GitHubでソースを見る</a>
+            </div>
+          </div>
+
+          <aside class="release-card" aria-label="最新リリース">
+            <div class="release-card-head">Latest stable release</div>
+            <div class="release-card-body">
+              <p class="release-version" data-release-version>v0.4.0</p>
+              <p class="release-meta">
+                Windows x64 · <span data-release-date>2026年8月</span> · 未署名
+              </p>
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
+                <span data-download-label>配布ZIPを取得</span>
+              </a>
+              <ul class="release-list">
+                <li>ZIPと3つの個別EXE</li>
+                <li>SHA-256一覧</li>
+                <li>GitHub artifact attestation</li>
+                <li>日本語・英語ガイド</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <div class="section" style="padding-top: 0">
+        <div class="notice" role="note">
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <div>
+            <strong>現在の公式バイナリはAuthenticode未署名です。</strong>
+            <p>SmartScreenの警告を無効化せず、SHA-256とGitHub artifact attestationを確認してください。libarchive / bsdtarは同梱していません。</p>
+          </div>
+        </div>
+      </div>
+
+      <section class="section" id="how">
+        <div class="section-heading">
+          <h2>境界を分けて、<br>公開前に検査。</h2>
+          <p>
+            未信頼の書庫を通常ユーザー権限のまま直接展開しません。バックエンド、作業領域、最終出力の境界を分け、どこか一つが壊れても暗黙に処理を続けない設計です。
+          </p>
+        </div>
+
+        <div class="flow" aria-label="展開処理の流れ">
+          <div class="flow-step"><strong>1. 固定</strong><span>bsdtar一式をSHA-256マニフェストで完全照合</span></div>
+          <div class="flow-step"><strong>2. 隔離</strong><span>capabilityなし・ネットワークなしの一時AppContainer</span></div>
+          <div class="flow-step"><strong>3. 監視</strong><span>時間、メモリ、プロセス数、ファイル数、展開容量を制限</span></div>
+          <div class="flow-step"><strong>4. 再検査</strong><span>パス、リンク、ADS、予約名、identity、内容を監査</span></div>
+          <div class="flow-step"><strong>5. 公開</strong><span>検査済みの通常ファイルだけを新規フォルダへatomic publish</span></div>
+        </div>
+
+        <div class="card-grid" style="margin-top: 1rem">
+          <article class="card">
+            <span class="card-number">A</span>
+            <h3>fail closed</h3>
+            <p>AppContainer作成、ハッシュ検証、監査、cleanupのいずれかが失敗すれば、通常権限へ降格せず停止します。</p>
+          </article>
+          <article class="card">
+            <span class="card-number">B</span>
+            <h3>作成も隔離</h3>
+            <p>圧縮元を監査・複製し、生成書庫を別sandboxで再展開。元treeと一致するまで公開しません。</p>
+          </article>
+          <article class="card">
+            <span class="card-number">C</span>
+            <h3>由来を固定</h3>
+            <p>backend manifest、provenance、SPDX SBOM、license evidenceの完全一致を検証できます。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="setup">
+        <div class="section-heading">
+          <h2>3ステップで導入。</h2>
+          <p>通常は配布ZIPを選びます。バックエンドを意図的に分離しているため、初回だけ自分が信頼するlibarchiveを取り込んでください。</p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <span class="card-number">01</span>
+            <h3>ダウンロード</h3>
+            <p><a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>最新Release</a>からWindows x64 ZIPを取得し、任意の新規フォルダへ展開します。</p>
+          </article>
+          <article class="card">
+            <span class="card-number">02</span>
+            <h3>ハッシュ確認</h3>
+            <p><code>SHA256SUMS.txt</code>と<code>Get-FileHash</code>の値を比較します。必要に応じてGitHub attestationも確認します。</p>
+          </article>
+          <article class="card">
+            <span class="card-number">03</span>
+            <h3>バックエンド設定</h3>
+            <p><code>iroha-zip.exe settings</code>を開き、MSYS2または信頼済みbundleを取り込み、診断を実行します。</p>
+          </article>
+        </div>
+
+        <div class="two-column" style="margin-top: 1.2rem">
+          <div class="panel">
+            <h3>ハッシュを確認</h3>
+            <pre><code>Get-FileHash `
+  .\iroha-zip-0.4.0-windows-x64.zip `
+  -Algorithm SHA256</code></pre>
+          </div>
+          <div class="panel">
+            <h3>設定と診断</h3>
+            <pre><code>.\iroha-zip.exe settings
+.\iroha-zip.exe doctor</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="formats">
+        <div class="section-heading">
+          <h2>日本の古い書庫も。</h2>
+          <p>libarchiveが有効にしている形式を自動判定します。文字コード情報のない古い日本語ZIP/LZHにはCP932を明示できます。</p>
+        </div>
+
+        <table class="format-table">
+          <tbody>
+            <tr><th scope="row">展開</th><td>ZIP / ZIPX、7z、RAR / RAR5、LHA / LZH、TAR、GZ、BZ2、XZ、Zstandard、.Z、CABほか</td></tr>
+            <tr><th scope="row">作成</th><td>ZIP、7z、TAR、TAR.GZ</td></tr>
+            <tr><th scope="row">文字コード</th><td>auto、UTF-8、CP932、CP437</td></tr>
+            <tr><th scope="row">対象OS</th><td>Windows 10以降。通常利用はWindows 11 x64を想定</td></tr>
+          </tbody>
+        </table>
+
+        <pre><code>iroha-zip.exe extract .\old-japanese.zip --encoding cp932
+iroha-zip.exe create seven-zip .\folder .\folder.7z</code></pre>
+      </section>
+
+      <section class="section" id="security">
+        <div class="section-heading">
+          <h2>拒否するものを明確に。</h2>
+          <p>便利さのために危険な構造を黙って正規化しません。監査結果が曖昧な場合は出力を公開せず、partial treeをcleanupします。</p>
+        </div>
+
+        <div class="two-column">
+          <div class="panel">
+            <h3>主な拒否条件</h3>
+            <ul class="check-list">
+              <li><code>..</code>、絶対／drive／UNC path</li>
+              <li>symlink、junction、reparse point、hard link</li>
+              <li>NTFS Alternate Data Stream</li>
+              <li>重複memberと大小文字／separator alias</li>
+              <li>Windows予約名、末尾ドット／スペース</li>
+              <li>設定した容量、個数、深さ、長さの超過</li>
+              <li>既存出力の上書き</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>確認可能な証拠</h3>
+            <ul class="plain-list">
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/THREAT_MODEL.md">脅威モデル</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/WINDOWS_E2E.md">Windows E2E契約</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/MALICIOUS_CORPUS.md">悪性書庫コーパス</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/BACKEND_EVIDENCE.md">バックエンド証跡</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/security">Security policy</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="usage">
+        <div class="section-heading">
+          <h2>ダブルクリックも、CLIも。</h2>
+          <p>設定画面から関連付け候補を登録できます。CLIではpreview、選択展開、作成、診断を同じpolicy境界で利用できます。</p>
+        </div>
+
+        <div class="two-column">
+          <div class="panel">
+            <h3>展開・プレビュー</h3>
+            <pre><code>iroha-zip.exe preview .\archive.zip
+iroha-zip.exe extract .\archive.zip
+iroha-zip.exe extract .\archive.zip `
+  --select "資料\index.txt"</code></pre>
+          </div>
+          <div class="panel">
+            <h3>作成</h3>
+            <pre><code>iroha-zip.exe create zip `
+  .\folder .\folder.zip
+
+iroha-zip.exe create tar-gz `
+  .\folder .\folder.tar.gz</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="status">
+        <div class="section-heading">
+          <h2>できたことも、<br>残ることも公開。</h2>
+          <p>安全性を「完了」と宣言するためのサイトではありません。自動化済みの証拠と、実機・長期検証が残る領域を分けて追跡します。</p>
+        </div>
+
+        <div class="status-grid">
+          <div class="status-card done">
+            <h3>自動化済み</h3>
+            <ul class="check-list">
+              <li>Rust unit / integration testsとClippy</li>
+              <li>Windows MSVC buildとnative UI automation</li>
+              <li>5つのbounded fuzz target</li>
+              <li>backend manifest / SBOM / license検証</li>
+              <li>生成型の悪性書庫回帰テスト</li>
+              <li>リリースhashとartifact attestation</li>
+            </ul>
+          </div>
+          <div class="status-card open">
+            <h3>継続検証</h3>
+            <ul class="plain-list">
+              <li>Windows 10/11実機の全format matrix</li>
+              <li>実験的LPACの互換性とdenial測定</li>
+              <li>長時間fuzzingと独立セキュリティ監査</li>
+              <li>パスワード付き書庫の秘密入力</li>
+              <li>Windows ARM64 package</li>
+              <li>将来のAuthenticode署名</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <a class="button" href="https://github.com/hjosugi/iroha-zip/issues">未解決Issueを見る</a>
+          <a class="button" href="https://github.com/hjosugi/iroha-zip/blob/main/docs/BUILD_STATUS.md">検証状況の詳細</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div>
+          <a class="brand" href="./" style="color: white">
+            <span class="brand-mark" aria-hidden="true"></span><span>iroha-zip</span>
+          </a>
+          <p>MIT OR Apache-2.0。セキュリティ監査済み製品ではありません。未信頼ファイルにはOSと組織の通常の防御も併用してください。</p>
+        </div>
+        <nav class="footer-links" aria-label="フッター">
+          <a href="https://github.com/hjosugi/iroha-zip">Source</a>
+          <a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>Release</a>
+          <a href="https://github.com/hjosugi/iroha-zip/issues">Issues</a>
+          <a href="../en/" hreflang="en" data-language-choice="en">English</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

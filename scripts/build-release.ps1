@@ -3,9 +3,9 @@
 Validates, builds, and packages iroha-zip Windows executables.
 
 .DESCRIPTION
-The default All phase creates an unsigned local preview. Formal releases use the Build
-phase, sign the three resulting executables outside this script, and then use Package
-with RequireAuthenticode and the exact expected publisher certificate subject.
+The default All phase creates the official unsigned package. A future signed release can
+use the Build phase, sign the three resulting executables outside this script, and then
+use Package with RequireAuthenticode and the exact expected publisher certificate subject.
 #>
 [CmdletBinding()]
 param(
@@ -114,7 +114,7 @@ try {
         return
     }
     if (-not $RequireAuthenticode) {
-        Write-Warning "Creating an unsigned local preview. Formal releases require externally signed binaries and -RequireAuthenticode."
+        Write-Warning "Creating an unsigned package. Verify SHA256SUMS.txt and the GitHub artifact attestation before use."
     }
 
     $version = ((Select-String -LiteralPath "Cargo.toml" -Pattern '^version\s*=\s*"([^\"]+)"').Matches[0].Groups[1].Value)
@@ -183,6 +183,7 @@ try {
 
     foreach ($file in @(
         "README.md",
+        "README.en.md",
         "SECURITY.md",
         "config.example.toml",
         "LICENSE-MIT",
@@ -204,9 +205,11 @@ try {
         "ISSUE_BACKLOG.md",
         "LPAC_EVALUATION.md",
         "MALICIOUS_CORPUS.md",
+        "RELEASE_NOTES.md",
         "RELEASE_VERIFICATION.md",
         "SETTINGS_ACCESSIBILITY.md",
         "THREAT_MODEL.md",
+        "UNSIGNED_RELEASE.md",
         "WINDOWS_E2E.md"
     )) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\$document") `

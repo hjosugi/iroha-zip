@@ -1,10 +1,18 @@
 # iroha-zip
 
+[日本語](README.md) | [English](README.en.md) | [公式サイト / Website](https://hjosugi.github.io/iroha-zip/)
+
 iroha-zipは、未信頼の圧縮ファイルをWindows上でできるだけ小さい権限で展開し、検査済みの通常ファイルから書庫を作成するRust製ラッパーです。
 
 目的は「Rustで全書庫形式を再実装する」ことではありません。最新版のlibarchive/`bsdtar.exe`を独立プロセスとして使い、そのプロセスを一時的なAppContainerに閉じ込め、展開前後と圧縮元をRust側で検査します。展開と作成のどちらでも、`bsdtar.exe`を通常ユーザー権限で直接実行しません。
 
-これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.3.1`です。
+これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.4.0`です。
+
+## ダウンロード
+
+[GitHub Releases](https://github.com/hjosugi/iroha-zip/releases/latest) から Windows x64 ZIP、または個別のEXEをダウンロードできます。現在の公式バイナリは未署名です。`SHA256SUMS.txt`とGitHub artifact attestationで出所を確認してください。詳しい確認手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)にあります。
+
+配布物にはlibarchive / `bsdtar.exe`を同梱していません。初回起動後、設定画面から自分が信頼するバックエンドを取り込む必要があります。
 
 ## 主な動作
 
@@ -36,7 +44,7 @@ Mark-of-the-Webを各ファイルへ伝播
     ↓
 リンク、リパースポイント、ADS、ハードリンク、容量を監査
     ↓
-監査済みの通常ファイルだけをAppContainer領域へコピー
+監査済みの通常ファイルだけを隔離stagingへコピー
     ↓
 WindowsではPackage SIDのwrite／delete／ACL変更をDACLで拒否
     ↓
@@ -117,15 +125,13 @@ iroha-zipは次をfail-closedで拒否します。
 
 詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。通常AppContainerと実験的LPACの差、fail-closed条件、未完の検証matrixは[LPAC評価](docs/LPAC_EVALUATION.md)、Windows自動E2Eの証跡項目と限界は[Windows E2E](docs/WINDOWS_E2E.md)、生成型の攻撃書庫と非公開方針は[悪性コーパス](docs/MALICIOUS_CORPUS.md)に分離しています。
 
-## 必要環境
+## 動作環境
 
 - Windows 10以降。通常利用はWindows 11 x64を想定
-- Rust 1.97.1
-- Visual Studio Build ToolsのMSVC C++ build tools
 - libarchive 3.8.9系の`bsdtar.exe`と実行に必要なDLL
 - PowerShell 5.1以降
 
-`rust-toolchain.toml`でRust 1.97.1を固定しています。
+ソースからビルドする場合は、追加でRust 1.97.1とVisual Studio Build ToolsのMSVC C++ build toolsが必要です。`rust-toolchain.toml`でRust 1.97.1を固定しています。
 
 ## なぜbsdtarをZIPに同梱していないか
 
@@ -182,10 +188,10 @@ cargo build --release
 
 ```text
 dist\iroha-zip\
-   dist\iroha-zip-0.3.1-windows-x64.zip
+   dist\iroha-zip-0.4.0-windows-x64.zip
 ```
 
-この通常実行で作るZIPはローカル検証用の未署名previewです。正式リリースでは、tag-driven workflowが`-Phase Build`で検証・ビルドし、Azure Artifact Signingで3つのEXEへ署名した後、`-Phase Package -RequireAuthenticode`で署名・publisher・timestampを再検証して梱包します。GitHubの設定値、証明書custody、4つのrelease asset、独立検証手順は[署名付きリリース仕様](docs/RELEASE_VERIFICATION.md)を参照してください。
+この通常実行とtag-driven workflowは未署名バイナリを作成します。公式リリースにはZIP、3つの個別EXE、SHA-256一覧を添付し、GitHub artifact attestationも発行します。未署名であること、SmartScreen警告、独立検証手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)を参照してください。将来Authenticode署名を有効にするための厳格な検証経路は[リリース検証仕様](docs/RELEASE_VERIFICATION.md)に保持しています。
 
 初回ビルド時に`Cargo.lock`がない場合は生成されます。以後は`Cargo.lock`をバージョン管理し、`--locked`でビルドしてください。
 

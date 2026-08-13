@@ -53,7 +53,7 @@ iroha-zipの中心目標は、攻撃者が作成した書庫を展開すると�
 | バックエンド差し替え | EXEと全DLLをSHA-256マニフェストで固定し、コピー後に再ハッシュ |
 | DLL横取り | バックエンドディレクトリの余分なファイルを拒否し、最小PATHで起動 |
 | 既存データ上書き | `create_new`、`-k`、既存出力拒否、最終rename |
-| 作成backendから圧縮元treeへアクセス | 親プロセスが監査済みtreeから上限付きPAX streamを生成し、AppContainer内のbsdtarにはそのstreamだけを渡す |
+| 作成backendから圧縮元treeへアクセス | 親プロセスが監査済みtreeから上限付きPAX archiveを生成し、AppContainer内のbsdtarには固定のsandbox-local名だけを渡す |
 | インターネット由来属性の消失 | 入力書庫のZone.Identifierを正規化し、公開する通常ファイルへ再付与 |
 
 ## 4. 展開処理の流れ
@@ -93,7 +93,7 @@ AppContainerプロセス
   5. バックエンドをコピー後に再ハッシュ
 
 AppContainerプロセス
-  6. bsdtarが継承stdin handleからPAX streamを読み、専用outputへ書庫を作成
+  6. bsdtarが保持handleで変更不能なsandbox-local PAX archiveを読み、専用outputへ書庫を作成
   7. 親プロセスが出力サイズとオブジェクト数を監視
 
 通常プロセス
@@ -138,11 +138,11 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 
 圧縮元ツリーは相対パス、種別、長さ、各ファイルのSHA-256を決定的にfingerprintします。実コピー時には各ファイルのidentity・時刻・長さ・内容を監査時の値と照合し、コピー後のツリーfingerprintも再比較します。同一サイズの改変、同じ内容を持つ別ファイルへの置換、rename、hardlink、symlink、およびroot外へ解決されるファイルはfail closedになります。
 
-作成backendへはstaging treeやPAX fileのpathを渡しません。信頼する親プロセスが通常fileとdirectoryだけを決定的なPAX streamへ直列化し、path深さ・長さ、file数、directory数、単一file size、合計sizeを設定上限で再検査します。これはzero-capability AppContainerからdrive rootを列挙する必要をなくします。親はPAX fileをidentity・時刻・長さ・SHA-256で検査し、Windowsではwrite／delete sharingを拒否した同じhandleを子のstdinとして継承させます。backendは`@-`からのみ読みます。開始前のfingerprintを終了後にも照合し、さらに別sandboxで再展開した完全rootがstaging sourceと一致しなければ公開しません。
+作成backendへはstaging treeのpathを渡しません。信頼する親プロセスが通常fileとdirectoryだけを決定的なPAX archiveへ直列化し、path深さ・長さ、file数、directory数、単一file size、合計sizeを設定上限で再検査します。これはzero-capability AppContainerからdrive rootを列挙する必要をなくします。親はPAX fileをidentity・時刻・長さ・SHA-256で検査し、Windowsではwrite／delete sharingを拒否した同じhandleを子のstdinとして継承してprocess終了まで保持します。backendには通常の圧縮元ではなく固定のsandbox-local名`@source.pax.tar`だけを渡し、同じPAX fileをread-onlyで再オープンさせます。開始前のfingerprintを終了後にも照合し、さらに別sandboxで再展開した完全rootがstaging sourceと一致しなければ公開しません。
 
 作成backend終了後もstaging sourceとPAX streamのfingerprintを維持していることを確認し、生成書庫はhandleから別sandboxへ渡します。PAX writerが最初から正規化済み相対pathを生成するため、backendの正規表現置換には依存しません。libarchiveが付ける単一の`./` prefixまたはroot markerだけを作成物専用のraw listing policyで正規化し、二重prefix、backslash形式、親参照、絶対pathなどは拒否します。再展開した完全rootがsourceと一致し、さらに書庫identity・時刻・長さ・SHA-256が検証時と一致するhandleからだけ最終出力へcopyします。内容不一致、同一サイズ改変、identity置換、危険なlistingはいずれも出力前にfail closedになります。
 
-Windowsの作成経路では、AppContainerが本来書き込めるPackage profile storageからstaging sourceを分離し、backend起動前に通常の一時領域へ複製します。そのsource rootの既存DACLを継承から保護し、Package SIDには継承可能なread／execute専用ACEだけを設定します。file data／append／EA／attribute書込、child削除、delete、DACL変更、owner変更は与えません。sourceの親directoryにはroot到達と列挙に必要な非継承read accessだけを与えます。`SetNamedSecurityInfoW`の自動継承によりread-only ACEを既存の子へ伝播し、通常ユーザー側のallow ACEは維持するため親プロセスは監査とcleanupを続けられます。MicrosoftのAppContainer dual-principal modelどおり、ユーザー側が許可されていてもPackage SID側にread／executeしか許可しないことでchildの実効書込権限を止めます。実行ファイルを同じAppContainerへbyte-identical copyしたprobeが親／root／nestedの列挙、root／nested内容の読取成功と、overwrite、append、親／rootでの作成、rename、delete、attribute、DACL、owner各write accessの拒否を測定します。実際の作成backendへsource pathやPAX pathは渡さず、検査済みPAX handleだけをstdinとして継承させます。API根拠は[AppContainer isolation](https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-isolation)、[Automatic Propagation of Inheritable ACEs](https://learn.microsoft.com/en-us/windows/win32/secauthz/automatic-propagation-of-inheritable-aces)、[`SetEntriesInAclW`](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setentriesinaclw)、[Launch an AppContainer](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)です。明示的unsandboxed経路ではstaging treeのWindows DACL封印は適用されませんが、PAX handleのwrite／delete sharing拒否と前後fingerprint検査は維持します。
+Windowsの作成経路では、AppContainerが本来書き込めるPackage profile storageからstaging sourceを分離し、backend起動前に通常の一時領域へ複製します。そのsource rootの既存DACLを継承から保護し、Package SIDには継承可能なread／execute専用ACEだけを設定します。file data／append／EA／attribute書込、child削除、delete、DACL変更、owner変更は与えません。sourceの親directoryにはroot到達と列挙に必要な非継承read accessだけを与えます。`SetNamedSecurityInfoW`の自動継承によりread-only ACEを既存の子へ伝播し、通常ユーザー側のallow ACEは維持するため親プロセスは監査とcleanupを続けられます。MicrosoftのAppContainer dual-principal modelどおり、ユーザー側が許可されていてもPackage SID側にread／executeしか許可しないことでchildの実効書込権限を止めます。実行ファイルを同じAppContainerへbyte-identical copyしたprobeが親／root／nestedの列挙、root／nested内容の読取成功と、overwrite、append、親／rootでの作成、rename、delete、attribute、DACL、owner各write accessの拒否を測定します。実際の作成backendへ通常のsource pathは渡しません。検査済みPAX handleをstdinとして継承しながら、固定のsandbox-local名だけをread-onlyで開かせます。この互換経路はMSYS2 UCRT64 `bsdtar`がAppContainer内の`@-` archive変換で再現性のあるaccess violationを起こしたためのもので、保持handleによるWindowsのwrite／delete sharing拒否と終了後fingerprint照合を維持します。API根拠は[AppContainer isolation](https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-isolation)、[Automatic Propagation of Inheritable ACEs](https://learn.microsoft.com/en-us/windows/win32/secauthz/automatic-propagation-of-inheritable-aces)、[`SetEntriesInAclW`](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setentriesinaclw)、[Launch an AppContainer](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)です。明示的unsandboxed経路ではstaging treeのWindows DACL封印は適用されませんが、前後fingerprint検査は維持します。
 
 Windowsのtree member列挙は、`FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT`かつread共有だけで開いたdirectory handleに対し、`GetFileInformationByHandleEx(FileIdBothDirectoryInfo)`を使用します。固定64 KiB bufferを検査し、設定のfile＋directory上限を超えて名前を蓄積しません。handleと現在pathのvolume serial／file indexを列挙前後で照合し、各directory identityを初回監査と実コピーの間でも比較します。これにより列挙対象directory自身のrename／deleteと同名の空directory差替えを検出します。根拠は[`FILE_ID_BOTH_DIR_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info)、[`GetFileInformationByHandle`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle)、[`CreateFileW`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)です。非Windowsの明示的検証経路はdirectory handleとidentityを保持・照合しますが、member名の取得自体は`read_dir`です。
 

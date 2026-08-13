@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: iroha-zip version
-      placeholder: v0.3.1
+      placeholder: v0.4.0
     validations:
       required: true
   - type: input
