@@ -21,12 +21,13 @@ iroha-zip 0.4.0 は、Windows x64 向けの最初の安定版扱いリリース�
 ### 主な変更
 
 - 生成書庫を別のsandboxで再展開し、監査済み圧縮元と完全一致するまで公開しない作成経路。
-- 上限付きPAXをmaterialize・照合し、backendを再コピーしてtreeをread-only封印してから作成する二段階経路と、handleを保持したTOCTOU対策。
+- 監査済み通常objectだけの外部staging treeを全entry単位でread-only封印し、相対`.`だけから作成する経路と、handleを保持したTOCTOU対策。
+- 検証済みsandbox copyへ固定UTF-8 process manifestを埋め込み・再照合する、Windows版libarchive 3.8.6以降の日本語名回帰対策。
 - raw member名を検査するbounded preflight、悪性書庫回帰コーパス、5つのbounded fuzz target。
 - policy-safe previewと、全書庫監査後に行う選択展開。
 - backend provenance、SPDX SBOM、license evidenceの厳格な検証。
 - Windows Attachment Servicesへの明示的なbest-effort／required handoff。
-- 高DPI、キーボード操作、rollback-safe保存に対応した設定画面。
+- 日本語／英語、高DPI、キーボード操作、rollback-safe保存に対応した設定画面。
 - 日本語／英語のGitHub Pagesと完全な日英利用ガイド。
 
 既知の制約と検証状況は、同梱の `README.md` / `README.en.md` と `docs/BUILD_STATUS.md` を確認してください。
@@ -54,12 +55,13 @@ iroha-zip 0.4.0 is the first release presented as a stable Windows x64 download.
 ### Highlights
 
 - Creation re-extracts every generated archive in a second sandbox and refuses publication unless it exactly reproduces the audited source.
-- A two-pass creation path that materializes and verifies bounded PAX input, recopies the backend, seals the tree read-only, and retains handles across TOCTOU-sensitive boundaries.
+- A creation path that copies only audited regular objects into external staging, seals every entry read-only to the Package SID, archives only relative `.`, and retains handles across TOCTOU-sensitive boundaries.
+- A fixed UTF-8 process manifest embedded into and read back from each verified sandbox executable copy to avoid the Windows libarchive 3.8.6+ Unicode-name regression.
 - Bounded raw-member preflight, a generated hostile-archive regression corpus, and five bounded fuzz targets.
 - Policy-safe preview and selective extraction only after auditing the complete archive.
 - Strict backend provenance, SPDX SBOM, and license-evidence verification.
 - Explicit best-effort or required Windows Attachment Services handoff.
-- A high-DPI, keyboard-accessible Settings application with rollback-safe saves.
+- A Japanese/English, high-DPI, keyboard-accessible Settings application with rollback-safe saves.
 - Japanese and English GitHub Pages plus complete bilingual usage guidance.
 
 See the packaged `README.md` / `README.en.md` and `docs/BUILD_STATUS.md` for known limitations and current validation evidence.

@@ -480,7 +480,12 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
                 )
             },
         )?;
-        let acl_applied = staging_probe.sandbox.seal_staged_source(&staging_root)?;
+        let seal_entry_budget = u64::try_from(STAGING_FIXTURES.len() + 1).map_err(|_| {
+            IrohaZipError::Sandbox("staging-write probe entry budget overflow".to_owned())
+        })?;
+        let acl_applied = staging_probe
+            .sandbox
+            .seal_staged_source_tree(&staging_root, seal_entry_budget)?;
         if !acl_applied {
             return Err(IrohaZipError::Sandbox(
                 "staging-write probe did not receive an AppContainer ACL".to_owned(),

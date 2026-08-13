@@ -285,7 +285,9 @@ impl BackendBundle {
             }
         }
 
-        Ok(destination.join(self.executable_relative()?))
+        let executable = destination.join(self.executable_relative()?);
+        platform::prepare_backend_executable(&executable)?;
+        Ok(executable)
     }
 }
 

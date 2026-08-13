@@ -16,8 +16,8 @@ use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_HANDLE_EOF, ERROR_INVALID_PARAMETER,
-    ERROR_NO_MORE_FILES, ERROR_SUCCESS, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS, HLOCAL,
-    LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    ERROR_NO_MORE_FILES, ERROR_SUCCESS, FreeLibrary, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS,
+    HLOCAL, LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Security::Authorization::{
     ConvertSidToStringSidW, EXPLICIT_ACCESS_W, GetNamedSecurityInfoW, NO_MULTIPLE_TRUSTEE,
@@ -51,6 +51,11 @@ use windows::Win32::System::JobObjects::{
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
 };
+use windows::Win32::System::LibraryLoader::{
+    BeginUpdateResourceW, EndUpdateResourceW, FindResourceW, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE,
+    LOAD_LIBRARY_AS_IMAGE_RESOURCE, LoadLibraryExW, LoadResource, LockResource, SizeofResource,
+    UpdateResourceW,
+};
 use windows::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateMutexW, CreateProcessW,
     DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess,
@@ -62,6 +67,7 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::System::WindowsProgramming::PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
 use windows::Win32::UI::Shell::{AttachmentServices, IAttachmentExecute};
+use windows::Win32::UI::WindowsAndMessaging::RT_MANIFEST;
 use windows::core::{Error as WindowsError, GUID, HRESULT, PCWSTR, PWSTR};
 
 use crate::config::IsolationMode;
@@ -75,6 +81,109 @@ const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
 const CONFIG_SAVE_MUTEX_NAME: &str = r"Local\iroha-zip.ConfigSave.v1";
 const CONFIG_SAVE_MUTEX_TIMEOUT_MS: u32 = 30_000;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
+const BACKEND_MANIFEST_RESOURCE_ID: u16 = 1;
+const BACKEND_MANIFEST_LANGUAGE_EN_US: u16 = 0x0409;
+const UTF8_BACKEND_MANIFEST: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings" xmlns:ws3="http://schemas.microsoft.com/SMI/2019/WindowsSettings">
+      <ws2:longPathAware>true</ws2:longPathAware>
+      <ws3:activeCodePage>UTF-8</ws3:activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>
+"#;
+
+pub fn prepare_backend_executable(path: &Path) -> Result<()> {
+    validate_regular_file_security(path)?;
+    let wide_path = wide_null(path.as_os_str());
+    let update = unsafe { BeginUpdateResourceW(PCWSTR(wide_path.as_ptr()), true) }
+        .map_err(|error| windows_error_path("BeginUpdateResourceW", path, error))?;
+    let resource_name = integer_resource(BACKEND_MANIFEST_RESOURCE_ID);
+    let manifest_length = u32::try_from(UTF8_BACKEND_MANIFEST.len())
+        .map_err(|_| IrohaZipError::Backend("UTF-8 backend manifest length overflow".to_owned()))?;
+    let write_result = unsafe {
+        UpdateResourceW(
+            update,
+            RT_MANIFEST,
+            resource_name,
+            BACKEND_MANIFEST_LANGUAGE_EN_US,
+            Some(UTF8_BACKEND_MANIFEST.as_ptr().cast()),
+            manifest_length,
+        )
+    };
+    if let Err(error) = write_result {
+        let _ = unsafe { EndUpdateResourceW(update, true) };
+        return Err(windows_error_path("UpdateResourceW", path, error));
+    }
+    unsafe { EndUpdateResourceW(update, false) }
+        .map_err(|error| windows_error_path("EndUpdateResourceW", path, error))?;
+
+    validate_regular_file_security(path)?;
+    verify_utf8_backend_manifest(path)
+}
+
+fn verify_utf8_backend_manifest(path: &Path) -> Result<()> {
+    let wide_path = wide_null(path.as_os_str());
+    let module = unsafe {
+        LoadLibraryExW(
+            PCWSTR(wide_path.as_ptr()),
+            None,
+            LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE | LOAD_LIBRARY_AS_IMAGE_RESOURCE,
+        )
+    }
+    .map_err(|error| windows_error_path("LoadLibraryExW for manifest verification", path, error))?;
+    let verification = (|| {
+        let resource = unsafe {
+            FindResourceW(
+                Some(module),
+                integer_resource(BACKEND_MANIFEST_RESOURCE_ID),
+                RT_MANIFEST,
+            )
+        };
+        if resource.0.is_null() {
+            return Err(IrohaZipError::Backend(format!(
+                "UTF-8 backend manifest resource is missing after preparation: {}",
+                path.display()
+            )));
+        }
+        let size = unsafe { SizeofResource(Some(module), resource) };
+        let size = usize::try_from(size).map_err(|_| {
+            IrohaZipError::Backend("UTF-8 backend manifest resource length overflow".to_owned())
+        })?;
+        let loaded = unsafe { LoadResource(Some(module), resource) }
+            .map_err(|error| windows_error_path("LoadResource", path, error))?;
+        let pointer = unsafe { LockResource(loaded) };
+        if pointer.is_null() {
+            return Err(IrohaZipError::Backend(format!(
+                "UTF-8 backend manifest resource is unreadable after preparation: {}",
+                path.display()
+            )));
+        }
+        let observed = unsafe { std::slice::from_raw_parts(pointer.cast::<u8>(), size) };
+        if observed != UTF8_BACKEND_MANIFEST {
+            return Err(IrohaZipError::Backend(format!(
+                "UTF-8 backend manifest resource changed after preparation: {}",
+                path.display()
+            )));
+        }
+        Ok(())
+    })();
+    let release = unsafe { FreeLibrary(module) }
+        .map_err(|error| windows_error_path("FreeLibrary", path, error));
+    verification.and(release)
+}
+
+fn integer_resource(value: u16) -> PCWSTR {
+    PCWSTR(usize::from(value) as *const u16)
+}
 
 pub struct AttachmentHandoffSession {
     _apartment: ComApartment,
@@ -512,25 +621,29 @@ impl Sandbox {
         }
     }
 
-    pub fn seal_staged_source(&self, path: &Path) -> Result<bool> {
+    pub fn seal_staged_source_tree(&self, path: &Path, max_entries: u64) -> Result<bool> {
         let resolved = fs::canonicalize(path).map_err(|error| {
-            IrohaZipError::io_path("cannot resolve staged source before sealing", path, error)
+            IrohaZipError::io_path(
+                "cannot resolve staged source tree before sealing",
+                path,
+                error,
+            )
         })?;
         validate_directory_security(&resolved)?;
         let allowed_parent = self.sealed_source_parent.as_deref().unwrap_or(&self.root);
         if resolved == allowed_parent || !resolved.starts_with(allowed_parent) {
             return Err(IrohaZipError::Sandbox(format!(
-                "refusing to change a staging ACL outside a sandbox child: {}",
+                "refusing to seal a staged tree outside its sandbox child: {}",
                 resolved.display()
             )));
         }
 
         let mode = self.mode.as_ref().ok_or_else(|| {
-            IrohaZipError::Sandbox("cannot seal staging after sandbox cleanup".to_owned())
+            IrohaZipError::Sandbox("cannot seal a staged tree after sandbox cleanup".to_owned())
         })?;
         match mode {
             Mode::AppContainer { sid, .. } => {
-                restrict_appcontainer_tree_to_readonly(&resolved, *sid)?;
+                restrict_appcontainer_tree_to_readonly_recursive(&resolved, *sid, max_entries)?;
                 Ok(true)
             }
             Mode::Unsandboxed => Ok(false),
@@ -641,17 +754,6 @@ impl Sandbox {
     }
 }
 
-fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> {
-    set_appcontainer_access(
-        path,
-        sid,
-        FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
-        SUB_CONTAINERS_AND_OBJECTS_INHERIT,
-        true,
-        "staged source",
-    )
-}
-
 fn restrict_appcontainer_tree_to_readonly_recursive(
     path: &Path,
     sid: PSID,
@@ -709,7 +811,7 @@ fn restrict_appcontainer_tree_to_readonly_recursive(
     }
 
     // Set every object's Package-SID access explicitly before sealing the root.
-    // This removes any explicit write-capable ACE left by the materializer;
+    // This removes any explicit write-capable ACE already present on a child;
     // root inheritance alone would preserve such an ACE.
     for (entry, is_directory) in entries.into_iter().rev() {
         set_appcontainer_access(
@@ -722,7 +824,7 @@ fn restrict_appcontainer_tree_to_readonly_recursive(
                 NO_INHERITANCE
             },
             true,
-            "materialized source",
+            "sealed staged source",
         )?;
     }
     Ok(())
@@ -1786,10 +1888,9 @@ fn minimal_environment_pairs(program: &Path, root: &Path) -> Vec<(OsString, OsSt
     let backend_dir = program.parent().unwrap_or(root).as_os_str().to_owned();
     let root_os = root.as_os_str().to_owned();
     vec![
-        // Keep this spelling lowercase.  libarchive's native-Windows
-        // current-codepage detector recognizes `utf8` and `UTF-8`, but not
-        // the otherwise UCRT-equivalent `UTF8`.  The latter makes PAX UTF-8
-        // names unreadable when the host ACP cannot represent them.
+        // Keep explicit UTF-8 locale hints for CRT/backend builds that honor
+        // the environment. The prepared executable's activeCodePage manifest
+        // is the process-wide Windows guarantee on supported OS versions.
         (OsString::from("LANG"), OsString::from(".utf8")),
         (OsString::from("LC_ALL"), OsString::from(".utf8")),
         (OsString::from("LOCALAPPDATA"), root_os.clone()),
@@ -1849,7 +1950,7 @@ mod tests {
     }
 
     #[test]
-    fn backend_environment_uses_libarchive_compatible_utf8_locale_spelling() {
+    fn backend_environment_keeps_explicit_utf8_locale_hints() {
         let pairs = minimal_environment_pairs(
             Path::new(r"C:\backend\bsdtar.exe"),
             Path::new(r"C:\sandbox"),
@@ -1861,6 +1962,21 @@ mod tests {
                 .expect("UTF-8 locale variable must be present");
             assert_eq!(value, ".utf8");
         }
+    }
+
+    #[test]
+    fn backend_preparation_changes_only_the_disposable_copy_and_verifies_its_manifest() {
+        let directory = TestDirectory::new();
+        let original = std::env::current_exe().unwrap();
+        let original_bytes = fs::read(&original).unwrap();
+        let disposable = directory.0.join("prepared-backend.exe");
+        fs::copy(&original, &disposable).unwrap();
+
+        prepare_backend_executable(&disposable).unwrap();
+        verify_utf8_backend_manifest(&disposable).unwrap();
+
+        assert_eq!(fs::read(&original).unwrap(), original_bytes);
+        assert_ne!(fs::read(&disposable).unwrap(), original_bytes);
     }
 
     #[test]

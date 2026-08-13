@@ -66,7 +66,7 @@
                 <li>ZIPと3つの個別EXE</li>
                 <li>SHA-256一覧</li>
                 <li>GitHub artifact attestation</li>
-                <li>日本語・英語ガイド</li>
+                <li>日本語・英語ガイド／設定画面</li>
               </ul>
             </div>
           </aside>
@@ -160,7 +160,7 @@
       <section class="section" id="formats">
         <div class="section-heading">
           <h2>日本の古い書庫も。</h2>
-          <p>libarchiveが有効にしている形式を自動判定します。文字コード情報のない古い日本語ZIP/LZHにはCP932を明示できます。</p>
+          <p>libarchiveが有効にしている形式を自動判定します。UTF-8 process modeで新しい日本語名を保ち、文字コード情報のない古い日本語ZIP/LZHにはCP932を明示できます。</p>
         </div>
 
         <table class="format-table">
@@ -168,7 +168,7 @@
             <tr><th scope="row">展開</th><td>ZIP / ZIPX、7z、RAR / RAR5、LHA / LZH、TAR、GZ、BZ2、XZ、Zstandard、.Z、CABほか</td></tr>
             <tr><th scope="row">作成</th><td>ZIP、7z、TAR、TAR.GZ</td></tr>
             <tr><th scope="row">文字コード</th><td>auto、UTF-8、CP932、CP437</td></tr>
-            <tr><th scope="row">対象OS</th><td>Windows 10以降。通常利用はWindows 11 x64を想定</td></tr>
+            <tr><th scope="row">対象OS</th><td>Windows 10 version 1903以降。通常利用はWindows 11 x64を想定</td></tr>
           </tbody>
         </table>
 

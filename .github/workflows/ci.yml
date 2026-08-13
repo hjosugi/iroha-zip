@@ -66,9 +66,13 @@ jobs:
       - name: Exercise native settings accessibility contract
         if: runner.os == 'Windows'
         shell: pwsh
-        run: >-
-          ./scripts/test-settings-ui.ps1
-          -Executable ./target/debug/iroha-zip-settings.exe
+        run: |
+          ./scripts/test-settings-ui.ps1 `
+            -Executable ./target/debug/iroha-zip-settings.exe `
+            -Language ja
+          ./scripts/test-settings-ui.ps1 `
+            -Executable ./target/debug/iroha-zip-settings.exe `
+            -Language en
 
   windows-e2e:
     # The fixed-label AppContainer/backend matrix is deliberately separated
@@ -238,6 +242,7 @@ jobs:
           -Executable ./target/release/iroha-zip-settings.exe
           -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-e2e-backend')
           -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'settings-e2e.json')
+          -Language en
 
       - name: Summarize backend crash evidence
         if: failure()

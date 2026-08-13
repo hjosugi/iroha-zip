@@ -13,6 +13,10 @@ use crate::monitor;
 use crate::platform::{FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec};
 use crate::util;
 
+pub fn prepare_backend_executable(path: &Path) -> Result<()> {
+    validate_regular_file_security(path)
+}
+
 pub struct Sandbox {
     root: PathBuf,
 }
@@ -244,14 +248,25 @@ impl Sandbox {
         }
     }
 
-    pub fn seal_staged_source(&self, path: &Path) -> Result<bool> {
+    pub fn seal_staged_source_tree(&self, path: &Path, _max_entries: u64) -> Result<bool> {
         let resolved = fs::canonicalize(path).map_err(|error| {
-            IrohaZipError::io_path("cannot resolve staged source before sealing", path, error)
+            IrohaZipError::io_path(
+                "cannot resolve staged source tree before sealing",
+                path,
+                error,
+            )
         })?;
         validate_directory_security(&resolved)?;
-        if resolved == self.root || !resolved.starts_with(&self.root) {
+        let root = fs::canonicalize(&self.root).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot resolve sandbox root before sealing a staged tree",
+                &self.root,
+                error,
+            )
+        })?;
+        if resolved == root || !resolved.starts_with(&root) {
             return Err(IrohaZipError::Sandbox(format!(
-                "refusing to change staging permissions outside a sandbox child: {}",
+                "refusing to seal a staged tree outside a sandbox child: {}",
                 resolved.display()
             )));
         }
@@ -476,8 +491,8 @@ mod tests {
         let sandbox = Sandbox::new(64, true, IsolationMode::AppContainer).unwrap();
         let source = sandbox.root().join("source");
         fs::create_dir(&source).unwrap();
-        assert!(!sandbox.seal_staged_source(&source).unwrap());
-        assert!(sandbox.seal_staged_source(sandbox.root()).is_err());
+        assert!(!sandbox.seal_staged_source_tree(&source, 0).unwrap());
+        assert!(sandbox.seal_staged_source_tree(sandbox.root(), 0).is_err());
 
         let internal = sandbox.root().join("internal");
         fs::create_dir(&internal).unwrap();

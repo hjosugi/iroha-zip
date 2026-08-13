@@ -5,7 +5,10 @@ param(
 
     [string]$BackendDirectory,
 
-    [string]$EvidenceOutput
+    [string]$EvidenceOutput,
+
+    [ValidateSet("ja", "en")]
+    [string]$Language = "ja"
 )
 
 Set-StrictMode -Version Latest
@@ -245,6 +248,20 @@ $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
 $longDirectory = Join-Path $testRoot ("長い保存先-" + ("x" * 96))
 $configPath = Join-Path $testRoot "設定.toml"
 [System.IO.Directory]::CreateDirectory($longDirectory) | Out-Null
+$expectedWindowPrefix = if ($Language -eq "ja") {
+    "iroha-zip 設定"
+}
+else {
+    "iroha-zip Settings"
+}
+$expectedDoctorText = if ($Language -eq "ja") {
+    "診断に成功"
+}
+else {
+    "diagnosis succeeded"
+}
+$previousLanguage = $env:IROHA_ZIP_LANGUAGE
+$env:IROHA_ZIP_LANGUAGE = $Language
 
 $process = $null
 $setupEvidence = $null
@@ -252,7 +269,7 @@ try {
     $process = Start-Process -FilePath $executablePath `
         -ArgumentList @("--config", $configPath) -PassThru
     $window = Wait-ForProcessWindow -Process $process
-    if ($window.Current.Name -notlike "iroha-zip 設定*") {
+    if ($window.Current.Name -notlike "$expectedWindowPrefix*") {
         throw "Unexpected settings window name: $($window.Current.Name)"
     }
 
@@ -277,6 +294,17 @@ try {
     foreach ($id in $buttonIds) {
         $controls[$id] = Require-Control -Window $window -Id $id `
             -Type ([System.Windows.Automation.ControlType]::Button)
+    }
+    $localizedNamePatterns = if ($Language -eq "ja") {
+        @{ 1 = "保存"; 1002 = "診断"; 1201 = "既定値" }
+    }
+    else {
+        @{ 1 = "Save"; 1002 = "Diagnose"; 1201 = "Restore defaults" }
+    }
+    foreach ($entry in $localizedNamePatterns.GetEnumerator()) {
+        if ($controls[[int]$entry.Key].Current.Name -notmatch [regex]::Escape($entry.Value)) {
+            throw "Control $($entry.Key) is not localized for ${Language}: $($controls[[int]$entry.Key].Current.Name)"
+        }
     }
 
     foreach ($id in @(1001, 1003, 1004)) {
@@ -420,7 +448,7 @@ try {
                 $textCondition
             ) | ForEach-Object { $_.Current.Name }
         ) -join "`n"
-        if ($doctorText -notmatch "診断に成功") {
+        if ($doctorText -notmatch $expectedDoctorText) {
             throw "Settings-screen backend/AppContainer diagnostic did not report success: $doctorText"
         }
         Dismiss-Message $doctorMessage
@@ -431,6 +459,7 @@ try {
         $setupEvidence = [ordered]@{
             schemaVersion = 1
             status = "passed"
+            language = $Language
             generatedAtUtc = [DateTime]::UtcNow.ToString("o")
             controlCount = 26
             safeFolderPickerCancellations = 3
@@ -462,6 +491,12 @@ finally {
     }
     if (Test-Path -LiteralPath $testRoot) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force
+    }
+    if ($null -eq $previousLanguage) {
+        Remove-Item Env:IROHA_ZIP_LANGUAGE -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:IROHA_ZIP_LANGUAGE = $previousLanguage
     }
 }
 

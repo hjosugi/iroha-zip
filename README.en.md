@@ -45,17 +45,13 @@ Audit links, reparse points, ADS, hard links, and size limits
     ↓
 Copy only audited regular files to isolated staging
     ↓
-Have the parent create a bounded PAX snapshot, then remove the original staging copy
+Seal every staged file and directory read/execute-only to the Package SID
     ↓
-Materialize the PAX tree in AppContainer and match it to the source fingerprint
-    ↓
-Discard and recopy the backend, then seal the materialized tree read-only to its Package SID
-    ↓
-Archive only relative `.` with the freshly SHA-256-verified bsdtar
+Set the sealed tree as the working directory and let SHA-256-pinned bsdtar archive only relative `.`
     ↓
 Monitor the output archive size
     ↓
-Recheck the sealed materialized-source fingerprint
+Recheck the sealed staging-tree fingerprint
     ↓
 List and re-extract the result in a second AppContainer and compare the complete tree
     ↓
@@ -105,7 +101,7 @@ cp932
 cp437
 ```
 
-Perfect automatic detection is impossible when a ZIP does not record its filename encoding correctly. The Settings application therefore retains an explicit default encoding option for double-click extraction.
+Perfect automatic detection is impossible when a ZIP does not record its filename encoding correctly. The Settings application therefore retains an explicit default encoding option for double-click extraction. To avoid the [upstream UTF-8 filename regression](https://github.com/libarchive/libarchive/issues/3063) in Windows libarchive 3.8.6 and later, iroha-zip embeds a UTF-8 process-code-page manifest only into the verified sandbox copy of the backend executable and reads the resource back byte-for-byte before launch. The imported original and DLLs remain unchanged.
 
 ## Security design
 
@@ -124,13 +120,13 @@ iroha-zip fails closed on:
 - unexpected, missing, or linked files in the backend bundle; and
 - overwriting an existing extraction destination or output archive.
 
-A Job Object restricts the backend to one process, enforces a memory limit, and terminates timeouts. Extracted files are never used directly from temporary storage: only inspected regular files are copied into a new partial folder, which is then renamed atomically. Windows tree audits enumerate names through parent directory handles opened without rename/delete sharing and compare directory identity during audit and copy. Creation similarly audits and duplicates the source, denies Package SID writes, then re-extracts the produced archive in a separate sandbox and requires a matching tree fingerprint. The explicit unsandboxed diagnostic path keeps before/after fingerprint detection but cannot apply the Windows DACL seal.
+A Job Object restricts the backend to one process, enforces a memory limit, and terminates timeouts. Extracted files are never used directly from temporary storage: only inspected regular files are copied into a new partial folder, which is then renamed atomically. Windows tree audits enumerate names through parent directory handles opened without rename/delete sharing and compare directory identity during audit and copy. For creation, the trusted parent audits and copies the source into a unique external staging tree, protects every object from inherited DACL changes, and grants the Package SID only read/execute access. The backend receives that tree as its working directory and only relative `.`, never the normal source path. Before/after fingerprints and a full re-extraction in a second sandbox must match before publication. The explicit unsandboxed diagnostic path keeps before/after fingerprint detection but cannot apply the Windows DACL seal.
 
 See the [threat model](docs/THREAT_MODEL.md). The differences between AppContainer and experimental LPAC, fail-closed rules, and unfinished validation are tracked in the [LPAC evaluation](docs/LPAC_EVALUATION.md). Automated Windows evidence and its limits are specified in [Windows E2E](docs/WINDOWS_E2E.md), and generated hostile fixtures are described in the [malicious corpus](docs/MALICIOUS_CORPUS.md).
 
 ## Runtime requirements
 
-- Windows 10 or later; normal use targets Windows 11 x64
+- Windows 10 version 1903 or later; normal use targets Windows 11 x64
 - A libarchive 3.8.9-series `bsdtar.exe` and its required DLLs
 - PowerShell 5.1 or later
 
@@ -214,6 +210,8 @@ Open Settings from the extracted package:
 .\iroha-zip.exe settings
 # or .\iroha-zip-settings.exe
 ```
+
+Settings follows the Windows user UI language: Japanese systems use Japanese, and other UI languages use English. Support and automation can explicitly set the process environment variable `IROHA_ZIP_LANGUAGE=ja` or `en`; the override is not persisted in the configuration file.
 
 The application manages:
 

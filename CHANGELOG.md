@@ -8,8 +8,9 @@
 
 - Updated the SHA-1/SHA-256 implementation dependencies to the compatible
   `sha1`/`sha2` 0.11.0 generation.
-- Replaced the crashing AppContainer `bsdtar @archive` conversion with a bounded two-pass path: materialize and fingerprint the parent-generated PAX tree, recopy the verified backend, seal that tree read-only, then archive relative `.`.
-- Pin the Windows backend locale to libarchive-compatible `.utf8` spelling so PAX paths remain readable when the host ANSI code page cannot represent Japanese names.
+- Replaced the crashing AppContainer `bsdtar @archive` conversion with a bounded path that copies only audited regular objects into a unique external staging tree, seals every object read/execute-only to the Package SID, and archives only relative `.` from that working directory.
+- Work around libarchive's Windows 3.8.6+ UTF-8 filename regression by embedding and byte-verifying a fixed UTF-8 process-code-page manifest in each already-verified sandbox executable copy; the imported backend remains unchanged.
+- Localize the complete native Settings surface in Japanese and English, follow the Windows UI language, provide an explicit process-local override, and exercise both languages through UI Automation.
 
 - Added an accessible Japanese/English GitHub Pages site and complete English project guide.
 - Publish a stable unsigned Windows x64 release with the ZIP, three individual executables, SHA-256 inventories, and GitHub artifact attestations.

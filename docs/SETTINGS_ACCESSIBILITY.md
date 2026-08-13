@@ -1,6 +1,6 @@
 # Settings accessibility and UI automation
 
-Updated: 2026-08-10
+Updated: 2026-08-14
 
 This document records the implemented UX-001 contract and the evidence that is still required on
 real Windows systems. It does not claim screen-reader or high-DPI certification.
@@ -21,7 +21,7 @@ different scale factors remains part of the real-Windows matrix.
 Every editable setting, combo box, checkbox, and action button has:
 
 - a stable, non-zero Win32 control ID;
-- a visible Japanese label with a unique access key;
+- a visible Japanese or English label with a unique access key;
 - standard Win32 keyboard behavior through `IsDialogMessageW`;
 - Tab/Shift+Tab focus, Enter-to-save, and Escape-to-close behavior;
 - an unsaved-change marker and a close confirmation when edits have not been saved.
@@ -30,11 +30,13 @@ The 15 setting IDs occupy 2001–2015. The 11 action IDs include 1001–1004, 11
 (1), and `IDCANCEL` (2). A platform-neutral `SettingsAction` mapping is exhaustively tested so every
 action ID has exactly one dispatch target.
 
+The settings application localizes labels, combo-box choices, status text, validation, folder-picker titles, confirmations, success messages, and operational errors. It follows the Windows user UI language: Japanese selects Japanese, while other UI languages use English. `IROHA_ZIP_LANGUAGE=ja` or `IROHA_ZIP_LANGUAGE=en` is an explicit process-local override for automation and support reproduction; it is not persisted in the configuration file.
+
 ## UI Automation smoke test
 
 Windows CI builds the release settings executable and runs
 [test-settings-ui.ps1](../scripts/test-settings-ui.ps1) with the native .NET UI Automation API.
-The script creates a temporary configuration path and a long, non-ASCII backend path, then checks
+The fast Windows job runs the complete contract once in Japanese and once in English. The script creates a temporary configuration path and a long, non-ASCII backend path, then checks
 all 26 controls for:
 
 - expected AutomationId and control type;
@@ -49,7 +51,7 @@ then invokes Restore Defaults twice, requires accessible No/Yes confirmation pat
 preserved edits and restored defaults, makes the form dirty again, and invokes the native Cancel
 button twice to verify both preservation and confirmed discard through the accessible dialog.
 
-When supplied a verified backend and evidence path by the dedicated Windows E2E job, a second disposable settings process also saves that backend path through the native Save button, dismisses the success dialog, invokes the settings-screen diagnosis, requires the real backend/AppContainer diagnostic success dialog, closes from a clean state, hashes the saved configuration and executable, and writes a JSON report after removing the temporary tree. This does not exercise backend replacement, file associations, Default Apps, or folder-picker side effects.
+When supplied a verified backend and evidence path by the dedicated Windows E2E job, a second disposable English settings process also saves that backend path through the native Save button, dismisses the success dialog, invokes the settings-screen diagnosis, requires the real backend/AppContainer diagnostic success dialog, closes from a clean state, hashes the saved configuration and executable, records the exercised language, and writes a JSON report after removing the temporary tree. This does not exercise backend replacement, file associations, Default Apps, or folder-picker side effects.
 
 The smoke test cancels import before a source is selected, and deliberately does not invoke actual
 backend replacement, association changes, Default Apps, or the configuration-folder launch because

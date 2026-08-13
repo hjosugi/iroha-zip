@@ -46,17 +46,13 @@ Mark-of-the-Webを各ファイルへ伝播
     ↓
 監査済みの通常ファイルだけを隔離stagingへコピー
     ↓
-親プロセスが上限付きPAX snapshotを生成し、元のstaging copyを削除
+全file／directoryのDACLをPackage SIDからread／execute専用に封印
     ↓
-AppContainer内でPAXを一時treeへ展開し、元fingerprintと照合
-    ↓
-使用したbackendを破棄・再コピーし、一時treeをPackage SIDからread-onlyに封印
-    ↓
-再コピーしたSHA-256固定済みbsdtarで相対`.`だけを圧縮
+SHA-256固定済みbsdtarに封印treeをcurrent directoryとして与え、相対`.`だけを圧縮
     ↓
 生成中の書庫サイズを監視
     ↓
-封印した一時treeが変わっていないことをfingerprintで再確認
+封印したstaging treeが変わっていないことをfingerprintで再確認
     ↓
 生成書庫を別のAppContainerでlisting検査・再展開し、元treeと照合
     ↓
@@ -106,7 +102,7 @@ cp932
 cp437
 ```
 
-ZIPに文字コード情報が正しく保存されていない場合、完全な自動判定は不可能です。そのため手動指定を残しています。ダブルクリック展開で使う既定値は設定画面から選択できます。
+ZIPに文字コード情報が正しく保存されていない場合、完全な自動判定は不可能です。そのため手動指定を残しています。ダブルクリック展開で使う既定値は設定画面から選択できます。Windows版libarchive 3.8.6以降にあるUTF-8名の[上流回帰](https://github.com/libarchive/libarchive/issues/3063)を避けるため、検証済みbackendをsandboxへコピーした後、その一時EXEだけにUTF-8 process code page manifestを埋め込み、埋め込んだbytesを実行前に再読出しして照合します。取り込んだ原本とDLLは変更しません。
 
 ## セキュリティ設計
 
@@ -125,13 +121,13 @@ iroha-zipは次をfail-closedで拒否します。
 - バックエンドフォルダ内の余分なファイル、欠落ファイル、リンク
 - 既存の展開先や既存の出力書庫の上書き
 
-さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。作成時は圧縮元を監査・複製して上限付きPAX snapshotへ変換し、元copyをbackend起動前に削除します。PAXを一度AppContainer内へ展開して元treeと照合した後、その処理に使ったbackendを破棄して検証済みbundleから再コピーし、展開treeをPackage SIDからread-onlyにDACL封印してから相対`.`だけを圧縮します。生成書庫は別sandboxへ再展開し、tree fingerprintが一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
+さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。backendにはそのtreeをcurrent directoryとして設定し、通常の圧縮元pathではなく相対`.`だけを渡します。作成前後にfingerprintを照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
 
 詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。通常AppContainerと実験的LPACの差、fail-closed条件、未完の検証matrixは[LPAC評価](docs/LPAC_EVALUATION.md)、Windows自動E2Eの証跡項目と限界は[Windows E2E](docs/WINDOWS_E2E.md)、生成型の攻撃書庫と非公開方針は[悪性コーパス](docs/MALICIOUS_CORPUS.md)に分離しています。
 
 ## 動作環境
 
-- Windows 10以降。通常利用はWindows 11 x64を想定
+- Windows 10 version 1903以降。通常利用はWindows 11 x64を想定
 - libarchive 3.8.9系の`bsdtar.exe`と実行に必要なDLL
 - PowerShell 5.1以降
 
@@ -215,6 +211,8 @@ dist\iroha-zip\
 .\iroha-zip.exe settings
 # または .\iroha-zip-settings.exe
 ```
+
+設定画面はWindowsのユーザーUI言語が日本語なら日本語、それ以外なら英語で表示します。サポート時や自動試験では、process環境変数`IROHA_ZIP_LANGUAGE=ja`または`en`で明示できます。この指定は設定ファイルへ保存されません。
 
 設定画面から次のすべてを実行できます。
 

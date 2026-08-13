@@ -175,20 +175,46 @@ impl SettingsField {
             Self::MaxPathBytes => "パス長",
         }
     }
+
+    pub fn english_label(self) -> &'static str {
+        match self {
+            Self::General => "Settings",
+            Self::BackendDirectory => "Backend location",
+            Self::TimeoutSeconds => "Timeout",
+            Self::MemoryLimitMib => "Memory limit",
+            Self::MaxArchiveBytes => "Input archive limit",
+            Self::MaxFiles => "File count",
+            Self::MaxDirectories => "Directory count",
+            Self::MaxTotalBytes => "Total size",
+            Self::MaxSingleFileBytes => "Single-file size",
+            Self::MaxDepth => "Path depth",
+            Self::MaxPathBytes => "Path length",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsValidationError {
     pub field: SettingsField,
     pub message: String,
+    pub english_message: String,
 }
 
 impl SettingsValidationError {
-    fn new(field: SettingsField, message: impl Into<String>) -> Self {
+    fn new(
+        field: SettingsField,
+        message: impl Into<String>,
+        english_message: impl Into<String>,
+    ) -> Self {
         Self {
             field,
             message: message.into(),
+            english_message: english_message.into(),
         }
+    }
+
+    pub fn english(&self) -> String {
+        format!("{}: {}", self.field.english_label(), self.english_message)
     }
 }
 
@@ -290,10 +316,12 @@ impl SettingsForm {
             return Err(SettingsValidationError::new(
                 SettingsField::MaxSingleFileBytes,
                 "合計容量以下にしてください。",
+                "Must not exceed the total size limit.",
             ));
         }
         config.validate().map_err(|error| {
-            SettingsValidationError::new(SettingsField::General, error.to_string())
+            let message = error.to_string();
+            SettingsValidationError::new(SettingsField::General, &message, message.clone())
         })?;
         Ok(config)
     }
@@ -320,12 +348,17 @@ fn parse_byte_count(input: &str, field: SettingsField) -> Result<u64, SettingsVa
         .unwrap_or(normalized.len());
     let (digits, suffix) = normalized.split_at(digit_end);
     let value = digits.parse::<u64>().map_err(|_| {
-        SettingsValidationError::new(field, "0より大きい整数と単位を入力してください。")
+        SettingsValidationError::new(
+            field,
+            "0より大きい整数と単位を入力してください。",
+            "Enter an integer greater than zero and an optional unit.",
+        )
     })?;
     if value == 0 {
         return Err(SettingsValidationError::new(
             field,
             "0より大きい値を入力してください。",
+            "Enter a value greater than zero.",
         ));
     }
     let multiplier = match suffix.trim().to_ascii_lowercase().as_str() {
@@ -338,23 +371,28 @@ fn parse_byte_count(input: &str, field: SettingsField) -> Result<u64, SettingsVa
             return Err(SettingsValidationError::new(
                 field,
                 "単位は B、KiB、MiB、GiB、TiB のいずれかを使用してください。",
+                "Use one of these units: B, KiB, MiB, GiB, or TiB.",
             ));
         }
     };
-    value
-        .checked_mul(multiplier)
-        .ok_or_else(|| SettingsValidationError::new(field, "値が大きすぎます。"))
+    value.checked_mul(multiplier).ok_or_else(|| {
+        SettingsValidationError::new(field, "値が大きすぎます。", "The value is too large.")
+    })
 }
 
 fn parse_positive_u64(input: &str, field: SettingsField) -> Result<u64, SettingsValidationError> {
-    let value =
-        input.trim().replace('_', "").parse::<u64>().map_err(|_| {
-            SettingsValidationError::new(field, "0より大きい整数を入力してください。")
-        })?;
+    let value = input.trim().replace('_', "").parse::<u64>().map_err(|_| {
+        SettingsValidationError::new(
+            field,
+            "0より大きい整数を入力してください。",
+            "Enter an integer greater than zero.",
+        )
+    })?;
     if value == 0 {
         return Err(SettingsValidationError::new(
             field,
             "0より大きい整数を入力してください。",
+            "Enter an integer greater than zero.",
         ));
     }
     Ok(value)
@@ -365,7 +403,9 @@ fn parse_positive_usize(
     field: SettingsField,
 ) -> Result<usize, SettingsValidationError> {
     let value = parse_positive_u64(input, field)?;
-    usize::try_from(value).map_err(|_| SettingsValidationError::new(field, "値が大きすぎます。"))
+    usize::try_from(value).map_err(|_| {
+        SettingsValidationError::new(field, "値が大きすぎます。", "The value is too large.")
+    })
 }
 
 fn parse_bounded_u64(
@@ -378,12 +418,14 @@ fn parse_bounded_u64(
         SettingsValidationError::new(
             field,
             format!("{minimum}から{maximum}の整数を入力してください。"),
+            format!("Enter an integer from {minimum} through {maximum}."),
         )
     })?;
     if !(minimum..=maximum).contains(&value) {
         return Err(SettingsValidationError::new(
             field,
             format!("{minimum}から{maximum}の範囲で入力してください。"),
+            format!("Enter a value from {minimum} through {maximum}."),
         ));
     }
     Ok(value)

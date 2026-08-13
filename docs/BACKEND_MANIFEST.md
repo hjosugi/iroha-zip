@@ -38,6 +38,8 @@ Manifest paths use `/` separators and must be normalized relative paths. iroha-z
 
 After parsing, iroha-zip enumerates the executable payload without following links. Symlinks, reparse points, special files, missing files, extra files, unsafe file identities, and digest mismatches fail verification. The only reserved non-payload entry is `.iroha-zip-evidence/`; when present, its entire separate tree is validated against the provenance, SPDX, and license inventories before the backend is accepted. Evidence files are not copied into the AppContainer.
 
+On Windows, the verified original executable is copied and hash-checked before sandbox use. iroha-zip then replaces only the temporary copy's executable resources with a fixed `asInvoker`, long-path-aware, UTF-8 process-code-page manifest and reads that manifest back byte-for-byte before launch. This avoids the [libarchive 3.8.6+ Windows Unicode-name regression](https://github.com/libarchive/libarchive/issues/3063). It does not alter the imported original or DLLs, and the prepared copy is never installed or redistributed. The payload hash always identifies the unmodified source executable; the prepared sandbox copy is trusted through the verified-source → fixed-transform → resource-readback chain.
+
 ## Trust boundary
 
 The v1 manifest proves consistency with the bytes recorded during local import. Source classification, enforced MSYS2/pacman signature policy, package archive digests, SPDX 2.3 SBOM, payload ownership, and license evidence are recorded and independently checked as described in [Backend provenance, SBOM, and license evidence](BACKEND_EVIDENCE.md).

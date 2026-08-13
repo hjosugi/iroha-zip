@@ -66,7 +66,7 @@
                 <li>ZIP and three standalone EXEs</li>
                 <li>SHA-256 inventory</li>
                 <li>GitHub artifact attestation</li>
-                <li>Japanese and English guides</li>
+                <li>Japanese/English guides and Settings</li>
               </ul>
             </div>
           </aside>
@@ -160,7 +160,7 @@
       <section class="section" id="formats">
         <div class="section-heading">
           <h2>Including legacy Japanese archives.</h2>
-          <p>libarchive automatically detects enabled formats. Old Japanese ZIP and LZH archives that omit encoding metadata can explicitly use CP932.</p>
+          <p>libarchive automatically detects enabled formats. UTF-8 process mode preserves modern Japanese names; old ZIP and LZH archives that omit encoding metadata can explicitly use CP932.</p>
         </div>
 
         <table class="format-table">
@@ -168,7 +168,7 @@
             <tr><th scope="row">Extract</th><td>ZIP / ZIPX, 7z, RAR / RAR5, LHA / LZH, TAR, GZ, BZ2, XZ, Zstandard, .Z, CAB, and more</td></tr>
             <tr><th scope="row">Create</th><td>ZIP, 7z, TAR, TAR.GZ</td></tr>
             <tr><th scope="row">Filename encoding</th><td>auto, UTF-8, CP932, CP437</td></tr>
-            <tr><th scope="row">Operating system</th><td>Windows 10 or later; normal use targets Windows 11 x64</td></tr>
+            <tr><th scope="row">Operating system</th><td>Windows 10 version 1903 or later; normal use targets Windows 11 x64</td></tr>
           </tbody>
         </table>
 

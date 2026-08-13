@@ -55,6 +55,9 @@ fn invalid_field_is_reported_for_ui_focus() {
     form.memory_limit_mib = "32".to_owned();
     let error = form.into_config().unwrap_err();
     assert_eq!(error.field, SettingsField::MemoryLimitMib);
+    assert!(error.to_string().contains("メモリ上限"));
+    assert!(error.english().contains("Memory limit"));
+    assert!(error.english().contains("64 through 1048576"));
 
     let mut form = SettingsForm::from_config(&Config::default());
     form.max_single_file_bytes = "64 GiB".to_owned();

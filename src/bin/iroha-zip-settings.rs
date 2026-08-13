@@ -21,9 +21,11 @@ mod windows_app {
     use std::os::windows::process::CommandExt;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
+    use std::sync::OnceLock;
     use windows::Win32::Foundation::{
         ERROR_CANCELLED, HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,
     };
+    use windows::Win32::Globalization::GetUserDefaultUILanguage;
     use windows::Win32::Graphics::Gdi::{
         COLOR_3DFACE, DEFAULT_GUI_FONT, GetStockObject, GetSysColorBrush, ScreenToClient,
         UpdateWindow,
@@ -63,11 +65,62 @@ mod windows_app {
     use windows::core::{Error as WindowsError, HRESULT, PCWSTR};
 
     const WINDOW_CLASS: &str = "iroha-zip.Settings.Window";
-    const WINDOW_TITLE: &str = "iroha-zip 設定";
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     const BUTTON_CHECKED: usize = 1;
     const CONTENT_WIDTH: i32 = 932;
     const CONTENT_HEIGHT: i32 = 720;
+    const PRIMARY_LANGUAGE_JAPANESE: u16 = 0x11;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum Language {
+        Japanese,
+        English,
+    }
+
+    static LANGUAGE: OnceLock<Language> = OnceLock::new();
+
+    fn language_from_tag(value: &OsStr) -> Option<Language> {
+        let normalized = value.to_string_lossy().trim().to_ascii_lowercase();
+        if normalized == "ja" || normalized.starts_with("ja-") || normalized.starts_with("ja_") {
+            Some(Language::Japanese)
+        } else if normalized == "en"
+            || normalized.starts_with("en-")
+            || normalized.starts_with("en_")
+        {
+            Some(Language::English)
+        } else {
+            None
+        }
+    }
+
+    fn detect_language() -> Language {
+        if let Some(value) = std::env::var_os("IROHA_ZIP_LANGUAGE")
+            && let Some(language) = language_from_tag(&value)
+        {
+            return language;
+        }
+        let ui_language = unsafe { GetUserDefaultUILanguage() };
+        if ui_language & 0x03ff == PRIMARY_LANGUAGE_JAPANESE {
+            Language::Japanese
+        } else {
+            Language::English
+        }
+    }
+
+    fn selected_language() -> Language {
+        *LANGUAGE.get_or_init(detect_language)
+    }
+
+    fn tr(japanese: &'static str, english: &'static str) -> &'static str {
+        match selected_language() {
+            Language::Japanese => japanese,
+            Language::English => english,
+        }
+    }
+
+    pub fn window_title() -> &'static str {
+        tr("iroha-zip 設定", "iroha-zip Settings")
+    }
 
     #[derive(Default)]
     struct Controls {
@@ -119,7 +172,10 @@ mod windows_app {
                 add_static(
                     parent,
                     instance,
-                    "安全性に関わる全設定とWindows統合を、ここから検証・管理できます。",
+                    tr(
+                        "安全性に関わる全設定とWindows統合を、ここから検証・管理できます。",
+                        "Validate and manage all security settings and Windows integration here.",
+                    ),
                     18,
                     12,
                     888,
@@ -128,15 +184,35 @@ mod windows_app {
                 add_static(
                     parent,
                     instance,
-                    &format!("設定ファイル: {}", self.config_path.display()),
+                    &format!(
+                        "{} {}",
+                        tr("設定ファイル:", "Configuration file:"),
+                        self.config_path.display()
+                    ),
                     18,
                     36,
                     888,
                     20,
                 )?;
 
-                add_group(parent, instance, "バックエンド", 14, 60, 904, 108)?;
-                add_static(parent, instance, "保存先(&L)", 28, 86, 92, 22)?;
+                add_group(
+                    parent,
+                    instance,
+                    tr("バックエンド", "Backend"),
+                    14,
+                    60,
+                    904,
+                    108,
+                )?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("保存先(&L)", "&Location"),
+                    28,
+                    86,
+                    92,
+                    22,
+                )?;
                 self.controls.backend = add_edit(
                     parent,
                     instance,
@@ -150,7 +226,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "選択(&B)...",
+                    tr("選択(&B)...", "&Browse..."),
                     690,
                     81,
                     96,
@@ -161,7 +237,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "診断(&D)",
+                    tr("診断(&D)", "&Diagnose"),
                     796,
                     81,
                     104,
@@ -172,7 +248,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "bundleを取り込む(&I)...",
+                    tr("bundleを取り込む(&I)...", "&Import bundle..."),
                     122,
                     119,
                     190,
@@ -183,7 +259,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "MSYS2から取り込む(&M)...",
+                    tr("MSYS2から取り込む(&M)...", "Import from &MSYS2..."),
                     322,
                     119,
                     190,
@@ -194,7 +270,10 @@ mod windows_app {
                 add_static(
                     parent,
                     instance,
-                    "取り込み時にSHA-256 manifestを生成し、既存bundleを安全に置換します。",
+                    tr(
+                        "取り込み時にSHA-256 manifestを生成し、既存bundleを安全に置換します。",
+                        "Import generates a SHA-256 manifest and safely replaces the existing bundle.",
+                    ),
                     526,
                     123,
                     372,
@@ -202,13 +281,32 @@ mod windows_app {
                 )?;
 
                 add_group(parent, instance, "AppContainer", 14, 174, 904, 67)?;
-                add_static(parent, instance, "分離モード(&Q)", 28, 201, 92, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("分離モード(&Q)", "Isolation (&Q)"),
+                    28,
+                    201,
+                    92,
+                    22,
+                )?;
                 self.controls.isolation =
                     add_combo(parent, instance, 122, 197, 190, 120, control_id::ISOLATION)?;
-                for label in ["AppContainer（互換）", "LPAC（実験）"] {
+                for label in [
+                    tr("AppContainer（互換）", "AppContainer (compatible)"),
+                    tr("LPAC（実験）", "LPAC (experimental)"),
+                ] {
                     combo_add(self.controls.isolation, label);
                 }
-                add_static(parent, instance, "時間(&T)（1–86400秒）", 340, 201, 142, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("時間(&T)（1–86400秒）", "&Timeout (1–86400 s)"),
+                    340,
+                    201,
+                    142,
+                    22,
+                )?;
                 self.controls.timeout_seconds = add_edit(
                     parent,
                     instance,
@@ -219,7 +317,15 @@ mod windows_app {
                     true,
                     control_id::TIMEOUT_SECONDS,
                 )?;
-                add_static(parent, instance, "メモリ(&Y)（MiB）", 630, 201, 112, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("メモリ(&Y)（MiB）", "Memor&y (MiB)"),
+                    630,
+                    201,
+                    112,
+                    22,
+                )?;
                 self.controls.memory_limit_mib = add_edit(
                     parent,
                     instance,
@@ -231,8 +337,24 @@ mod windows_app {
                     control_id::MEMORY_LIMIT_MIB,
                 )?;
 
-                add_group(parent, instance, "展開・作成の上限", 14, 247, 904, 194)?;
-                add_static(parent, instance, "入力書庫の上限(&Z)", 28, 276, 164, 22)?;
+                add_group(
+                    parent,
+                    instance,
+                    tr("展開・作成の上限", "Extraction and creation limits"),
+                    14,
+                    247,
+                    904,
+                    194,
+                )?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("入力書庫の上限(&Z)", "Archive si&ze limit"),
+                    28,
+                    276,
+                    164,
+                    22,
+                )?;
                 self.controls.max_archive_bytes = add_edit(
                     parent,
                     instance,
@@ -243,7 +365,15 @@ mod windows_app {
                     false,
                     control_id::MAX_ARCHIVE_BYTES,
                 )?;
-                add_static(parent, instance, "ファイル数(&N)", 478, 276, 150, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("ファイル数(&N)", "File cou&nt"),
+                    478,
+                    276,
+                    150,
+                    22,
+                )?;
                 self.controls.max_files = add_edit(
                     parent,
                     instance,
@@ -255,7 +385,15 @@ mod windows_app {
                     control_id::MAX_FILES,
                 )?;
 
-                add_static(parent, instance, "ディレクトリ数(&G)", 28, 316, 164, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("ディレクトリ数(&G)", "Directory count (&G)"),
+                    28,
+                    316,
+                    164,
+                    22,
+                )?;
                 self.controls.max_directories = add_edit(
                     parent,
                     instance,
@@ -266,7 +404,15 @@ mod windows_app {
                     true,
                     control_id::MAX_DIRECTORIES,
                 )?;
-                add_static(parent, instance, "合計容量の上限(&H)", 478, 316, 150, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("合計容量の上限(&H)", "Total size limit (&H)"),
+                    478,
+                    316,
+                    150,
+                    22,
+                )?;
                 self.controls.max_total_bytes = add_edit(
                     parent,
                     instance,
@@ -278,7 +424,15 @@ mod windows_app {
                     control_id::MAX_TOTAL_BYTES,
                 )?;
 
-                add_static(parent, instance, "単一ファイル上限(&J)", 28, 356, 164, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("単一ファイル上限(&J)", "Single-file limit (&J)"),
+                    28,
+                    356,
+                    164,
+                    22,
+                )?;
                 self.controls.max_single_file_bytes = add_edit(
                     parent,
                     instance,
@@ -289,7 +443,15 @@ mod windows_app {
                     false,
                     control_id::MAX_SINGLE_FILE_BYTES,
                 )?;
-                add_static(parent, instance, "パスの深さ(&K)", 478, 356, 150, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("パスの深さ(&K)", "Path depth (&K)"),
+                    478,
+                    356,
+                    150,
+                    22,
+                )?;
                 self.controls.max_depth = add_edit(
                     parent,
                     instance,
@@ -304,7 +466,7 @@ mod windows_app {
                 add_static(
                     parent,
                     instance,
-                    "パス長(&V)（UTF-8 bytes）",
+                    tr("パス長(&V)（UTF-8 bytes）", "Path length (&V), UTF-8 bytes"),
                     28,
                     396,
                     164,
@@ -323,18 +485,32 @@ mod windows_app {
                 add_static(
                     parent,
                     instance,
-                    "容量は 16 GiB / 512 MiB のように入力できます。",
+                    tr(
+                        "容量は 16 GiB / 512 MiB のように入力できます。",
+                        "Sizes accept values such as 16 GiB or 512 MiB.",
+                    ),
                     478,
                     396,
                     380,
                     22,
                 )?;
 
-                add_group(parent, instance, "展開時の動作", 14, 447, 904, 104)?;
+                add_group(
+                    parent,
+                    instance,
+                    tr("展開時の動作", "Extraction behavior"),
+                    14,
+                    447,
+                    904,
+                    104,
+                )?;
                 self.controls.preserve_motw = add_checkbox(
                     parent,
                     instance,
-                    "Mark-of-the-Webを展開後のファイルへ引き継ぐ(&X)",
+                    tr(
+                        "Mark-of-the-Webを展開後のファイルへ引き継ぐ(&X)",
+                        "Propagate Mark-of-the-Web to extracted files (&X)",
+                    ),
                     30,
                     474,
                     350,
@@ -344,20 +520,44 @@ mod windows_app {
                 self.controls.open_after_double_click = add_checkbox(
                     parent,
                     instance,
-                    "ダブルクリック展開後にフォルダを開く(&O)",
+                    tr(
+                        "ダブルクリック展開後にフォルダを開く(&O)",
+                        "&Open folder after double-click extraction",
+                    ),
                     30,
                     498,
                     350,
                     24,
                     control_id::OPEN_AFTER_DOUBLE_CLICK,
                 )?;
-                add_static(parent, instance, "既定の文字コード(&E)", 486, 481, 142, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("既定の文字コード(&E)", "Default &encoding"),
+                    486,
+                    481,
+                    142,
+                    22,
+                )?;
                 self.controls.encoding =
                     add_combo(parent, instance, 636, 475, 222, 120, control_id::ENCODING)?;
-                for label in ["自動判定", "UTF-8", "CP932（日本語）", "CP437"] {
+                for label in [
+                    tr("自動判定", "Automatic"),
+                    "UTF-8",
+                    tr("CP932（日本語）", "CP932 (Japanese)"),
+                    "CP437",
+                ] {
                     combo_add(self.controls.encoding, label);
                 }
-                add_static(parent, instance, "Windows信頼連携(&W)", 486, 515, 142, 22)?;
+                add_static(
+                    parent,
+                    instance,
+                    tr("Windows信頼連携(&W)", "Windows trust (&W)"),
+                    486,
+                    515,
+                    142,
+                    22,
+                )?;
                 self.controls.attachment_handoff = add_combo(
                     parent,
                     instance,
@@ -368,18 +568,29 @@ mod windows_app {
                     control_id::ATTACHMENT_HANDOFF,
                 )?;
                 for label in [
-                    "無効（既定）",
-                    "best-effort（失敗を表示）",
-                    "必須（失敗時は公開しない）",
+                    tr("無効（既定）", "Disabled (default)"),
+                    tr("best-effort（失敗を表示）", "Best effort (report failure)"),
+                    tr(
+                        "必須（失敗時は公開しない）",
+                        "Required (do not publish on failure)",
+                    ),
                 ] {
                     combo_add(self.controls.attachment_handoff, label);
                 }
 
-                add_group(parent, instance, "Windows 統合", 14, 557, 904, 72)?;
+                add_group(
+                    parent,
+                    instance,
+                    tr("Windows 統合", "Windows integration"),
+                    14,
+                    557,
+                    904,
+                    72,
+                )?;
                 add_button(
                     parent,
                     instance,
-                    "関連付けを登録(&A)",
+                    tr("関連付けを登録(&A)", "Register &associations"),
                     30,
                     583,
                     160,
@@ -390,7 +601,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "関連付けを解除(&U)",
+                    tr("関連付けを解除(&U)", "&Unregister associations"),
                     200,
                     583,
                     160,
@@ -401,7 +612,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "既定のアプリを開く(&P)",
+                    tr("既定のアプリを開く(&P)", "Open default a&pps"),
                     370,
                     583,
                     180,
@@ -412,7 +623,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "設定フォルダを開く(&F)",
+                    tr("設定フォルダを開く(&F)", "Open config &folder"),
                     560,
                     583,
                     180,
@@ -424,7 +635,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "既定値に戻す(&R)",
+                    tr("既定値に戻す(&R)", "&Restore defaults"),
                     18,
                     642,
                     150,
@@ -435,7 +646,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "保存(&S)",
+                    tr("保存(&S)", "&Save"),
                     670,
                     642,
                     110,
@@ -446,7 +657,7 @@ mod windows_app {
                 add_button(
                     parent,
                     instance,
-                    "閉じる(&C)",
+                    tr("閉じる(&C)", "&Close"),
                     790,
                     642,
                     110,
@@ -454,8 +665,15 @@ mod windows_app {
                     control_id::CANCEL,
                     false,
                 )?;
-                self.controls.status =
-                    add_static(parent, instance, "設定を読み込みました。", 18, 682, 882, 22)?;
+                self.controls.status = add_static(
+                    parent,
+                    instance,
+                    tr("設定を読み込みました。", "Settings loaded."),
+                    18,
+                    682,
+                    882,
+                    22,
+                )?;
             }
 
             self.apply_config(&config);
@@ -529,7 +747,10 @@ mod windows_app {
         fn collect_config(&self) -> Result<Config, String> {
             self.read_form()?.into_config().map_err(|error| {
                 self.focus_field(error.field);
-                error.to_string()
+                match selected_language() {
+                    Language::Japanese => error.to_string(),
+                    Language::English => error.english(),
+                }
             })
         }
 
@@ -563,7 +784,13 @@ mod windows_app {
             form.isolation = match isolation {
                 0 => IsolationMode::AppContainer,
                 1 => IsolationMode::Lpac,
-                _ => return Err("分離モードを選択してください。".to_owned()),
+                _ => {
+                    return Err(tr(
+                        "分離モードを選択してください。",
+                        "Select an isolation mode.",
+                    )
+                    .to_owned());
+                }
             };
             let attachment_handoff = unsafe {
                 SendMessageW(
@@ -578,7 +805,13 @@ mod windows_app {
                 0 => AttachmentHandoffPolicy::Disabled,
                 1 => AttachmentHandoffPolicy::BestEffort,
                 2 => AttachmentHandoffPolicy::Required,
-                _ => return Err("Windows信頼連携の方針を選択してください。".to_owned()),
+                _ => {
+                    return Err(tr(
+                        "Windows信頼連携の方針を選択してください。",
+                        "Select a Windows trust handoff policy.",
+                    )
+                    .to_owned());
+                }
             };
             let encoding = unsafe {
                 SendMessageW(
@@ -594,7 +827,13 @@ mod windows_app {
                 1 => FilenameEncoding::Utf8,
                 2 => FilenameEncoding::Cp932,
                 3 => FilenameEncoding::Cp437,
-                _ => return Err("既定の文字コードを選択してください。".to_owned()),
+                _ => {
+                    return Err(tr(
+                        "既定の文字コードを選択してください。",
+                        "Select a default filename encoding.",
+                    )
+                    .to_owned());
+                }
             };
             Ok(form)
         }
@@ -606,10 +845,16 @@ mod windows_app {
                 .map_err(|error| error.to_string())?;
             self.saved_config.replace(config);
             self.update_dirty_title(parent);
-            set_control_text(self.controls.status, "設定を保存しました。");
+            set_control_text(
+                self.controls.status,
+                tr("設定を保存しました。", "Settings saved."),
+            );
             show_message(
                 Some(parent),
-                "設定を保存しました。次回の処理から反映されます。",
+                tr(
+                    "設定を保存しました。次回の処理から反映されます。",
+                    "Settings were saved and apply to the next operation.",
+                ),
                 MB_OK | MB_ICONINFORMATION,
             );
             Ok(())
@@ -617,13 +862,21 @@ mod windows_app {
 
         fn browse_backend(&self, parent: HWND) -> Result<(), String> {
             let initial = control_text(self.controls.backend)?;
-            if let Some(path) =
-                choose_folder(parent, "backend-manifest.tsvを含むフォルダ", &initial)?
-            {
+            if let Some(path) = choose_folder(
+                parent,
+                tr(
+                    "backend-manifest.tsvを含むフォルダ",
+                    "Folder containing backend-manifest.tsv",
+                ),
+                &initial,
+            )? {
                 set_control_os_text(self.controls.backend, path.as_os_str());
                 set_control_text(
                     self.controls.status,
-                    "バックエンドの保存先を変更しました。保存前に診断できます。",
+                    tr(
+                        "バックエンドの保存先を変更しました。保存前に診断できます。",
+                        "Backend location changed. You can diagnose it before saving.",
+                    ),
                 );
             }
             Ok(())
@@ -633,7 +886,10 @@ mod windows_app {
             let config = self.collect_config()?;
             let details = self.run_busy(
                 parent,
-                "バックエンドとAppContainerを診断しています...",
+                tr(
+                    "バックエンドとAppContainerを診断しています...",
+                    "Diagnosing the backend and AppContainer...",
+                ),
                 || {
                     let backend_dir = config
                         .backend_directory()
@@ -654,18 +910,31 @@ mod windows_app {
                         .creation_flags(CREATE_NO_WINDOW)
                         .output();
                     let _ = fs::remove_file(&temporary_config);
-                    let output =
-                        output_result.map_err(|error| format!("診断を開始できません: {error}"))?;
+                    let output = output_result.map_err(|error| {
+                        format!(
+                            "{}: {error}",
+                            tr("診断を開始できません", "Cannot start diagnosis")
+                        )
+                    })?;
                     if !output.status.success() {
-                        return Err(command_failure("診断", &output));
+                        return Err(command_failure(tr("診断", "Diagnosis"), &output));
                     }
                     Ok(decoded_output(&output))
                 },
             )?;
-            set_control_text(self.controls.status, "診断に成功しました。");
+            set_control_text(
+                self.controls.status,
+                tr("診断に成功しました。", "Diagnosis succeeded."),
+            );
             show_message(
                 Some(parent),
-                &format!("バックエンドとAppContainerの診断に成功しました。\n\n{details}"),
+                &format!(
+                    "{}\n\n{details}",
+                    tr(
+                        "バックエンドとAppContainerの診断に成功しました。",
+                        "Backend and AppContainer diagnosis succeeded."
+                    )
+                ),
                 MB_OK | MB_ICONINFORMATION,
             );
             Ok(())
@@ -673,9 +942,15 @@ mod windows_app {
 
         fn import_backend(&self, parent: HWND, from_msys2: bool) -> Result<(), String> {
             let title = if from_msys2 {
-                "MSYS2のルート（例: C:\\msys64）"
+                tr(
+                    "MSYS2のルート（例: C:\\msys64）",
+                    "MSYS2 root (for example, C:\\msys64)",
+                )
             } else {
-                "bsdtar.exeと依存DLLを含むbundle"
+                tr(
+                    "bsdtar.exeと依存DLLを含むbundle",
+                    "Bundle containing bsdtar.exe and dependent DLLs",
+                )
             };
             let Some(source) = choose_folder(parent, title, "")? else {
                 return Ok(());
@@ -683,12 +958,18 @@ mod windows_app {
             if !from_msys2
                 && !confirm_action(
                     parent,
-                    "警告: 任意のbundleは未対応の取得元です。配布元の署名や由来を検証できません。\n\nこの警告を理解し、未検証の取得元として取り込みますか？",
+                    tr(
+                        "警告: 任意のbundleは未対応の取得元です。配布元の署名や由来を検証できません。\n\nこの警告を理解し、未検証の取得元として取り込みますか？",
+                        "Warning: An arbitrary bundle is an unsupported source. Its distributor signature and origin cannot be verified.\n\nDo you understand this warning and want to import it as an unverified source?",
+                    ),
                 )
             {
                 set_control_text(
                     self.controls.status,
-                    "未検証bundleの取り込みを中止しました。",
+                    tr(
+                        "未検証bundleの取り込みを中止しました。",
+                        "Unverified bundle import cancelled.",
+                    ),
                 );
                 return Ok(());
             }
@@ -699,12 +980,18 @@ mod windows_app {
             if destination.exists()
                 && !confirm_action(
                     parent,
-                    "現在のバックエンドを検証済みの新しいbundleで置き換えます。続行しますか？",
+                    tr(
+                        "現在のバックエンドを検証済みの新しいbundleで置き換えます。続行しますか？",
+                        "Replace the current backend with the newly verified bundle?",
+                    ),
                 )
             {
                 set_control_text(
                     self.controls.status,
-                    "バックエンドの取り込みを中止しました。",
+                    tr(
+                        "バックエンドの取り込みを中止しました。",
+                        "Backend import cancelled.",
+                    ),
                 );
                 return Ok(());
             }
@@ -716,7 +1003,10 @@ mod windows_app {
             };
             let (bundle, evidence) = self.run_busy(
                 parent,
-                "バックエンドと供給元証跡を取り込み、検証しています...",
+                tr(
+                    "バックエンドと供給元証跡を取り込み、検証しています...",
+                    "Importing and verifying the backend and source evidence...",
+                ),
                 || {
                     let mut arguments = vec![
                         OsString::from(source_argument),
@@ -729,7 +1019,10 @@ mod windows_app {
                     }
                     let output = run_script(script, &arguments)?;
                     if !output.status.success() {
-                        return Err(command_failure("バックエンド取り込み", &output));
+                        return Err(command_failure(
+                            tr("バックエンド取り込み", "Backend import"),
+                            &output,
+                        ));
                     }
                     let bundle =
                         BackendBundle::verify(&destination).map_err(|error| error.to_string())?;
@@ -745,23 +1038,35 @@ mod windows_app {
             self.update_dirty_title(parent);
             set_control_text(
                 self.controls.status,
-                "バックエンドを取り込み、検証しました。",
-            );
-            show_message(
-                Some(parent),
-                &format!(
-                    "バックエンドを取り込みました。\n\n保存先: {}\n実行ファイル: {}\n取得元: {}\n証跡: {}",
-                    bundle.root().display(),
-                    bundle.executable().display(),
-                    if evidence.is_supported() {
-                        "MSYS2 UCRT64（署名方針を強制して検証済み）"
-                    } else {
-                        "未対応・未検証（明示承認済み）"
-                    },
-                    evidence.root().display()
+                tr(
+                    "バックエンドを取り込み、検証しました。",
+                    "Backend imported and verified.",
                 ),
-                MB_OK | MB_ICONINFORMATION,
             );
+            let source_description = if evidence.is_supported() {
+                tr(
+                    "MSYS2 UCRT64（署名方針を強制して検証済み）",
+                    "MSYS2 UCRT64 (verified with enforced signature policy)",
+                )
+            } else {
+                tr(
+                    "未対応・未検証（明示承認済み）",
+                    "Unsupported and unverified (explicitly approved)",
+                )
+            };
+            let message = format!(
+                "{}\n\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+                tr("バックエンドを取り込みました。", "Backend imported."),
+                tr("保存先", "Location"),
+                bundle.root().display(),
+                tr("実行ファイル", "Executable"),
+                bundle.executable().display(),
+                tr("取得元", "Source"),
+                source_description,
+                tr("証跡", "Evidence"),
+                evidence.root().display()
+            );
+            show_message(Some(parent), &message, MB_OK | MB_ICONINFORMATION);
             Ok(())
         }
 
@@ -769,16 +1074,31 @@ mod windows_app {
             if !register
                 && !confirm_action(
                     parent,
-                    "現在のユーザーからiroha-zipの関連付け候補を解除します。続行しますか？",
+                    tr(
+                        "現在のユーザーからiroha-zipの関連付け候補を解除します。続行しますか？",
+                        "Remove iroha-zip as an association candidate for the current user?",
+                    ),
                 )
             {
-                set_control_text(self.controls.status, "関連付けの解除を中止しました。");
+                set_control_text(
+                    self.controls.status,
+                    tr(
+                        "関連付けの解除を中止しました。",
+                        "Association removal cancelled.",
+                    ),
+                );
                 return Ok(());
             }
             let progress = if register {
-                "関連付け候補を登録しています..."
+                tr(
+                    "関連付け候補を登録しています...",
+                    "Registering association candidates...",
+                )
             } else {
-                "関連付け候補を解除しています..."
+                tr(
+                    "関連付け候補を解除しています...",
+                    "Removing association candidates...",
+                )
             };
             let output = self.run_busy(parent, progress, || {
                 if register {
@@ -796,12 +1116,18 @@ mod windows_app {
                 }
             })?;
             if !output.status.success() {
-                return Err(command_failure("関連付け", &output));
+                return Err(command_failure(tr("関連付け", "Association"), &output));
             }
             let message = if register {
-                "iroha-zipをアーカイブアプリ候補として登録しました。既定のアプリ画面で拡張子ごとの選択を確定してください。"
+                tr(
+                    "iroha-zipをアーカイブアプリ候補として登録しました。既定のアプリ画面で拡張子ごとの選択を確定してください。",
+                    "iroha-zip is registered as an archive-app candidate. Confirm each extension in Windows Default Apps.",
+                )
             } else {
-                "iroha-zipの関連付け候補を解除しました。Windowsの既定選択は必要に応じて変更してください。"
+                tr(
+                    "iroha-zipの関連付け候補を解除しました。Windowsの既定選択は必要に応じて変更してください。",
+                    "iroha-zip association candidates were removed. Change existing Windows defaults if needed.",
+                )
             };
             set_control_text(self.controls.status, message);
             show_message(Some(parent), message, MB_OK | MB_ICONINFORMATION);
@@ -812,20 +1138,39 @@ mod windows_app {
             spawn_explorer(OsStr::new("ms-settings:defaultapps"))?;
             set_control_text(
                 self.controls.status,
-                "Windowsの既定のアプリ画面を開きました。",
+                tr(
+                    "Windowsの既定のアプリ画面を開きました。",
+                    "Opened Windows Default Apps.",
+                ),
             );
             Ok(())
         }
 
         fn open_config_folder(&self) -> Result<(), String> {
-            let parent = self
-                .config_path
-                .parent()
-                .ok_or_else(|| "設定ファイルに親フォルダがありません。".to_owned())?;
-            fs::create_dir_all(parent)
-                .map_err(|error| format!("設定フォルダを作成できません: {error}"))?;
+            let parent = self.config_path.parent().ok_or_else(|| {
+                tr(
+                    "設定ファイルに親フォルダがありません。",
+                    "The configuration file has no parent folder.",
+                )
+                .to_owned()
+            })?;
+            fs::create_dir_all(parent).map_err(|error| {
+                format!(
+                    "{}: {error}",
+                    tr(
+                        "設定フォルダを作成できません",
+                        "Cannot create the configuration folder"
+                    )
+                )
+            })?;
             spawn_explorer(parent.as_os_str())?;
-            set_control_text(self.controls.status, "設定フォルダを開きました。");
+            set_control_text(
+                self.controls.status,
+                tr(
+                    "設定フォルダを開きました。",
+                    "Opened the configuration folder.",
+                ),
+            );
             Ok(())
         }
 
@@ -1062,13 +1407,23 @@ mod windows_app {
             let marker = if dirty { " *" } else { "" };
             set_control_text(
                 parent,
-                &format!("{WINDOW_TITLE} — v{}{marker}", env!("CARGO_PKG_VERSION")),
+                &format!(
+                    "{} — v{}{marker}",
+                    window_title(),
+                    env!("CARGO_PKG_VERSION")
+                ),
             );
         }
 
         fn request_close(&self, parent: HWND) -> Result<(), String> {
             if self.has_unsaved_changes()
-                && !confirm_action(parent, "保存していない変更を破棄して閉じますか？")
+                && !confirm_action(
+                    parent,
+                    tr(
+                        "保存していない変更を破棄して閉じますか？",
+                        "Discard unsaved changes and close?",
+                    ),
+                )
             {
                 return Ok(());
             }
@@ -1115,7 +1470,10 @@ mod windows_app {
                 SettingsAction::RestoreDefaults => {
                     if !confirm_action(
                         parent,
-                        "画面上のすべての設定を安全な既定値へ戻します。保存するまで反映されません。続行しますか？",
+                        tr(
+                            "画面上のすべての設定を安全な既定値へ戻します。保存するまで反映されません。続行しますか？",
+                            "Restore every displayed setting to its safe default? Changes do not apply until saved.",
+                        ),
                     ) {
                         return Ok(());
                     }
@@ -1123,7 +1481,10 @@ mod windows_app {
                     self.update_dirty_title(parent);
                     set_control_text(
                         self.controls.status,
-                        "既定値を表示しています。保存すると反映されます。",
+                        tr(
+                            "既定値を表示しています。保存すると反映されます。",
+                            "Safe defaults are displayed. Save to apply them.",
+                        ),
                     );
                     Ok(())
                 }
@@ -1134,13 +1495,19 @@ mod windows_app {
     }
 
     pub fn run() -> Result<(), String> {
+        let _ = LANGUAGE.set(detect_language());
         let config_path = parse_config_path()?;
         Config::load(&config_path).map_err(|error| error.to_string())?;
 
         unsafe {
             CoInitializeEx(None, COINIT_APARTMENTTHREADED)
                 .ok()
-                .map_err(|error| format!("COMを初期化できません: {error}"))?;
+                .map_err(|error| {
+                    format!(
+                        "{}: {error}",
+                        tr("COMを初期化できません", "Cannot initialize COM")
+                    )
+                })?;
         }
         let result = unsafe { run_message_loop(config_path) };
         unsafe { CoUninitialize() };
@@ -1163,14 +1530,22 @@ mod windows_app {
         };
         if unsafe { RegisterClassW(&raw const window_class) } == 0 {
             return Err(format!(
-                "設定画面のwindow classを登録できません: {}",
+                "{}: {}",
+                tr(
+                    "設定画面のwindow classを登録できません",
+                    "Cannot register the settings window class"
+                ),
                 WindowsError::from_thread()
             ));
         }
 
         let app = Box::new(App::new(config_path));
         let app_pointer = Box::into_raw(app);
-        let title = wide(&format!("{WINDOW_TITLE} — v{}", env!("CARGO_PKG_VERSION")));
+        let title = wide(&format!(
+            "{} — v{}",
+            window_title(),
+            env!("CARGO_PKG_VERSION")
+        ));
         let dpi = unsafe { GetDpiForSystem() }.max(BASE_DPI);
         let screen_width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
         let screen_height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
@@ -1205,7 +1580,13 @@ mod windows_app {
             Ok(window) => window,
             Err(error) => {
                 unsafe { drop(Box::from_raw(app_pointer)) };
-                return Err(format!("設定画面を作成できません: {error}"));
+                return Err(format!(
+                    "{}: {error}",
+                    tr(
+                        "設定画面を作成できません",
+                        "Cannot create the settings window"
+                    )
+                ));
             }
         };
 
@@ -1220,7 +1601,11 @@ mod windows_app {
             if result.0 == -1 {
                 unsafe { drop(Box::from_raw(app_pointer)) };
                 return Err(format!(
-                    "window messageを取得できません: {}",
+                    "{}: {}",
+                    tr(
+                        "window messageを取得できません",
+                        "Cannot retrieve a window message"
+                    ),
                     WindowsError::from_thread()
                 ));
             }
@@ -1283,7 +1668,10 @@ mod windows_app {
                     if !unsafe { (*app_pointer).controls.status }.is_invalid() {
                         set_control_text(
                             unsafe { (*app_pointer).controls.status },
-                            "処理に失敗しました。詳細はエラーダイアログを確認してください。",
+                            tr(
+                                "処理に失敗しました。詳細はエラーダイアログを確認してください。",
+                                "Operation failed. See the error dialog for details.",
+                            ),
                         );
                     }
                 }
@@ -1550,7 +1938,12 @@ mod windows_app {
                 None,
             )
         }
-        .map_err(|error| format!("controlを作成できません: {error}"))?;
+        .map_err(|error| {
+            format!(
+                "{}: {error}",
+                tr("controlを作成できません", "Cannot create a control")
+            )
+        })?;
         let font = unsafe { GetStockObject(DEFAULT_GUI_FONT) };
         unsafe {
             SendMessageW(
@@ -1580,15 +1973,19 @@ mod windows_app {
     fn control_text(control: HWND) -> Result<String, String> {
         let length = unsafe { GetWindowTextLengthW(control) };
         if length < 0 {
-            return Err("入力値の長さを取得できません。".to_owned());
+            return Err(tr(
+                "入力値の長さを取得できません。",
+                "Cannot read the input length.",
+            )
+            .to_owned());
         }
         let capacity = usize::try_from(length)
-            .map_err(|_| "入力値が長すぎます。".to_owned())?
+            .map_err(|_| tr("入力値が長すぎます。", "The input is too long.").to_owned())?
             .saturating_add(1);
         let mut buffer = vec![0u16; capacity];
         let copied = unsafe { GetWindowTextW(control, &mut buffer) };
         if copied < 0 {
-            return Err("入力値を取得できません。".to_owned());
+            return Err(tr("入力値を取得できません。", "Cannot read the input.").to_owned());
         }
         buffer.truncate(usize::try_from(copied).unwrap_or(0));
         Ok(String::from_utf16_lossy(&buffer))
@@ -1622,8 +2019,17 @@ mod windows_app {
 
     fn choose_folder(owner: HWND, title: &str, initial: &str) -> Result<Option<PathBuf>, String> {
         let dialog: IFileOpenDialog =
-            unsafe { CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER) }
-                .map_err(|error| format!("フォルダ選択画面を作成できません: {error}"))?;
+            unsafe { CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER) }.map_err(
+                |error| {
+                    format!(
+                        "{}: {error}",
+                        tr(
+                            "フォルダ選択画面を作成できません",
+                            "Cannot create the folder picker"
+                        )
+                    )
+                },
+            )?;
         let options = unsafe { dialog.GetOptions() }.map_err(|error| error.to_string())?;
         unsafe {
             dialog
@@ -1658,13 +2064,22 @@ mod windows_app {
             Err(error) if error.code() == HRESULT::from_win32(ERROR_CANCELLED.0) => {
                 return Ok(None);
             }
-            Err(error) => return Err(format!("フォルダを選択できません: {error}")),
+            Err(error) => {
+                return Err(format!(
+                    "{}: {error}",
+                    tr("フォルダを選択できません", "Cannot select a folder")
+                ));
+            }
         }
         let item = unsafe { dialog.GetResult() }.map_err(|error| error.to_string())?;
         let display_name =
             unsafe { item.GetDisplayName(SIGDN_FILESYSPATH) }.map_err(|error| error.to_string())?;
         if display_name.is_null() {
-            return Err("選択したフォルダのパスを取得できません。".to_owned());
+            return Err(tr(
+                "選択したフォルダのパスを取得できません。",
+                "Cannot retrieve the selected folder path.",
+            )
+            .to_owned());
         }
         let path = unsafe { os_string_from_wide_ptr(display_name.0) };
         unsafe { CoTaskMemFree(Some(display_name.0.cast::<c_void>())) };
@@ -1679,11 +2094,19 @@ mod windows_app {
             "unregister-associations.ps1",
         ];
         if !allowed.contains(&name) {
-            return Err("許可されていない管理scriptです。".to_owned());
+            return Err(tr(
+                "許可されていない管理scriptです。",
+                "The management script is not allowed.",
+            )
+            .to_owned());
         }
         let script = executable_directory()?.join("scripts").join(name);
         if !script.is_file() {
-            return Err(format!("管理scriptが見つかりません: {}", script.display()));
+            return Err(format!(
+                "{}: {}",
+                tr("管理scriptが見つかりません", "Management script not found"),
+                script.display()
+            ));
         }
         let windows_directory = std::env::var_os("SystemRoot")
             .or_else(|| std::env::var_os("WINDIR"))
@@ -1705,15 +2128,25 @@ mod windows_app {
             .stdin(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW)
             .output()
-            .map_err(|error| format!("PowerShellを開始できません: {error}"))
+            .map_err(|error| {
+                format!(
+                    "{}: {error}",
+                    tr("PowerShellを開始できません", "Cannot start PowerShell")
+                )
+            })
     }
 
     fn command_failure(operation: &str, output: &std::process::Output) -> String {
         let details = decoded_output(output);
-        format!(
-            "{operation}に失敗しました（終了コード: {}）。\n\n{details}",
-            output.status.code().unwrap_or(-1)
-        )
+        let exit_code = output.status.code().unwrap_or(-1);
+        match selected_language() {
+            Language::Japanese => {
+                format!("{operation}に失敗しました（終了コード: {exit_code}）。\n\n{details}")
+            }
+            Language::English => {
+                format!("{operation} failed (exit code: {exit_code}).\n\n{details}")
+            }
+        }
     }
 
     fn decoded_output(output: &std::process::Output) -> String {
@@ -1724,12 +2157,22 @@ mod windows_app {
     }
 
     fn executable_directory() -> Result<PathBuf, String> {
-        let executable = std::env::current_exe()
-            .map_err(|error| format!("実行ファイルの場所を取得できません: {error}"))?;
-        executable
-            .parent()
-            .map(Path::to_path_buf)
-            .ok_or_else(|| "実行ファイルに親フォルダがありません。".to_owned())
+        let executable = std::env::current_exe().map_err(|error| {
+            format!(
+                "{}: {error}",
+                tr(
+                    "実行ファイルの場所を取得できません",
+                    "Cannot locate the executable"
+                )
+            )
+        })?;
+        executable.parent().map(Path::to_path_buf).ok_or_else(|| {
+            tr(
+                "実行ファイルに親フォルダがありません。",
+                "The executable has no parent folder.",
+            )
+            .to_owned()
+        })
     }
 
     fn sibling(name: &str) -> Result<PathBuf, String> {
@@ -1747,7 +2190,12 @@ mod windows_app {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|error| format!("Explorerを開けません: {error}"))?;
+            .map_err(|error| {
+                format!(
+                    "{}: {error}",
+                    tr("Explorerを開けません", "Cannot open File Explorer")
+                )
+            })?;
         Ok(())
     }
 
@@ -1756,16 +2204,27 @@ mod windows_app {
         match arguments.next() {
             None => default_config_path().map_err(|error| error.to_string()),
             Some(flag) if flag == "--config" => {
-                let path = arguments
-                    .next()
-                    .map(PathBuf::from)
-                    .ok_or_else(|| "--configには設定ファイルのパスが必要です。".to_owned())?;
+                let path = arguments.next().map(PathBuf::from).ok_or_else(|| {
+                    tr(
+                        "--configには設定ファイルのパスが必要です。",
+                        "--config requires a configuration file path.",
+                    )
+                    .to_owned()
+                })?;
                 if arguments.next().is_some() {
-                    return Err("設定アプリに不要な引数が指定されました。".to_owned());
+                    return Err(tr(
+                        "設定アプリに不要な引数が指定されました。",
+                        "Unexpected arguments were supplied to the settings application.",
+                    )
+                    .to_owned());
                 }
                 Ok(path)
             }
-            Some(_) => Err("使用方法: iroha-zip-settings.exe [--config PATH]".to_owned()),
+            Some(_) => Err(tr(
+                "使用方法: iroha-zip-settings.exe [--config PATH]",
+                "Usage: iroha-zip-settings.exe [--config PATH]",
+            )
+            .to_owned()),
         }
     }
 
@@ -1775,7 +2234,7 @@ mod windows_app {
 
     fn confirm_action(owner: HWND, message: &str) -> bool {
         let message = wide(message);
-        let title = wide(WINDOW_TITLE);
+        let title = wide(window_title());
         unsafe {
             MessageBoxW(
                 Some(owner),
@@ -1788,7 +2247,7 @@ mod windows_app {
 
     fn show_message(owner: Option<HWND>, message: &str, style: MESSAGEBOX_STYLE) {
         let message = wide(message);
-        let title = wide(WINDOW_TITLE);
+        let title = wide(window_title());
         unsafe {
             MessageBoxW(
                 owner,
@@ -1814,6 +2273,24 @@ mod windows_app {
         }
         OsString::from_wide(unsafe { std::slice::from_raw_parts(value, length) })
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn explicit_language_tags_cover_japanese_and_english() {
+            assert_eq!(
+                language_from_tag(OsStr::new("ja-JP")),
+                Some(Language::Japanese)
+            );
+            assert_eq!(
+                language_from_tag(OsStr::new("en_US")),
+                Some(Language::English)
+            );
+            assert_eq!(language_from_tag(OsStr::new("fr-FR")), None);
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -1830,7 +2307,7 @@ fn main() -> std::process::ExitCode {
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect();
-            let title: Vec<u16> = OsStr::new("iroha-zip 設定")
+            let title: Vec<u16> = OsStr::new(windows_app::window_title())
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect();
