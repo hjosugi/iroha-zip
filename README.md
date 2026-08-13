@@ -46,13 +46,17 @@ Mark-of-the-Webを各ファイルへ伝播
     ↓
 監査済みの通常ファイルだけを隔離stagingへコピー
     ↓
-WindowsではPackage SIDのwrite／delete／ACL変更をDACLで拒否
+親プロセスが上限付きPAX snapshotを生成し、元のstaging copyを削除
     ↓
-SHA-256固定済みbsdtarをAppContainer内で実行
+AppContainer内でPAXを一時treeへ展開し、元fingerprintと照合
+    ↓
+使用したbackendを破棄・再コピーし、一時treeをPackage SIDからread-onlyに封印
+    ↓
+再コピーしたSHA-256固定済みbsdtarで相対`.`だけを圧縮
     ↓
 生成中の書庫サイズを監視
     ↓
-staging sourceが変わっていないことをfingerprintで再確認
+封印した一時treeが変わっていないことをfingerprintで再確認
     ↓
 生成書庫を別のAppContainerでlisting検査・再展開し、元treeと照合
     ↓
@@ -121,7 +125,7 @@ iroha-zipは次をfail-closedで拒否します。
 - バックエンドフォルダ内の余分なファイル、欠落ファイル、リンク
 - 既存の展開先や既存の出力書庫の上書き
 
-さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。作成時も圧縮元を監査・複製し、そのPackage SIDからの書込／作成／削除／ACL変更をDACLで拒否してからAppContainer内で処理します。生成書庫は別sandboxへ再展開し、tree fingerprintが一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
+さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。作成時は圧縮元を監査・複製して上限付きPAX snapshotへ変換し、元copyをbackend起動前に削除します。PAXを一度AppContainer内へ展開して元treeと照合した後、その処理に使ったbackendを破棄して検証済みbundleから再コピーし、展開treeをPackage SIDからread-onlyにDACL封印してから相対`.`だけを圧縮します。生成書庫は別sandboxへ再展開し、tree fingerprintが一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
 
 詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。通常AppContainerと実験的LPACの差、fail-closed条件、未完の検証matrixは[LPAC評価](docs/LPAC_EVALUATION.md)、Windows自動E2Eの証跡項目と限界は[Windows E2E](docs/WINDOWS_E2E.md)、生成型の攻撃書庫と非公開方針は[悪性コーパス](docs/MALICIOUS_CORPUS.md)に分離しています。
 

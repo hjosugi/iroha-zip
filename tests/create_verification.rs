@@ -65,13 +65,7 @@ while [ "$#" -gt 0 ]; do
             shift
             directory=$1
             ;;
-        @*)
-            source_archive=${{1#@}}
-            case "$source_archive" in
-                */*) directory=${{source_archive%/*}}/source ;;
-                *) directory=$PWD/source ;;
-            esac
-            ;;
+        .) directory=$PWD ;;
     esac
     shift
 done
@@ -80,9 +74,6 @@ case "$mode" in
     create)
         if [ "{behavior}" = "mutate-source" ]; then
             printf 'bravo' > "$directory/alpha.txt"
-        fi
-        if [ "{behavior}" = "mutate-stream" ]; then
-            printf 'corrupt' > "$source_archive"
         fi
         printf 'archive-{behavior}' > "$archive"
         ;;
@@ -98,6 +89,9 @@ case "$mode" in
         fi
         ;;
     extract)
+        if [ "{behavior}" = "mutate-stream" ] && [ "${{archive##*/}}" = "source.pax.tar" ]; then
+            printf 'corrupt' > "$archive"
+        fi
         if [ "{behavior}" = "empty" ]; then
             :
         elif [ "{behavior}" = "single-archive-root" ]; then
@@ -106,7 +100,9 @@ case "$mode" in
         else
             /bin/mkdir -p "$directory/nested"
             printf 'alpha' > "$directory/alpha.txt"
-            if [ "{behavior}" = "mismatched-content" ]; then
+            if [ "{behavior}" = "mismatched-materialization" ] && [ "${{archive##*/}}" = "source.pax.tar" ]; then
+                printf 'evil' > "$directory/nested/beta.txt"
+            elif [ "{behavior}" = "mismatched-content" ] && [ "${{archive##*/}}" != "source.pax.tar" ]; then
                 printf 'evil' > "$directory/nested/beta.txt"
             else
                 printf 'beta' > "$directory/nested/beta.txt"
@@ -236,6 +232,31 @@ fn reextraction_content_mismatch_cannot_publish() {
 }
 
 #[test]
+fn materialized_source_mismatch_cannot_reach_archive_creation() {
+    let directory = TestDirectory::new();
+    let source = source_tree(directory.path());
+    let backend = fake_backend(directory.path(), "mismatched-materialization");
+    let output = directory.path().join("rejected.zip");
+
+    let error = create::create_archive(
+        &backend,
+        &Config::default(),
+        CreateFormat::Zip,
+        &source,
+        &output,
+        true,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(
+        error.contains("materialized PAX source does not match"),
+        "{error}"
+    );
+    assert!(!output.exists());
+}
+
+#[test]
 fn backend_source_mutation_cannot_publish() {
     let directory = TestDirectory::new();
     let source = source_tree(directory.path());
@@ -253,7 +274,7 @@ fn backend_source_mutation_cannot_publish() {
     .unwrap_err()
     .to_string();
 
-    assert!(error.contains("modified the staged source tree"));
+    assert!(error.contains("modified the materialized source tree"));
     assert!(!output.exists());
     assert_eq!(fs::read(source.join("alpha.txt")).unwrap(), b"alpha");
 }

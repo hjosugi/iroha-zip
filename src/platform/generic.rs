@@ -258,6 +258,27 @@ impl Sandbox {
         Ok(false)
     }
 
+    pub fn seal_sandbox_tree(&self, path: &Path, _max_entries: u64) -> Result<bool> {
+        let resolved = fs::canonicalize(path).map_err(|error| {
+            IrohaZipError::io_path("cannot resolve sandbox tree before sealing", path, error)
+        })?;
+        validate_directory_security(&resolved)?;
+        let root = fs::canonicalize(&self.root).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot resolve sandbox root before sealing",
+                &self.root,
+                error,
+            )
+        })?;
+        if resolved == root || !resolved.starts_with(&root) {
+            return Err(IrohaZipError::Sandbox(format!(
+                "refusing to seal a tree outside a sandbox-root child: {}",
+                resolved.display()
+            )));
+        }
+        Ok(false)
+    }
+
     pub fn cleanup(self) -> Result<()> {
         match fs::remove_dir_all(&self.root) {
             Ok(()) => Ok(()),
@@ -457,6 +478,11 @@ mod tests {
         fs::create_dir(&source).unwrap();
         assert!(!sandbox.seal_staged_source(&source).unwrap());
         assert!(sandbox.seal_staged_source(sandbox.root()).is_err());
+
+        let internal = sandbox.root().join("internal");
+        fs::create_dir(&internal).unwrap();
+        assert!(!sandbox.seal_sandbox_tree(&internal, 0).unwrap());
+        assert!(sandbox.seal_sandbox_tree(sandbox.root(), 0).is_err());
     }
 
     #[test]

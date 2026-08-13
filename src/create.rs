@@ -11,7 +11,7 @@ use crate::platform::{ProcessSpec, Sandbox};
 use crate::snapshot::FileFingerprint;
 use crate::{monitor, pax, policy, staging, transfer, util};
 
-const SOURCE_ARCHIVE_ARGUMENT: &str = "@source.pax.tar";
+const MATERIALIZED_SOURCE_DIRECTORY: &str = "materialized-source";
 
 pub fn create_archive(
     backend: &BackendBundle,
@@ -58,7 +58,7 @@ pub fn create_archive(
             )
         })?;
 
-        let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
+        let materializer_backend = backend.copy_verified_to(&backend_dir)?;
         let expected_source =
             transfer::copy_audited_tree_fingerprint(&source, &source_dir, &config.limits)?;
         let source_archive = sandbox.root().join("source.pax.tar");
@@ -73,7 +73,60 @@ pub fn create_archive(
                 "bounded PAX source changed before backend launch".to_owned(),
             ));
         }
-        let _source_write_sealed = sandbox.seal_staged_source(&source_dir)?;
+        fs::remove_dir_all(&source_dir).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot remove audited source copy after PAX snapshot",
+                &source_dir,
+                error,
+            )
+        })?;
+        if source_dir.exists() {
+            return Err(IrohaZipError::Policy(
+                "audited source copy remained after PAX snapshot".to_owned(),
+            ));
+        }
+
+        let materialized_source = materialize_bounded_source(
+            &sandbox,
+            materializer_backend,
+            config,
+            &source_archive,
+            &expected_source,
+        )?;
+        require_file_fingerprint(
+            &source_archive,
+            &source_archive_fingerprint,
+            "backend modified the bounded PAX source stream while materializing it",
+        )?;
+        drop(source_archive_guard);
+        fs::remove_file(&source_archive).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot remove bounded PAX source after materialization",
+                &source_archive,
+                error,
+            )
+        })?;
+
+        // The first backend process parsed the bounded PAX input. Recopy the
+        // verified bundle so no process-local compromise can persist into the
+        // format-creation pass.
+        fs::remove_dir_all(&backend_dir).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot remove backend after source materialization",
+                &backend_dir,
+                error,
+            )
+        })?;
+        let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
+        let materialized_entry_budget = expected_source
+            .summary()
+            .files
+            .checked_add(expected_source.summary().directories)
+            .ok_or_else(|| {
+                IrohaZipError::Config("materialized source entry budget overflow".to_owned())
+            })?;
+        let _materialized_source_sealed =
+            sandbox.seal_sandbox_tree(&materialized_source, materialized_entry_budget)?;
 
         let sandbox_archive = output_dir.join("archive.bin");
         let stdout_log = sandbox.root().join("bsdtar.stdout.log");
@@ -81,11 +134,10 @@ pub fn create_archive(
         let mut args = create_arguments(format);
         args.push(OsString::from("-f"));
         args.push(sandbox_archive.as_os_str().to_owned());
-        // The trusted parent retains an audited, write/delete-nonshared handle
-        // while bsdtar reopens only this fixed sandbox-local name. Do not also
-        // inherit the PAX file as stdin: MSYS2 UCRT64 bsdtar faults in an
-        // AppContainer when its @archive conversion receives that extra handle.
-        args.push(OsString::from(SOURCE_ARCHIVE_ARGUMENT));
+        // MSYS2 UCRT64 bsdtar faults when @archive conversion runs inside an
+        // AppContainer. It can safely archive the already materialized,
+        // fingerprint-matched, read-only tree through this relative operand.
+        args.push(OsString::from("."));
 
         let baseline = policy::measure_tree(sandbox.root())?;
         let transient_bytes = config
@@ -103,14 +155,13 @@ pub fn create_archive(
             config
                 .limits
                 .max_single_file_bytes
-                .max(config.limits.max_archive_bytes)
-                .max(source_archive_fingerprint.length()),
+                .max(config.limits.max_archive_bytes),
         )?;
 
         let result = sandbox.run(ProcessSpec {
             program: sandbox_backend,
             args,
-            current_dir: sandbox.root().to_path_buf(),
+            current_dir: materialized_source.clone(),
             stdin_file: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
@@ -129,17 +180,11 @@ pub fn create_archive(
         }
 
         require_tree_fingerprint(
-            &source_dir,
+            &materialized_source,
             &config.limits,
             &expected_source,
-            "backend modified the staged source tree while creating the archive",
+            "backend modified the materialized source tree while creating the archive",
         )?;
-        require_file_fingerprint(
-            &source_archive,
-            &source_archive_fingerprint,
-            "backend modified the bounded PAX source stream while creating the archive",
-        )?;
-        drop(source_archive_guard);
 
         let verified_archive = verify_created_archive(
             backend,
@@ -149,10 +194,10 @@ pub fn create_archive(
             allow_unsandboxed,
         )?;
         require_tree_fingerprint(
-            &source_dir,
+            &materialized_source,
             &config.limits,
             &expected_source,
-            "staged source tree changed before archive publication",
+            "materialized source tree changed before archive publication",
         )?;
 
         let mut publication_snapshot = open_verified_archive_for_publication(
@@ -170,6 +215,107 @@ pub fn create_archive(
         }
         Err(error) => sandbox.fail_after_cleanup(error),
     }
+}
+
+fn materialize_bounded_source(
+    sandbox: &Sandbox,
+    backend: PathBuf,
+    config: &Config,
+    source_archive: &Path,
+    expected_source: &transfer::TreeFingerprint,
+) -> Result<PathBuf> {
+    let destination = sandbox.root().join(MATERIALIZED_SOURCE_DIRECTORY);
+    fs::create_dir(&destination).map_err(|error| {
+        IrohaZipError::io_path(
+            "cannot create materialized source directory",
+            &destination,
+            error,
+        )
+    })?;
+    let stdout_log = sandbox.root().join("materialize.stdout.log");
+    let stderr_log = sandbox.root().join("materialize.stderr.log");
+    let mut args: Vec<OsString> = ["-x", "-f"].into_iter().map(OsString::from).collect();
+    args.push(source_archive.as_os_str().to_owned());
+    args.push(OsString::from("-C"));
+    args.push(destination.as_os_str().to_owned());
+    args.extend(
+        [
+            "--safe-writes",
+            "--no-same-owner",
+            "--no-same-permissions",
+            "--no-xattrs",
+            "--no-acls",
+            "--no-fflags",
+            "--no-mac-metadata",
+            "-k",
+        ]
+        .into_iter()
+        .map(OsString::from),
+    );
+
+    let baseline = policy::measure_tree(sandbox.root())?;
+    let transient_files = config.limits.max_files.checked_add(18).ok_or_else(|| {
+        IrohaZipError::Config("source materialization file budget overflow".to_owned())
+    })?;
+    let transient_directories = config
+        .limits
+        .max_directories
+        .checked_add(4)
+        .ok_or_else(|| {
+            IrohaZipError::Config("source materialization directory budget overflow".to_owned())
+        })?;
+    let transient_bytes = config
+        .limits
+        .max_total_bytes
+        .checked_add(config.limits.max_single_file_bytes)
+        .and_then(|value| value.checked_add(2 * 1024 * 1024))
+        .ok_or_else(|| {
+            IrohaZipError::Config("source materialization byte budget overflow".to_owned())
+        })?;
+    let monitor_limits = monitor::limits_with_baseline(
+        &baseline,
+        transient_files,
+        transient_directories,
+        transient_bytes,
+        config
+            .limits
+            .max_single_file_bytes
+            .max(config.limits.max_archive_bytes),
+    )?;
+
+    let result = sandbox.run(ProcessSpec {
+        program: backend,
+        args,
+        current_dir: sandbox.root().to_path_buf(),
+        stdin_file: None,
+        stdout_log: stdout_log.clone(),
+        stderr_log: stderr_log.clone(),
+        timeout: Duration::from_secs(config.sandbox.timeout_seconds),
+        monitor_root: Some(sandbox.root().to_path_buf()),
+        limits: monitor_limits,
+    })?;
+    if result.exit_code != 0 {
+        let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
+        let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
+        return Err(IrohaZipError::Backend(format!(
+            "bsdtar exited with code {} while materializing the bounded source. stderr={stderr:?}, stdout={stdout:?}",
+            result.exit_code
+        )));
+    }
+    for log in [&stdout_log, &stderr_log] {
+        fs::remove_file(log).map_err(|error| {
+            IrohaZipError::io_path("cannot remove source materialization log", log, error)
+        })?;
+    }
+
+    policy::audit_tree(&destination, &config.limits)?;
+    require_tree_fingerprint(
+        &destination,
+        &config.limits,
+        expected_source,
+        "materialized PAX source does not match the audited source tree",
+    )?;
+    Ok(destination)
 }
 
 fn require_file_fingerprint(path: &Path, expected: &FileFingerprint, message: &str) -> Result<()> {
@@ -322,7 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn bounded_pax_input_needs_no_backend_path_rewrite() {
+    fn materialized_creation_needs_no_backend_path_rewrite() {
         for format in [
             CreateFormat::Zip,
             CreateFormat::SevenZip,
@@ -333,7 +479,7 @@ mod tests {
             assert!(!arguments.iter().any(|argument| argument == "-s"));
         }
 
-        assert_eq!(SOURCE_ARCHIVE_ARGUMENT, "@source.pax.tar");
+        assert_eq!(MATERIALIZED_SOURCE_DIRECTORY, "materialized-source");
     }
 
     #[test]

@@ -537,6 +537,30 @@ impl Sandbox {
         }
     }
 
+    pub fn seal_sandbox_tree(&self, path: &Path, max_entries: u64) -> Result<bool> {
+        let resolved = fs::canonicalize(path).map_err(|error| {
+            IrohaZipError::io_path("cannot resolve sandbox tree before sealing", path, error)
+        })?;
+        validate_directory_security(&resolved)?;
+        if resolved == self.root || !resolved.starts_with(&self.root) {
+            return Err(IrohaZipError::Sandbox(format!(
+                "refusing to change an ACL outside a sandbox-root child: {}",
+                resolved.display()
+            )));
+        }
+
+        let mode = self.mode.as_ref().ok_or_else(|| {
+            IrohaZipError::Sandbox("cannot seal a tree after sandbox cleanup".to_owned())
+        })?;
+        match mode {
+            Mode::AppContainer { sid, .. } => {
+                restrict_appcontainer_tree_to_readonly_recursive(&resolved, *sid, max_entries)?;
+                Ok(true)
+            }
+            Mode::Unsandboxed => Ok(false),
+        }
+    }
+
     pub fn cleanup(mut self) -> Result<()> {
         self.cleanup_inner()
     }
@@ -626,6 +650,82 @@ fn restrict_appcontainer_tree_to_readonly(path: &Path, sid: PSID) -> Result<()> 
         true,
         "staged source",
     )
+}
+
+fn restrict_appcontainer_tree_to_readonly_recursive(
+    path: &Path,
+    sid: PSID,
+    max_entries: u64,
+) -> Result<()> {
+    let mut stack = vec![path.to_path_buf()];
+    let mut entries = Vec::<(PathBuf, bool)>::new();
+    let mut observed = 0u64;
+    while let Some(directory) = stack.pop() {
+        entries.push((directory.clone(), true));
+        let children = fs::read_dir(&directory).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot enumerate sandbox tree while sealing",
+                &directory,
+                error,
+            )
+        })?;
+        for child in children {
+            let child = child.map_err(|error| {
+                IrohaZipError::io_path("cannot read sandbox entry while sealing", &directory, error)
+            })?;
+            let child_path = child.path();
+            let metadata = fs::symlink_metadata(&child_path).map_err(|error| {
+                IrohaZipError::io_path(
+                    "cannot inspect sandbox entry while sealing",
+                    &child_path,
+                    error,
+                )
+            })?;
+            validate_extracted_entry_security(&child_path, &metadata)?;
+            observed = observed.checked_add(1).ok_or_else(|| {
+                IrohaZipError::Policy("sandbox sealing entry count overflow".to_owned())
+            })?;
+            if observed > max_entries {
+                return Err(IrohaZipError::Policy(format!(
+                    "sandbox tree changed before sealing; observed more than {max_entries} entries"
+                )));
+            }
+            if metadata.is_dir() {
+                stack.push(child_path);
+            } else if metadata.is_file() {
+                entries.push((child_path, false));
+            } else {
+                return Err(IrohaZipError::Policy(format!(
+                    "special object appeared before sandbox sealing: {}",
+                    child_path.display()
+                )));
+            }
+        }
+    }
+    if observed != max_entries {
+        return Err(IrohaZipError::Policy(format!(
+            "sandbox tree entry count changed before sealing: expected {max_entries}, observed {observed}"
+        )));
+    }
+
+    // Set every object's Package-SID access explicitly before sealing the root.
+    // This removes any explicit write-capable ACE left by the materializer;
+    // root inheritance alone would preserve such an ACE.
+    for (entry, is_directory) in entries.into_iter().rev() {
+        set_appcontainer_access(
+            &entry,
+            sid,
+            FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
+            if is_directory {
+                SUB_CONTAINERS_AND_OBJECTS_INHERIT
+            } else {
+                NO_INHERITANCE
+            },
+            true,
+            "materialized source",
+        )?;
+    }
+    Ok(())
 }
 
 fn grant_appcontainer_parent_readonly(path: &Path, sid: PSID) -> Result<()> {

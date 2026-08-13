@@ -45,13 +45,17 @@ Audit links, reparse points, ADS, hard links, and size limits
     ↓
 Copy only audited regular files to isolated staging
     ↓
-On Windows, deny the Package SID write/delete/ACL changes with a DACL
+Have the parent create a bounded PAX snapshot, then remove the original staging copy
     ↓
-Run the SHA-256-pinned bsdtar inside AppContainer
+Materialize the PAX tree in AppContainer and match it to the source fingerprint
+    ↓
+Discard and recopy the backend, then seal the materialized tree read-only to its Package SID
+    ↓
+Archive only relative `.` with the freshly SHA-256-verified bsdtar
     ↓
 Monitor the output archive size
     ↓
-Recheck the staged source fingerprint
+Recheck the sealed materialized-source fingerprint
     ↓
 List and re-extract the result in a second AppContainer and compare the complete tree
     ↓
