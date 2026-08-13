@@ -7,9 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing vX.Y.Z tag to publish or verify
-        required: true
+        description: Existing vX.Y.Z tag (required only when publishing)
+        required: false
         type: string
+      publish:
+        description: Publish the existing tag as the stable GitHub Release
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   attestations: write
@@ -27,7 +32,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Check out the exact release tag
+      - name: Check out the release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
@@ -40,27 +45,46 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          PUBLISH_RELEASE: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
-          if ($env:RELEASE_TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
-            throw "Release tag must have the exact form vX.Y.Z: $env:RELEASE_TAG"
-          }
           $version = (Select-String -LiteralPath Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
-          if ($env:RELEASE_TAG -cne "v$version") {
-            throw "Tag $env:RELEASE_TAG does not match Cargo.toml version $version."
+          $publish = $env:PUBLISH_RELEASE -ceq 'true'
+          $requestedTag = if ($env:GITHUB_EVENT_NAME -ceq 'workflow_dispatch') {
+            ([string]$env:REQUESTED_TAG).Trim()
+          } else {
+            $env:RELEASE_TAG
+          }
+          if ($publish -and [string]::IsNullOrWhiteSpace($requestedTag)) {
+            throw 'Manual publication requires an existing vX.Y.Z tag.'
+          }
+          $releaseTag = if ([string]::IsNullOrWhiteSpace($requestedTag)) {
+            "v$version"
+          } else {
+            $requestedTag
+          }
+          if ($releaseTag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Release tag must have the exact form vX.Y.Z: $releaseTag"
+          }
+          if ($releaseTag -cne "v$version") {
+            throw "Tag $releaseTag does not match Cargo.toml version $version."
           }
 
           $checkedOutCommit = (& git rev-parse HEAD).Trim()
-          $tagCommit = (& git rev-parse "$env:RELEASE_TAG^{commit}").Trim()
-          if ($LASTEXITCODE -ne 0 -or $checkedOutCommit -cne $tagCommit) {
-            throw 'The checked-out commit does not match the release tag.'
+          if (-not [string]::IsNullOrWhiteSpace($requestedTag)) {
+            $tagCommit = (& git rev-parse "$releaseTag^{commit}").Trim()
+            if ($LASTEXITCODE -ne 0 -or $checkedOutCommit -cne $tagCommit) {
+              throw 'The checked-out commit does not match the release tag.'
+            }
           }
           $remoteMain = (& gh api "repos/$env:GITHUB_REPOSITORY/commits/main" --jq .sha).Trim()
           if ($LASTEXITCODE -ne 0 -or $remoteMain -cne $checkedOutCommit) {
             throw 'Release tags must point to the current main commit.'
           }
 
-          "tag=$env:RELEASE_TAG" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "publish=$($publish.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Install pinned Rust toolchain
         shell: bash
@@ -158,6 +182,7 @@ jobs:
           retention-days: 30
 
       - name: Publish stable GitHub release
+        if: steps.release.outputs.publish == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -190,6 +215,7 @@ jobs:
           }
 
       - name: Verify the published release inventory
+        if: steps.release.outputs.publish == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -208,3 +234,15 @@ jobs:
           if ($names.Count -ne 6 -or 'SHA256SUMS.txt' -notin $names) {
             throw "Unexpected release inventory: $($names -join ', ')"
           }
+
+      - name: Summarize non-publishing validation
+        if: steps.release.outputs.publish != 'true'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          @"
+          ## Unsigned release dry run succeeded
+
+          Version **$env:VERSION** was validated, built, packaged, attested, and preserved as a workflow artifact. No tag or GitHub Release was created or changed.
+          "@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8

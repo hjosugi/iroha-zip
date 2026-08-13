@@ -64,6 +64,15 @@ pub fn create_archive(
         let source_archive = sandbox.root().join("source.pax.tar");
         let source_archive_fingerprint =
             pax::write_tree_archive(&source_dir, &source_archive, &config.limits)?;
+        let source_archive_guard = crate::snapshot::AuditedFile::open(
+            &source_archive,
+            source_archive_fingerprint.length(),
+        )?;
+        if source_archive_guard.fingerprint() != &source_archive_fingerprint {
+            return Err(IrohaZipError::Policy(
+                "bounded PAX source changed before backend launch".to_owned(),
+            ));
+        }
         let _source_write_sealed = sandbox.seal_staged_source(&source_dir)?;
 
         let sandbox_archive = output_dir.join("archive.bin");
@@ -72,10 +81,10 @@ pub fn create_archive(
         let mut args = create_arguments(format);
         args.push(OsString::from("-f"));
         args.push(sandbox_archive.as_os_str().to_owned());
-        // Keep the audited file inherited as stdin so Windows denies write/delete
-        // sharing for the lifetime of the child, but let bsdtar reopen the same
-        // file for reading by its fixed sandbox-local name. MSYS2 UCRT64 bsdtar
-        // reproducibly faults in AppContainer while converting from @-.
+        // The trusted parent retains an audited, write/delete-nonshared handle
+        // while bsdtar reopens only this fixed sandbox-local name. Do not also
+        // inherit the PAX file as stdin: MSYS2 UCRT64 bsdtar faults in an
+        // AppContainer when its @archive conversion receives that extra handle.
         args.push(OsString::from(SOURCE_ARCHIVE_ARGUMENT));
 
         let baseline = policy::measure_tree(sandbox.root())?;
@@ -102,7 +111,7 @@ pub fn create_archive(
             program: sandbox_backend,
             args,
             current_dir: sandbox.root().to_path_buf(),
-            stdin_file: Some(source_archive.clone()),
+            stdin_file: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds),
@@ -130,6 +139,7 @@ pub fn create_archive(
             &source_archive_fingerprint,
             "backend modified the bounded PAX source stream while creating the archive",
         )?;
+        drop(source_archive_guard);
 
         let verified_archive = verify_created_archive(
             backend,

@@ -25,6 +25,8 @@ The release workflow generates a GitHub artifact attestation for the ZIP, all th
 
 The tag-driven workflow is deliberately non-interactive:
 
+Before creating a tag, maintainers can manually dispatch the Release workflow on `main` with `publish` left disabled. This dry run executes the complete unsigned validation, build, package, attestation, and artifact-upload path but cannot create or change a GitHub Release. Manual publication requires both an existing matching tag and an explicit `publish` selection.
+
 1. The tag must have the exact form `vX.Y.Z`, match `Cargo.toml`, resolve to the checked-out commit, and point to the current `main` commit.
 2. The pinned Rust 1.97.1 toolchain runs formatting, all targets, minimized fuzz regressions, Clippy with warnings denied, and a locked Windows x64 release build.
 3. Packaging verifies the expected three executable names and creates a backend-free ZIP.

@@ -32,6 +32,7 @@ public static class IrohaZipUiAutomationNative {
 
 $ButtonClickMessage = 0x00F5
 $CommandMessage = 0x0111
+$CloseMessage = 0x0010
 
 function Wait-Until {
     param(
@@ -211,7 +212,16 @@ function Invoke-AndCancelFolderPicker {
     if ($dialog.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
         throw "Folder picker was not exposed as an accessible window."
     }
-    Invoke-DialogButton -Dialog $dialog -Id 2
+    $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
+    if ($dialogHandle -eq [IntPtr]::Zero -or
+        -not [IrohaZipUiAutomationNative]::PostMessageW(
+            $dialogHandle,
+            $CloseMessage,
+            [UIntPtr]::Zero,
+            [IntPtr]::Zero
+        )) {
+        throw "Cannot cancel the folder picker through its accessible window."
+    }
     Wait-ForNoSecondaryWindow -Process $Process -MainWindow $MainWindow
 }
 
