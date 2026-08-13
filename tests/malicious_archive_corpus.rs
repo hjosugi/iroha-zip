@@ -1,5 +1,7 @@
 use sha2::{Digest, Sha256};
 
+use iroha_zip::util::hex_lower;
+
 const BLOCK: usize = 512;
 
 #[derive(Clone)]
@@ -251,7 +253,7 @@ fn pad_tar_data(archive: &mut Vec<u8>) {
 fn sha256(bytes: &[u8]) -> String {
     let mut digest = Sha256::new();
     digest.update(bytes);
-    format!("{:x}", digest.finalize())
+    hex_lower(digest.finalize())
 }
 
 struct CorpusSample {

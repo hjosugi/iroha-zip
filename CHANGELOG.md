@@ -6,6 +6,9 @@
 
 ## 0.4.0 - 2026-08-14
 
+- Updated the SHA-1/SHA-256 implementation dependencies to the compatible
+  `sha1`/`sha2` 0.11.0 generation.
+
 - Added an accessible Japanese/English GitHub Pages site and complete English project guide.
 - Publish a stable unsigned Windows x64 release with the ZIP, three individual executables, SHA-256 inventories, and GitHub artifact attestations.
 - Document unsigned-binary and SmartScreen expectations without weakening verification guidance.

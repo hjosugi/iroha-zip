@@ -11,6 +11,7 @@ use sha2::Digest;
 use crate::backend::{BackendBundle, MANIFEST_FILE, sha256_file, validate_manifest_path};
 use crate::error::{IrohaZipError, Result};
 use crate::platform;
+use crate::util::hex_lower;
 
 pub const EVIDENCE_DIRECTORY: &str = ".iroha-zip-evidence";
 pub const PROVENANCE_FILE: &str = "backend-provenance.json";
@@ -848,14 +849,14 @@ fn package_verification_code(root: &Path, paths: &[&str]) -> Result<String> {
             }
             hasher.update(&buffer[..read]);
         }
-        file_hashes.push(format!("{:x}", hasher.finalize()));
+        file_hashes.push(hex_lower(hasher.finalize()));
     }
     file_hashes.sort_unstable();
     let mut package_hasher = Sha1::new();
     for hash in file_hashes {
         package_hasher.update(hash.as_bytes());
     }
-    Ok(format!("{:x}", package_hasher.finalize()))
+    Ok(hex_lower(package_hasher.finalize()))
 }
 
 fn is_sha256(value: &str) -> bool {
@@ -1162,18 +1163,14 @@ mod tests {
         fs::write(directory.0.join("b"), b"b").unwrap();
         let code = package_verification_code(&directory.0, &["a", "b"]).unwrap();
 
-        let mut hashes = [
-            format!("{:x}", Sha1::digest(b"a")),
-            format!("{:x}", Sha1::digest(b"b")),
-        ];
+        let mut hashes = [hex_lower(Sha1::digest(b"a")), hex_lower(Sha1::digest(b"b"))];
         hashes.sort_unstable();
-        let expected = format!(
-            "{:x}",
-            Sha1::digest(format!("{}{}", hashes[0], hashes[1]).as_bytes())
-        );
+        let expected = hex_lower(Sha1::digest(
+            format!("{}{}", hashes[0], hashes[1]).as_bytes(),
+        ));
         assert_eq!(code, expected);
 
-        let lowercase_sha256 = format!("{:x}", Sha256::digest(b"test"));
+        let lowercase_sha256 = hex_lower(Sha256::digest(b"test"));
         assert!(is_sha256(&lowercase_sha256));
         assert!(!is_sha256(&lowercase_sha256.to_uppercase()));
         assert!(is_utc_second_timestamp("2024-02-29T23:59:60Z"));

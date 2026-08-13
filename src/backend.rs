@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::error::{IrohaZipError, Result};
 use crate::platform;
 use crate::policy;
+use crate::util::hex_lower;
 
 pub(crate) const MANIFEST_FILE: &str = "backend-manifest.tsv";
 const MANIFEST_HEADER: &str = "IROHA-ZIP-BACKEND-MANIFEST\t1";
@@ -302,7 +303,7 @@ pub fn sha256_file(path: &Path) -> Result<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hex_lower(hasher.finalize()))
 }
 
 fn read_manifest(path: &Path) -> Result<BackendManifest> {

@@ -8,6 +8,22 @@ use crate::error::{IrohaZipError, Result};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Encodes arbitrary bytes as canonical lowercase hexadecimal text.
+///
+/// Keeping this conversion local avoids depending on formatter traits exposed
+/// by a particular digest output type.
+pub fn hex_lower(bytes: impl AsRef<[u8]>) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+
+    let bytes = bytes.as_ref();
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        encoded.push(DIGITS[(byte >> 4) as usize] as char);
+        encoded.push(DIGITS[(byte & 0x0f) as usize] as char);
+    }
+    encoded
+}
+
 pub fn unique_token() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -193,4 +209,15 @@ pub fn write_all_new(path: &Path, data: &[u8]) -> Result<()> {
     file.sync_all()
         .map_err(|error| IrohaZipError::io_path("cannot flush file", path, error))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hex_lower;
+
+    #[test]
+    fn lowercase_hex_encoding_is_padded_and_canonical() {
+        assert_eq!(hex_lower([]), "");
+        assert_eq!(hex_lower([0x00, 0x01, 0x0f, 0x10, 0xff]), "00010f10ff");
+    }
 }
