@@ -81,19 +81,22 @@ try {
         foreach ($extension in $extensions) {
             $openWith = "HKCU:\Software\Classes\$extension\OpenWithProgids"
             $candidate = Get-ItemPropertyValue -LiteralPath $openWith -Name $progId
+            $sentinel = Get-ItemPropertyValue -LiteralPath $openWith -Name $sentinelName
             $supported = Get-ItemPropertyValue `
                 -LiteralPath "$applicationKey\SupportedTypes" -Name $extension
             $association = Get-ItemPropertyValue `
                 -LiteralPath "$capabilitiesKey\FileAssociations" -Name $extension
             if ([string]$candidate -cne "" -or [string]$supported -cne "" -or
-                [string]$association -cne $progId) {
+                [string]$association -cne $progId -or $sentinel -cne $sentinelValue) {
                 throw "Association registration is incomplete for $extension on attempt $attempt."
             }
         }
         if ((Get-ItemPropertyValue -LiteralPath $capabilitiesKey -Name "ApplicationName") `
                 -cne "iroha-zip" -or
             (Get-ItemPropertyValue -LiteralPath $registeredApps -Name "iroha-zip") `
-                -cne "Software\iroha-zip\Capabilities") {
+                -cne "Software\iroha-zip\Capabilities" -or
+            (Get-ItemPropertyValue -LiteralPath $registeredApps -Name $sentinelName) `
+                -cne $sentinelValue) {
             throw "Application capabilities registration is incomplete on attempt $attempt."
         }
     }

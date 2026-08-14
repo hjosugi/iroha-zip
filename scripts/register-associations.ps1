@@ -43,7 +43,9 @@ New-ItemProperty -Path $capabilitiesKey -Name "ApplicationDescription" `
 
 foreach ($extension in $extensions) {
     $openWith = "HKCU:\Software\Classes\$extension\OpenWithProgids"
-    New-Item -Path $openWith -Force | Out-Null
+    if (-not (Test-Path -LiteralPath $openWith)) {
+        New-Item -Path $openWith | Out-Null
+    }
     New-ItemProperty -Path $openWith -Name $progId -Value "" -PropertyType String -Force | Out-Null
     New-ItemProperty -Path "$applicationKey\SupportedTypes" -Name $extension -Value "" `
         -PropertyType String -Force | Out-Null
@@ -52,7 +54,9 @@ foreach ($extension in $extensions) {
 }
 
 $registeredApps = "HKCU:\Software\RegisteredApplications"
-New-Item -Path $registeredApps -Force | Out-Null
+if (-not (Test-Path -LiteralPath $registeredApps)) {
+    New-Item -Path $registeredApps | Out-Null
+}
 New-ItemProperty -Path $registeredApps -Name "iroha-zip" `
     -Value "Software\iroha-zip\Capabilities" -PropertyType String -Force | Out-Null
 
