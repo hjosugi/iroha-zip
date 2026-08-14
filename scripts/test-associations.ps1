@@ -25,8 +25,9 @@ foreach ($ownedKey in $ownedKeys) {
     }
 }
 if (Test-Path -LiteralPath $registeredApps) {
-    $existingRegistration = Get-ItemPropertyValue -LiteralPath $registeredApps `
-        -Name "iroha-zip" -ErrorAction SilentlyContinue
+    $existingRegistration = (Get-Item -LiteralPath $registeredApps).GetValue(
+        "iroha-zip", $null
+    )
     if ($null -ne $existingRegistration) {
         throw "Association test refuses to replace a pre-existing RegisteredApplications value."
     }
@@ -106,8 +107,7 @@ try {
     }
     foreach ($extension in $extensions) {
         $openWith = "HKCU:\Software\Classes\$extension\OpenWithProgids"
-        if ($null -ne (Get-ItemPropertyValue -LiteralPath $openWith -Name $progId `
-                -ErrorAction SilentlyContinue)) {
+        if ($null -ne (Get-Item -LiteralPath $openWith).GetValue($progId, $null)) {
             throw "Association removal left the project candidate for $extension."
         }
         if ((Get-ItemPropertyValue -LiteralPath $openWith -Name $sentinelName) `
@@ -115,8 +115,7 @@ try {
             throw "Association removal damaged unrelated state for $extension."
         }
     }
-    if ($null -ne (Get-ItemPropertyValue -LiteralPath $registeredApps -Name "iroha-zip" `
-            -ErrorAction SilentlyContinue) -or
+    if ($null -ne (Get-Item -LiteralPath $registeredApps).GetValue("iroha-zip", $null) -or
         (Get-ItemPropertyValue -LiteralPath $registeredApps -Name $sentinelName) `
             -cne $sentinelValue) {
         throw "Association removal damaged RegisteredApplications state."
