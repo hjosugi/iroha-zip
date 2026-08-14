@@ -760,6 +760,50 @@ mod tests {
         assert!(!target.exists());
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn audited_tree_copy_rejects_junction_replacement_after_audit() {
+        let directory = TestDirectory::new();
+        let source = directory.0.join("source");
+        let target = directory.0.join("target");
+        let nested = source.join("nested");
+        let moved = source.join("moved");
+        let outside = directory.0.join("outside");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(&nested).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(nested.join("audited.txt"), b"audited").unwrap();
+        fs::write(outside.join("hostile.txt"), b"hostile").unwrap();
+
+        let result = copy_audited_tree_inner(&source, &target, &Limits::default(), || {
+            fs::rename(&nested, &moved).map_err(|error| {
+                IrohaZipError::io_path("cannot move race-test directory", &nested, error)
+            })?;
+            let status = std::process::Command::new("cmd.exe")
+                .args(["/d", "/c", "mklink", "/J"])
+                .arg(&nested)
+                .arg(&outside)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map_err(|error| {
+                    IrohaZipError::io_path("cannot start junction race probe", &nested, error)
+                })?;
+            if !status.success() {
+                return Err(IrohaZipError::Policy(format!(
+                    "cannot create junction race probe at {}: {status}",
+                    nested.display()
+                )));
+            }
+            Ok(())
+        });
+
+        assert!(result.is_err(), "a post-audit junction must be rejected");
+        assert!(!target.exists(), "a rejected junction must publish nothing");
+        assert_eq!(fs::read(outside.join("hostile.txt")).unwrap(), b"hostile");
+    }
+
     #[test]
     fn best_effort_handoff_failure_is_explicit_but_required_failure_is_fatal() {
         let directory = TestDirectory::new();
