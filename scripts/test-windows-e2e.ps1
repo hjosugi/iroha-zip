@@ -553,6 +553,64 @@ try {
         }
     }
 
+    $windowsRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)
+    if ([string]::IsNullOrWhiteSpace($windowsRoot)) {
+        throw "Windows did not report its system root for the controlled CAB fixture."
+    }
+    $makeCabPath = Resolve-Leaf (Join-Path $windowsRoot "System32\makecab.exe") `
+        "Windows makecab"
+    $makeCabSignature = Get-AuthenticodeSignature -FilePath $makeCabPath
+    if ($makeCabSignature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+        $null -eq $makeCabSignature.SignerCertificate -or
+        $makeCabSignature.SignerCertificate.Subject -notmatch `
+            '(^|,\s*)O=Microsoft Corporation(,|$)') {
+        throw "The controlled CAB generator is not validly Microsoft-signed: $makeCabPath"
+    }
+    $cabSourceRoot = Join-Path $backendFixtureRoot "cab-source"
+    [System.IO.Directory]::CreateDirectory($cabSourceRoot) | Out-Null
+    $cabSource = Join-Path $cabSourceRoot "cab-fixture.txt"
+    [System.IO.File]::WriteAllText(
+        $cabSource,
+        "controlled Microsoft Cabinet LZX fixture`n",
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $cabSourceTree = Compare-Tree $cabSourceRoot $cabSourceRoot
+    $generatedCab = Join-Path $filterArchivesRoot "controlled-lzx.cab"
+    $cabGenerateRun = Invoke-TestProcess -FilePath $makeCabPath -Arguments @(
+        "/V1", "/D", "CompressionType=LZX", "/D", "CompressionMemory=21",
+        $cabSource, $generatedCab
+    )
+    $generatedCab = Resolve-Leaf $generatedCab "controlled CAB fixture"
+    $cabArchive = Join-Path $archivesRoot "読取-cab.cab"
+    Copy-Item -LiteralPath $generatedCab -Destination $cabArchive
+    $cabDestination = Join-Path $extractedRoot "cab"
+    $cabPreviewRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+        "--config", $configPath, "preview", $cabArchive
+    )
+    $cabExtractRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+        "--config", $configPath, "extract", $cabArchive, "--output", $cabDestination
+    )
+    $cabTree = Compare-Tree $cabSourceRoot $cabDestination
+    $report.readFixtures += [pscustomobject][ordered]@{
+        format = "cab-lzx"
+        extension = "cab"
+        archiveBytes = (Get-Item -LiteralPath $cabArchive).Length
+        archiveSha256 = (Get-FileHash -LiteralPath $cabArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+        controlledSourceManifestSha256 = $cabSourceTree.manifestSha256
+        treeManifestSha256 = $cabTree.manifestSha256
+        controlledFixtureGenerationMilliseconds = $cabGenerateRun.elapsedMilliseconds
+        previewMilliseconds = $cabPreviewRun.elapsedMilliseconds
+        extractMilliseconds = $cabExtractRun.elapsedMilliseconds
+        generator = [ordered]@{
+            fileName = "makecab.exe"
+            fileSha256 = (Get-FileHash -LiteralPath $makeCabPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            authenticodeStatus = $makeCabSignature.Status.ToString()
+            signerSubject = $makeCabSignature.SignerCertificate.Subject
+            compression = "LZX:21"
+        }
+        explicitCleanupRequired = $true
+    }
+
     $invalidArchive = Join-Path $archivesRoot "壊れた.zip"
     [System.IO.File]::WriteAllText(
         $invalidArchive,
