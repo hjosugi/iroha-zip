@@ -763,6 +763,8 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn audited_tree_copy_rejects_junction_replacement_after_audit() {
+        use std::os::windows::fs::MetadataExt;
+
         let directory = TestDirectory::new();
         let source = directory.0.join("source");
         let target = directory.0.join("target");
@@ -796,7 +798,6 @@ mod tests {
                     nested.display()
                 )));
             }
-            use std::os::windows::fs::MetadataExt;
             let metadata = fs::symlink_metadata(&nested).map_err(|error| {
                 IrohaZipError::io_path("cannot inspect junction race probe", &nested, error)
             })?;
