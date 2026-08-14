@@ -54,10 +54,20 @@ button twice to verify both preservation and confirmed discard through the acces
 When supplied a verified backend and evidence path by the dedicated Windows E2E job, a second disposable English settings process also saves that backend path through the native Save button, dismisses the success dialog, invokes the settings-screen diagnosis, requires the real backend/AppContainer diagnostic success dialog, closes from a clean state, hashes the saved configuration and executable, records the exercised language, and writes a JSON report after removing the temporary tree. This does not exercise backend replacement, file associations, Default Apps, or folder-picker side effects.
 
 The smoke test cancels import before a source is selected, and deliberately does not invoke actual
-backend replacement, association changes, Default Apps, or the configuration-folder launch because
-those actions mutate or open external Windows state. Their ID-to-handler dispatch is covered by the
-exhaustive platform-neutral test. Their side effects and rollback must be exercised only on a
-disposable Windows worker.
+backend replacement, Default Apps, or the configuration-folder launch because those actions mutate
+or open external Windows state. Their ID-to-handler dispatch is covered by the exhaustive
+platform-neutral test. Their side effects and rollback must be exercised only on a disposable
+Windows worker.
+
+The fast disposable Windows job separately exercises association registration as real per-user
+external state. It refuses to run over any pre-existing iroha-zip-owned registry tree, stages the
+shell executable under a path containing spaces and Japanese text, and places unique unrelated
+sentinel values in all 18 shared `OpenWithProgids` keys and `RegisteredApplications`. It snapshots
+each protected `UserChoice`, registers twice to prove idempotence, and requires exact quoted
+commands, icon paths, supported types, capabilities, and candidate ProgID values. Unregistration
+must remove only iroha-zip-owned keys/values while retaining every sentinel and the exact
+`UserChoice` key existence, subkey names, value names, kinds, and data. Final cleanup removes only test-created state. The contract passed in
+[Actions run 31768309835](https://github.com/hjosugi/iroha-zip/actions/runs/31768309835).
 
 ## Concurrent configuration saves
 
@@ -75,7 +85,7 @@ through one file barrier against the same non-ASCII configuration path, and requ
 configuration plus zero temporary/backup artifacts. Windows unit tests use isolated mutex names to
 require a bounded wait to fail closed, verify a normal acquisition after release, and accept
 `WAIT_ABANDONED` after an owning thread exits without release. The Windows tests and both fixed
-Server settings save/diagnosis paths passed in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176).
+Server settings save/diagnosis paths passed in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143).
 
 The replacement transaction writes and flushes a unique temporary file, renames the prior file to
 a unique backup, and only then moves the new file into place. A deterministic injected-failure test

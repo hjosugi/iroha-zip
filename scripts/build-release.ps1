@@ -199,6 +199,7 @@ try {
     foreach ($document in @(
         "ANTIMALWARE_HANDOFF.md",
         "ARCHIVE_PREVIEW.md",
+        "ARM64.md",
         "BACKEND_EVIDENCE.md",
         "BACKEND_MANIFEST.md",
         "BUILD_STATUS.md",
@@ -212,6 +213,7 @@ try {
         "SETTINGS_ACCESSIBILITY.md",
         "THREAT_MODEL.md",
         "UNSIGNED_RELEASE.md",
+        "UPDATER.md",
         "WINDOWS_E2E.md"
     )) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\$document") `

@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 
-This document defines the automated SAFE-001 evidence contract. The complete contract passed on both fixed-label GitHub runners in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176) from commit `2d410f5f3eac3166b54808af83bcdc385470819b`. The reviewed JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, five explicitly removed AppContainer profiles/roots, all archive assertions below, the generated malicious corpus, and the English settings setup/diagnosis path. These results are evidence for the named disposable Server images, not Windows 10/11 desktop certification or a security audit.
+This document defines the automated SAFE-001 evidence contract. The schema-v4 contract passed on both fixed-label GitHub runners in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143) from commit `e81b42aaeb1a4826dfe38043e33564271889c1f8`. The reviewed JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven explicitly removed AppContainer profiles/roots, all archive assertions below, the generated malicious corpus, and the English settings setup/diagnosis path. These results are evidence for the named disposable Server images, not Windows 10/11 desktop certification or a security audit.
 
 ## Automated matrix
 
@@ -35,14 +35,16 @@ The archive harness fails the job unless all of these checks pass:
 |---|---|
 | Backend | Manifest, provenance, SPDX, package verification, license inventory, notices, and evidence hashes pass with `--require-supported`. |
 | AppContainer token | The child token reports `TokenIsAppContainer`, not LPAC for the default mode, and exactly zero capabilities. |
+| Launch gate | Each child is created suspended and assigned to its Job; the parent positively verifies the requested token mode and zero capabilities before one exact resume. A Windows regression delays a forced verification failure for two seconds, requires empty child stdout, and cleans the rejected sandbox. |
 | Network | A copied, byte-identical probe cannot connect to an active parent-owned loopback listener. |
 | Timeout | A 5-second child is terminated by a 250-millisecond sandbox timeout. |
 | Memory | A child requesting and touching 256 MiB fails inside a Job Object limited to 64 MiB. |
+| Crash and loader failure | A positively verified in-sandbox child aborts with a nonzero status, while a deliberately corrupted PE is rejected by process creation. Both paths must perform explicit profile/root cleanup. |
 | Process temp | A child resolves its effective Windows temporary path, obtains random bytes through CNG, and creates and removes a file using libarchive's read/write/delete and delete-on-close access pattern. Its dedicated temporary directory must be empty after exit. |
 | Staging source | The source is staged outside the AppContainer's intrinsically writable profile storage, then receives a protected, inheritable Package SID read/execute-only ACE. Its parent receives only non-inheriting traversal/list access. A byte-identical child can enumerate the parent/root/nested directories and read nested data, but cannot overwrite, append, create in the parent or source, rename, delete, change file attributes, open the DACL for writing, or open the owner for writing. |
 | Create input | The trusted parent copies only audited regular objects into a unique external staging tree, compares the complete source fingerprint, and protects every file/directory DACL individually. It serializes that sealed tree into a bounded PAX stream held by identity/length/SHA-256; the backend receives only fixed sandbox-local `@source.pax.tar`, never the normal source path or a filesystem-tree operand. A dedicated monitored scratch grants the 7z writer only the temporary read/write/delete boundary it needs and must be empty after process exit. |
 | UTF-8 backend | A dedicated listing child loads only verified-manifest DLL candidates after rechecking AppContainer and zero-capability token state, then reads `archive_entry_pathname_utf8`. ZIP/PAX creation explicitly requests UTF-8 headers. After exact source and sandbox-copy hashes pass, the temporary backend EXE also receives a fixed `asInvoker`/long-path/UTF-8 process manifest whose resource is read back byte-for-byte. Japanese names in every create/read path must survive on the default English runner locale. |
-| Cleanup | All five probe profiles, their profile roots, and their owned external staged-source roots are absent after explicit cleanup. |
+| Cleanup | All seven probe profiles, their profile roots, and their owned external staged-source roots are absent after explicit cleanup. |
 | Doctor | A real `bsdtar --version` run reports measured AppContainer and zero-capability evidence. |
 | Create/read | ZIP, 7z, TAR, and TAR.GZ are converted from the trusted bounded PAX stream, internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. The backend bundle in every sandbox is recursively read/execute-only to its Package SID. |
 | Pass separation | The sandbox archive copy remains handle-pinned and recursively Package-SID read-only across listing/extraction. The extraction directory is absent during listing and is created new only after the child exits, policy accepts the list, and the archive fingerprint still matches. |
@@ -58,11 +60,11 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 
 ## Evidence format
 
-`windows-e2e.json` is UTF-8 JSON with `schemaVersion: 1`. Its nested isolation report uses `schemaVersion: 3`. It records:
+`windows-e2e.json` is UTF-8 JSON with `schemaVersion: 2`. Its nested isolation report uses `schemaVersion: 4`. It records:
 
 - runner OS/image identity and executable/backend-manifest SHA-256 values;
 - source-tree counts, byte total, manifest hash, and longest path length;
-- token, network, timeout, memory, effective process-temp path, CNG/delete-on-close results, staging-source read/write ACL, profile deletion, and root deletion evidence;
+- token, network, timeout, memory, abnormal-exit status, corrupt-loader rejection, effective process-temp path, CNG/delete-on-close results, staging-source read/write ACL, profile deletion, and root deletion evidence;
 - per-format archive size/hash, tree-manifest hash, operation durations, and controlled additional read-filter fixtures;
 - invalid-input publication result and shell extraction result;
 - final harness-root cleanup and any failure message.
@@ -76,7 +78,7 @@ The automated Server matrix does not close SAFE-001. Still required:
 1. run the same contract on disposable Windows 10 and Windows 11 x64 machines;
 2. add legally redistributable read fixtures for RAR/RAR5, LHA/LZH, CAB, ZIPX, and raw compressed streams through SAFE-002;
 3. record LPAC format and broader filesystem/registry/COM/LAN/Internet denial results;
-4. exercise crash/loader failure and Windows reparse-race paths;
+4. exercise real Windows reparse-race paths and broader backend-specific crash/cancellation cases;
 5. preserve reviewed evidence outside the 14-day CI artifact window;
 6. complete visual DPI, keyboard-only, and screen-reader validation on desktop Windows.
 

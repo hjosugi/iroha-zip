@@ -300,13 +300,14 @@ iroha-zip.exe doctor
 ## 現在の制約
 
 - パスワード付き書庫は未対応です。stock Windows版bsdtarの制約と、コマンドラインへ秘密を載せないConPTY設計・試験条件は[暗号化書庫設計](docs/ENCRYPTED_ARCHIVES.md)で追跡します。
+- 自動updaterは未実装です。未署名版から自己更新を有効にせず、署名・downgrade・rollback・backend分離の条件を[署名付きupdater設計](docs/UPDATER.md)で固定しています。
 - CLIのpolicy-safe previewと選択展開はありますが、書庫内容を閲覧・検索・選択するネイティブGUIは未実装です。
 - ウイルス対策エンジンではありません。展開後の実行ファイルが安全であることは保証しません。
 - AppContainerやWindowsカーネル、libarchive自体の未知の脆弱性を防げる保証はありません。
 - 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。
 - 同一ユーザー権限をすでに奪取した攻撃者との競合を完全には防げません。
 - 公開済み`v0.4.0`はWindows x64専用です。native ARM64のRust/AppContainer CIと、backend/archive/Releaseに残る正確な境界は[ARM64対応状況](docs/ARM64.md)で追跡します。
-- Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。Server 2022/2025向けWindows E2Eと生成型の悪性コーパスも[Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176)で合格しました。ただし、これはWindows 10/11実機検証やセキュリティ監査の代替ではありません。再現可能な定期fuzzingは[`docs/FUZZING.md`](docs/FUZZING.md)、E2Eの正確な範囲は[`docs/WINDOWS_E2E.md`](docs/WINDOWS_E2E.md)、コーパス範囲は[`docs/MALICIOUS_CORPUS.md`](docs/MALICIOUS_CORPUS.md)、全体状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
+- Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。Server 2022/2025向けschema-v4 Windows E2Eと生成型の悪性コーパスも[Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143)で合格しました。ただし、これはWindows 10/11実機検証やセキュリティ監査の代替ではありません。再現可能な定期fuzzingは[`docs/FUZZING.md`](docs/FUZZING.md)、E2Eの正確な範囲は[`docs/WINDOWS_E2E.md`](docs/WINDOWS_E2E.md)、コーパス範囲は[`docs/MALICIOUS_CORPUS.md`](docs/MALICIOUS_CORPUS.md)、全体状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
 
 残作業は、優先度・依存関係・受け入れ条件を付けた[`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md)で追跡します。変更を提案する場合は[`CONTRIBUTING.md`](CONTRIBUTING.md)も確認してください。
 

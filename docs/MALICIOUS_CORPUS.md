@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 
-This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs produced reviewed passing evidence in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176) from commit `2d410f5f3eac3166b54808af83bcdc385470819b`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed.
+This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs produced reviewed passing evidence in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143) from commit `e81b42aaeb1a4826dfe38043e33564271889c1f8`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed.
 
 ## Distribution and retention policy
 

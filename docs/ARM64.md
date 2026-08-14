@@ -16,6 +16,11 @@ CI は GitHub の native `windows-11-arm` runner 上で、Rust host が
   Job memory limit、異常終了、loader failure、process temp、staging DACL、7 profile/root cleanup
 - 実行binaryのSHA-256とisolation probeのSHA-256が一致すること
 
+この契約は commit `e81b42aaeb1a4826dfe38043e33564271889c1f8` の
+[Actions run 31768309835](https://github.com/hjosugi/iroha-zip/actions/runs/31768309835) で合格しました。
+downloadしたJSONではOS/process architectureがともに`Arm64`、PE machineが`0xAA64`、
+isolation schemaが4、cleanupが7/7成功でした。
+
 このjobが保存するJSONは診断証跡です。ARM64のbinary、ZIP、checksumをReleaseへ公開しません。
 
 ### 未完のbackend境界
@@ -50,6 +55,11 @@ CI runs on GitHub's native `windows-11-arm` runner. After requiring the Rust hos
 
 The job retains diagnostic JSON only. It does not publish ARM64 binaries, a ZIP, or checksums as
 release assets.
+
+This contract passed for commit `e81b42aaeb1a4826dfe38043e33564271889c1f8` in
+[Actions run 31768309835](https://github.com/hjosugi/iroha-zip/actions/runs/31768309835).
+The downloaded JSON records `Arm64` for both OS and process architecture, PE machine `0xAA64`,
+isolation schema 4, and successful cleanup for all seven probe profiles and roots.
 
 ### Backend work still required
 

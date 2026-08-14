@@ -299,13 +299,14 @@ This validates configuration, every backend hash, `bsdtar --version`, and AppCon
 ## Current limitations
 
 - Password-protected archives are not supported. The stock Windows bsdtar constraints and a ConPTY design that avoids command-line secrets are tracked in [Encrypted archives](docs/ENCRYPTED_ARCHIVES.md).
+- No automatic updater is implemented. The unsigned build does not self-update; [Signed updater design](docs/UPDATER.md) fixes the signature, downgrade, rollback, and backend-separation gates.
 - The CLI has policy-safe preview and selective extraction, but there is no native archive browsing/search/selection GUI.
 - iroha-zip is not an antivirus engine and cannot promise that extracted executables are safe.
 - It cannot guarantee protection from unknown vulnerabilities in AppContainer, the Windows kernel, or libarchive.
 - Normal AppContainer is the default. Experimental LPAC must be selected explicitly and used only after `doctor` succeeds with the chosen backend. There is no silent compatibility downgrade.
 - It cannot fully eliminate races against an attacker who already controls the same user account.
 - Published `v0.4.0` is Windows x64 only. [ARM64 status](docs/ARM64.md) records the native Rust/AppContainer CI boundary and the backend/archive/release work that remains.
-- The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. The Server 2022/2025 E2E and generated malicious corpus passed in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176). This is not a substitute for Windows 10/11 device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
+- The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. The schema-v4 Server 2022/2025 E2E and generated malicious corpus passed in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143). This is not a substitute for Windows 10/11 device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
 
 Remaining work and acceptance criteria are tracked in [`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md). Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing a change.
 

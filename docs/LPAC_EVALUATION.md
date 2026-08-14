@@ -1,6 +1,6 @@
 # LPAC evaluation
 
-Updated: 2026-08-09
+Updated: 2026-08-14
 
 This document records the SAFE-006 prototype boundary. LPAC remains opt-in until the real-Windows archive and denial matrix is complete.
 
@@ -26,9 +26,19 @@ isolation = "appcontainer" # default compatibility mode
 isolation = "lpac"         # experimental stricter mode
 ```
 
-When LPAC is selected, iroha-zip does not retry process creation as a regular AppContainer. It opens the created process token and requires both `TokenIsAppContainer != 0` and `TokenIsLessPrivilegedAppContainer != 0`. Missing API support, rejected attributes, backend loader failure, and token downgrade are errors. This deliberately uses runtime evidence instead of assuming support from an OS version string.
+When LPAC is selected, iroha-zip does not retry process creation as a regular AppContainer. Every Windows child is created with `CREATE_SUSPENDED`; the parent opens the token and requires both `TokenIsAppContainer != 0` and `TokenIsLessPrivilegedAppContainer != 0`, plus zero capabilities, before calling `ResumeThread` exactly once. Missing API support, rejected attributes, backend loader failure, token downgrade, and an unexpected suspend count are errors. The Job Object is terminated while the child is still suspended on a verification failure. This deliberately uses runtime evidence instead of assuming support from an OS version string.
 
 The existing `--allow-unsandboxed` switch is separate. It permits an unsandboxed diagnostic fallback only when the user explicitly supplies that switch for that individual command; it is never read from persistent configuration.
+
+## Observed fixed-Server result
+
+[Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143) exercised commit `e81b42aaeb1a4826dfe38043e33564271889c1f8` on fixed Windows Server 2022 build 20348 and Windows Server 2025 build 26100 runners. Normal AppContainer completed the schema-v4 zero-capability isolation and archive matrix on both images, including abnormal-exit, corrupt-loader, and seven-profile/root cleanup evidence.
+
+On both images, LPAC process creation reached token verification, but `GetTokenInformation(TokenIsLessPrivilegedAppContainer)` returned `ERROR_INVALID_PARAMETER`. iroha-zip therefore could not positively prove the requested LPAC token and treated both images as unsupported. The harness required exit code 2, empty isolation-report stdout, the exact classified error, no backend-success output from `doctor`, and removal of its outer temporary root. The probe implementation explicitly cleans the failed sandbox before returning the token error. The harness did not accept any other LPAC failure class.
+
+The Windows unit suite also forces token verification to fail for two seconds after process creation and requires the rejected child to produce zero stdout. This regression would allow a `--list` child enough time to produce output if it had been started before verification; the passing result establishes the suspended-until-verified launch ordering for the tested implementation.
+
+This result does not establish that these kernels cannot create an LPAC. It establishes the narrower, relevant fact that iroha-zip cannot obtain its required affirmative token evidence through the documented query on those runner builds and therefore fails closed without executing the backend.
 
 ## Capability policy
 
