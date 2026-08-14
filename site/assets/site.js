@@ -28,7 +28,7 @@
   }
 
   const locale = document.documentElement.lang === "ja" ? "ja-JP" : "en-US";
-  const fallbackVersion = "v0.5.0";
+  const fallbackVersion = "v0.5.1";
 
   const setText = (selector, value) => {
     document.querySelectorAll(selector).forEach((node) => {

@@ -4,6 +4,17 @@
 
 Nothing yet.
 
+## 0.5.2 - 2026-08-14
+
+- Correct the packaged Japanese/English security policy so the supported line is `0.5.x` and
+  `0.4.x` and earlier are identified as historical releases.
+- Add a normal-CI regression that derives the release tag and supported line from
+  `CARGO_PKG_VERSION` and rejects stale packaged release-document versions.
+- Refresh bilingual release, ARM64, build, issue, website, and issue-template evidence after the
+  independently verified immutable `v0.5.1` publication.
+- Keep the runtime archive and sandbox behavior unchanged from `v0.5.1`; this patch exists so the
+  corrected security policy is present inside the immutable x64 and ARM64 packages.
+
 ## 0.5.1 - 2026-08-14
 
 - Add two-pass AppContainer handling for standalone GZ, BZ2, XZ, Zstandard, and UNIX compress

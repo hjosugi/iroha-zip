@@ -9,7 +9,7 @@ attestations, and immutable asset readback. None of these is an Authenticode pub
 
 ## Current unsigned artifact contract
 
-Version `0.5.1` contains exactly 11 assets. Substitute the version for later releases:
+Version `0.5.2` contains exactly 11 assets. Substitute the version for later releases:
 
 - `iroha-zip-<version>-windows-x64.zip`
 - `iroha-zip-<version>-windows-x64.zip.sha256`
@@ -65,15 +65,20 @@ matching tag and an explicit `publish` choice.
     immutable, latest, and an exact match for all 11 assets.
 
 The repository immutable-release policy was enabled on 2026-08-14. The stable unsigned
-[`v0.5.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.0) publication passed the complete
-dual-architecture contract in [Actions run 31774707963](https://github.com/hjosugi/iroha-zip/actions/runs/31774707963).
-An independent public re-download matched all 11 Release API digests, eight subjects in
+[`v0.5.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.1) publication passed the complete
+dual-architecture contract from commit `65a99b74d99ea138ca1ffe95559290cc9cec8322` in
+[Actions run 31782247651](https://github.com/hjosugi/iroha-zip/actions/runs/31782247651), after the same
+path passed without publication in
+[dry run 31781678934](https://github.com/hjosugi/iroha-zip/actions/runs/31781678934). An independent
+public re-download matched all 11 Release API digests and byte lengths, eight subjects in
 `SHA256SUMS.txt`, both one-line sidecars, all direct and ZIP-contained PE machine identities, every
-ZIP-to-standalone executable byte, backend non-inclusion, the exact tag commit, and all nine
-tag-ref attestations. The Certificate Table was empty in all six distinct executables, confirming
-the disclosed intentionally unsigned state. Unsigned `v0.4.1` was the first publication under the
-immutable policy; `v0.4.0` predates enforcement and remains mutable according to GitHub's API. A
-failed future draft remains unpublished for investigation; it is not silently deleted or overwritten.
+ZIP-to-standalone executable byte, bilingual package content, backend non-inclusion, annotated tag
+object `138bff62391af738789fbc00344c88a166a0c443`, the exact tag commit, and all nine tag-ref
+attestations with hosted-runner enforcement. The Certificate Table was empty in all six distinct
+executables, confirming the disclosed intentionally unsigned state. `v0.5.0` was the preceding
+complete-contract release; unsigned `v0.4.1` was the first publication under the immutable policy,
+while `v0.4.0` predates enforcement and remains mutable according to GitHub's API. A failed future
+draft remains unpublished for investigation; it is not silently deleted or overwritten.
 
 GitHub's immutable-policy status endpoint requires repository `Administration: read`, which the
 standard Actions token cannot request. Do not add a long-lived administrator token. Immediately
@@ -91,7 +96,7 @@ Download only from `https://github.com/hjosugi/iroha-zip/releases`. Select `x64`
 `arm64` for Windows on ARM, then compare it with `SHA256SUMS.txt`:
 
 ```powershell
-$asset = Get-Item .\iroha-zip-0.5.1-windows-arm64.zip
+$asset = Get-Item .\iroha-zip-0.5.2-windows-arm64.zip
 $expected = Get-Content .\SHA256SUMS.txt |
   Where-Object { $_ -match ([regex]::Escape($asset.Name) + '$') }
 if (@($expected).Count -ne 1) { throw 'Missing or duplicate checksum entry' }
@@ -103,10 +108,10 @@ if ($actual -cne $expectedHash) { throw 'SHA-256 mismatch' }
 Then verify the GitHub artifact attestation:
 
 ```powershell
-gh attestation verify .\iroha-zip-0.5.1-windows-arm64.zip `
+gh attestation verify .\iroha-zip-0.5.2-windows-arm64.zip `
   --repo hjosugi/iroha-zip `
   --signer-workflow hjosugi/iroha-zip/.github/workflows/release.yml `
-  --source-ref refs/tags/v0.5.1 `
+  --source-ref refs/tags/v0.5.2 `
   --deny-self-hosted-runners
 ```
 

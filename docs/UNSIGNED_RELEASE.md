@@ -12,9 +12,9 @@ iroha-zip の現在の公式 Windows バイナリは Authenticode 未署名で�
 PowerShell で SHA-256 を表示する例:
 
 ```powershell
-Get-FileHash .\iroha-zip-0.5.1-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.5.2-windows-x64.zip -Algorithm SHA256
 # Windows on ARMの場合 / For Windows on ARM:
-Get-FileHash .\iroha-zip-0.5.1-windows-arm64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.5.2-windows-arm64.zip -Algorithm SHA256
 ```
 
 未署名であることは、ファイルが安全であることも危険であることも単独では証明しません。リポジトリ、ハッシュ、GitHub artifact attestation、公開ソースを組み合わせて出所を確認してください。
@@ -31,9 +31,9 @@ The current official iroha-zip Windows binaries are not Authenticode-signed. Win
 Example SHA-256 check in PowerShell:
 
 ```powershell
-Get-FileHash .\iroha-zip-0.5.1-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.5.2-windows-x64.zip -Algorithm SHA256
 # Windows on ARM:
-Get-FileHash .\iroha-zip-0.5.1-windows-arm64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.5.2-windows-arm64.zip -Algorithm SHA256
 ```
 
 The absence of an Authenticode signature does not, by itself, prove that a file is safe or unsafe. Establish provenance by combining the repository URL, SHA-256 digest, GitHub artifact attestation, and published source.
