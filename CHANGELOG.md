@@ -18,6 +18,8 @@
   dependency-free Node regression on Linux, Windows, and the Pages deployment gate.
 - Enable hosted CodeQL extended analysis for Rust, Actions, and JavaScript; record the reviewed
   same-user/local-path baseline without disabling future path-flow alerts.
+- Package every document linked by the bilingual guides and reject missing release-document targets
+  in ordinary CI before the native Release build.
 - Document the measured Windows PE/PDB reproducibility boundary so dry-run digests are never reused
   as expected published-asset digests.
 - Bound every MSYS2 backend-export child command independently, preserve batched arguments through

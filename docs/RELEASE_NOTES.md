@@ -43,7 +43,8 @@ Releaseへ公開します。
   与えました。Rust文書契約とdependency-free Node behavior testをLinux／Windows／deploy前に実行します。
 - CodeQL extended setupでRust、Actions、JavaScript/TypeScriptをhosted runner上で解析し、既存の
   path-flow 233件を全件reviewしてtest-only 188件とexpected local boundary 45件へ分類しました。
-  ruleは無効化せず、新規flowを検出し続けます。
+  ruleは無効化せず、新規flowを検出し続けます。日英guideから参照するbaseline文書もpackageし、
+  link先がpackage inventoryから欠ける場合はnative build前の通常CIで拒否します。
 - dry runとtag buildのPE差を測定し、COFF/debug timestampとCodeView PDB GUID以外の差を観測しなかった
   範囲を文書化しました。bit-reproducible／build-path-independentとは主張しません。
 - archive runtime codeとtrust boundaryは変更していません。同一versionのassetを置換せず、全build、
@@ -116,7 +117,8 @@ is checked by PE machine value before a separate immutable Release is published.
   and before deployment.
 - Enable hosted CodeQL extended analysis for Rust, Actions, and JavaScript/TypeScript. Review all 233
   existing path flows as 188 test-only and 45 expected local boundaries while leaving the rule enabled
-  for new flows.
+  for new flows. The linked baseline document is packaged, and ordinary CI rejects any guide target
+  omitted from the package inventory before native Release builds.
 - Measure the dry-run/tag-build PE boundary: observed differences were confined to COFF/debug
   timestamps and CodeView PDB GUIDs. Bit-reproducible or build-path-independent output is not claimed.
 - Archive runtime code and trust boundaries are unchanged. No same-version asset is replaced; the

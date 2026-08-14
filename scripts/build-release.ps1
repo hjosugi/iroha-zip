@@ -247,6 +247,7 @@ try {
         "BACKEND_EVIDENCE.md",
         "BACKEND_MANIFEST.md",
         "BUILD_STATUS.md",
+        "CODEQL.md",
         "ENCRYPTED_ARCHIVES.md",
         "FUZZING.md",
         "ISSUE_BACKLOG.md",

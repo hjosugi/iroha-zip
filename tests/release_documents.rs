@@ -29,6 +29,7 @@ fn packaged_release_documents_match_the_crate_version() {
 
     let readme_ja = include_str!("../README.md");
     let readme_en = include_str!("../README.en.md");
+    let release_packager = include_str!("../scripts/build-release.ps1");
     assert!(readme_ja.contains(&tag), "README.md is missing {tag}");
     assert!(readme_en.contains(&tag), "README.en.md is missing {tag}");
     assert!(readme_ja.contains(&x64_zip));
@@ -48,6 +49,24 @@ fn packaged_release_documents_match_the_crate_version() {
             readme_en.matches(marker).count(),
             "bilingual README structure differs for marker {marker:?}"
         );
+    }
+    for (guide_name, guide) in [("README.md", readme_ja), ("README.en.md", readme_en)] {
+        for suffix in guide.split("](docs/").skip(1) {
+            let document = suffix
+                .split([')', '#'])
+                .next()
+                .expect("a docs link must have a path");
+            assert!(
+                std::path::Path::new(document)
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("md")),
+                "{guide_name} has a malformed docs link: {document}"
+            );
+            assert!(
+                release_packager.contains(&format!("\"{document}\"")),
+                "release package omits {guide_name} target docs/{document}"
+            );
+        }
     }
 
     let release_notes = include_str!("../docs/RELEASE_NOTES.md");
