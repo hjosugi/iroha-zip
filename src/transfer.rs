@@ -796,6 +796,16 @@ mod tests {
                     nested.display()
                 )));
             }
+            use std::os::windows::fs::MetadataExt;
+            let metadata = fs::symlink_metadata(&nested).map_err(|error| {
+                IrohaZipError::io_path("cannot inspect junction race probe", &nested, error)
+            })?;
+            if !metadata.file_type().is_symlink() || metadata.file_attributes() & 0x0000_0400 == 0 {
+                return Err(IrohaZipError::Policy(format!(
+                    "junction race probe has no reparse-point identity: {}",
+                    nested.display()
+                )));
+            }
             Ok(())
         });
 
@@ -803,8 +813,8 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("NTFS reparse points are rejected"),
-            "the race must reach the product's reparse-point rejection: {error}"
+                .contains("source tree changed to a symbolic link after audit"),
+            "the race must reach the product's post-audit link rejection: {error}"
         );
         assert!(!target.exists(), "a rejected junction must publish nothing");
         assert_eq!(fs::read(outside.join("hostile.txt")).unwrap(), b"hostile");
