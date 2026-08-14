@@ -228,12 +228,31 @@ jobs:
       - name: Exercise generated malicious archive corpus
         shell: pwsh
         env:
-          IROHA_ZIP_CORPUS_EXECUTABLE: ${{ github.workspace }}/target/release/iroha-zip.exe
           IROHA_ZIP_CORPUS_BACKEND: ${{ runner.temp }}/iroha-zip-e2e-backend
           IROHA_ZIP_CORPUS_EVIDENCE: ${{ runner.temp }}/malicious-corpus.json
-        run: >-
-          cargo test --test malicious_archive_corpus --locked --
-          --ignored --nocapture
+        run: |
+          $builtExecutable = Join-Path $env:GITHUB_WORKSPACE 'target/release/iroha-zip.exe'
+          $runtimeRoot = Join-Path $env:RUNNER_TEMP `
+            ("iroha-zip-corpus-runtime-" + [Guid]::NewGuid().ToString('N'))
+          $runtimeExecutable = Join-Path $runtimeRoot 'iroha-zip.exe'
+          New-Item -ItemType Directory -Path $runtimeRoot | Out-Null
+          try {
+            Copy-Item -LiteralPath $builtExecutable -Destination $runtimeExecutable
+            $builtHash = (Get-FileHash -LiteralPath $builtExecutable -Algorithm SHA256).Hash
+            $runtimeHash = (Get-FileHash -LiteralPath $runtimeExecutable -Algorithm SHA256).Hash
+            if ($builtHash -cne $runtimeHash) {
+              throw 'Independent corpus executable does not match the Cargo build artifact.'
+            }
+            $env:IROHA_ZIP_CORPUS_EXECUTABLE = $runtimeExecutable
+            cargo test --test malicious_archive_corpus --locked -- `
+              --ignored --nocapture
+            if ($LASTEXITCODE -ne 0) {
+              throw "Malicious archive corpus failed with exit code $LASTEXITCODE."
+            }
+          }
+          finally {
+            Remove-Item -LiteralPath $runtimeRoot -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
       - name: Exercise settings-screen setup and diagnosis
         shell: pwsh
