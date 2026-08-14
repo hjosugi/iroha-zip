@@ -184,6 +184,7 @@ fn bundle_verification_requires_an_exact_regular_file_tree() {
         bundle.executable_relative().unwrap(),
         Path::new("bsdtar.exe")
     );
+    assert_eq!(bundle.copied_entry_count().unwrap(), 1);
 
     fs::write(directory.path().join("unexpected.dll"), b"extra").unwrap();
     let error = BackendBundle::verify(directory.path())
@@ -191,6 +192,29 @@ fn bundle_verification_requires_an_exact_regular_file_tree() {
         .to_string();
     assert!(error.contains("does not exactly match its manifest"));
     assert!(error.contains("unexpected.dll"));
+}
+
+#[test]
+fn copied_entry_count_includes_each_distinct_parent_directory() {
+    let directory = TestDirectory::new();
+    fs::create_dir_all(directory.path().join("bin")).unwrap();
+    fs::create_dir_all(directory.path().join("lib/codec")).unwrap();
+    let executable = directory.path().join("bin/bsdtar.exe");
+    let library = directory.path().join("lib/codec/archive.dll");
+    fs::write(&executable, b"test backend").unwrap();
+    fs::write(&library, b"test library").unwrap();
+    let executable_hash = sha256_file(&executable).unwrap();
+    let library_hash = sha256_file(&library).unwrap();
+    fs::write(
+        directory.path().join("backend-manifest.tsv"),
+        format!(
+            "IROHA-ZIP-BACKEND-MANIFEST\t1\nexecutable\tbin/bsdtar.exe\nsha256\t{executable_hash}\tbin/bsdtar.exe\nsha256\t{library_hash}\tlib/codec/archive.dll\n"
+        ),
+    )
+    .unwrap();
+
+    let bundle = BackendBundle::verify(directory.path()).unwrap();
+    assert_eq!(bundle.copied_entry_count().unwrap(), 5);
 }
 
 #[test]

@@ -339,6 +339,10 @@ fn probe_backend_in_sandbox(
     )?;
     let operation = (|| {
         let sandbox_backend = backend.copy_verified_to(&sandbox.root().join("backend"))?;
+        let _backend_sealed = sandbox.seal_sandbox_tree(
+            &sandbox.root().join("backend"),
+            backend.copied_entry_count()?,
+        )?;
         let stdout_log = sandbox.root().join("doctor.stdout.log");
         let stderr_log = sandbox.root().join("doctor.stderr.log");
         let result = sandbox.run(ProcessSpec {

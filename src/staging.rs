@@ -81,6 +81,8 @@ pub(crate) fn stage_archive(
         })?;
 
         let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
+        let _backend_sealed =
+            sandbox.seal_sandbox_tree(&backend_dir, backend.copied_entry_count()?)?;
         let sandbox_archive = input_dir.join("archive.bin");
         archive_snapshot.copy_to_new(&sandbox_archive)?;
 

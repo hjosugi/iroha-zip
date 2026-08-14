@@ -66,6 +66,10 @@ while [ "$#" -gt 0 ]; do
             directory=$1
             ;;
         .) directory=$PWD ;;
+        @*)
+            source_archive=${{1#@}}
+            directory=$PWD/source
+            ;;
     esac
     shift
 done
@@ -251,7 +255,7 @@ fn backend_source_mutation_cannot_publish() {
 
 #[test]
 #[ignore = "requires /usr/bin/bsdtar from a system libarchive installation"]
-fn real_libarchive_accepts_the_sealed_staged_tree_for_all_create_formats() {
+fn real_libarchive_converts_the_bounded_pax_source_for_all_create_formats() {
     let directory = TestDirectory::new();
     let source = source_tree(directory.path());
     fs::create_dir(source.join("empty")).unwrap();

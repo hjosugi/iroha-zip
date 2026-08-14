@@ -237,6 +237,28 @@ impl BackendBundle {
         })
     }
 
+    pub fn copied_entry_count(&self) -> Result<u64> {
+        let mut directories = BTreeSet::<PathBuf>::new();
+        for relative in self.files.keys() {
+            let mut parent = relative.parent();
+            while let Some(path) = parent {
+                if path.as_os_str().is_empty() {
+                    break;
+                }
+                directories.insert(path.to_path_buf());
+                parent = path.parent();
+            }
+        }
+        u64::try_from(self.files.len())
+            .ok()
+            .and_then(|files| {
+                u64::try_from(directories.len())
+                    .ok()
+                    .and_then(|count| files.checked_add(count))
+            })
+            .ok_or_else(|| IrohaZipError::Backend("backend entry count overflow".to_owned()))
+    }
+
     pub fn copy_verified_to(&self, destination: &Path) -> Result<PathBuf> {
         fs::create_dir_all(destination).map_err(|error| {
             IrohaZipError::io_path(

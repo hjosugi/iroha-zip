@@ -9,9 +9,9 @@ use crate::config::{Config, FilenameEncoding};
 use crate::error::{IrohaZipError, Result};
 use crate::platform::{ProcessSpec, Sandbox};
 use crate::snapshot::FileFingerprint;
-use crate::{monitor, policy, staging, transfer, util};
+use crate::{monitor, pax, policy, staging, transfer, util};
 
-const STAGED_SOURCE_OPERAND: &str = ".";
+const SOURCE_ARCHIVE_ARGUMENT: &str = "@source.pax.tar";
 
 pub fn create_archive(
     backend: &BackendBundle,
@@ -59,6 +59,8 @@ pub fn create_archive(
         })?;
 
         let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
+        let _backend_sealed =
+            sandbox.seal_sandbox_tree(&backend_dir, backend.copied_entry_count()?)?;
         let expected_source =
             transfer::copy_audited_tree_fingerprint(&source, &source_dir, &config.limits)?;
         let staged_entry_budget = expected_source
@@ -70,6 +72,18 @@ pub fn create_archive(
             })?;
         let _staged_source_sealed =
             sandbox.seal_staged_source_tree(&source_dir, staged_entry_budget)?;
+        let source_archive = sandbox.root().join("source.pax.tar");
+        let source_archive_fingerprint =
+            pax::write_tree_archive(&source_dir, &source_archive, &config.limits)?;
+        let source_archive_guard = crate::snapshot::AuditedFile::open(
+            &source_archive,
+            source_archive_fingerprint.length(),
+        )?;
+        if source_archive_guard.fingerprint() != &source_archive_fingerprint {
+            return Err(IrohaZipError::Policy(
+                "bounded PAX source changed before backend launch".to_owned(),
+            ));
+        }
 
         let sandbox_archive = output_dir.join("archive.bin");
         let stdout_log = sandbox.root().join("bsdtar.stdout.log");
@@ -77,10 +91,11 @@ pub fn create_archive(
         let mut args = create_arguments(format);
         args.push(OsString::from("-f"));
         args.push(sandbox_archive.as_os_str().to_owned());
-        // The trusted parent supplies this sealed directory as the process
-        // current directory. The backend receives only a relative operand and
-        // cannot write, create, delete, or change ACLs in the staged tree.
-        args.push(OsString::from(STAGED_SOURCE_OPERAND));
+        // Feed bsdtar an already-audited, bounded archive instead of asking
+        // libarchive's Windows disk reader to traverse the staged tree. The
+        // disk reader queries the volume root with GetDiskFreeSpaceW, which is
+        // intentionally inaccessible from a capability-free AppContainer.
+        args.push(OsString::from(SOURCE_ARCHIVE_ARGUMENT));
 
         let baseline = policy::measure_tree(sandbox.root())?;
         let transient_bytes = config
@@ -98,13 +113,14 @@ pub fn create_archive(
             config
                 .limits
                 .max_single_file_bytes
-                .max(config.limits.max_archive_bytes),
+                .max(config.limits.max_archive_bytes)
+                .max(source_archive_fingerprint.length()),
         )?;
 
         let result = sandbox.run(ProcessSpec {
             program: sandbox_backend,
             args,
-            current_dir: source_dir.clone(),
+            current_dir: sandbox.root().to_path_buf(),
             stdin_file: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
@@ -128,6 +144,12 @@ pub fn create_archive(
             &expected_source,
             "backend modified the staged source tree while creating the archive",
         )?;
+        require_file_fingerprint(
+            &source_archive,
+            &source_archive_fingerprint,
+            "backend modified the bounded PAX source stream while creating the archive",
+        )?;
+        drop(source_archive_guard);
 
         let verified_archive = verify_created_archive(
             backend,
@@ -158,6 +180,14 @@ pub fn create_archive(
         }
         Err(error) => sandbox.fail_after_cleanup(error),
     }
+}
+
+fn require_file_fingerprint(path: &Path, expected: &FileFingerprint, message: &str) -> Result<()> {
+    let observed = crate::snapshot::AuditedFile::open(path, expected.length())?;
+    if observed.fingerprint() != expected {
+        return Err(IrohaZipError::Policy(message.to_owned()));
+    }
+    Ok(())
 }
 
 fn open_verified_archive_for_publication(
@@ -302,7 +332,7 @@ mod tests {
     }
 
     #[test]
-    fn staged_creation_uses_one_relative_source_operand_without_path_rewrite() {
+    fn creation_uses_one_fixed_pax_source_without_path_rewrite() {
         for format in [
             CreateFormat::Zip,
             CreateFormat::SevenZip,
@@ -319,7 +349,7 @@ mod tests {
             );
         }
 
-        assert_eq!(STAGED_SOURCE_OPERAND, ".");
+        assert_eq!(SOURCE_ARCHIVE_ARGUMENT, "@source.pax.tar");
     }
 
     #[test]
