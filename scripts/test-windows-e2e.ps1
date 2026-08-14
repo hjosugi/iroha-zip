@@ -144,9 +144,17 @@ function Compare-Tree([string]$Expected, [string]$Actual) {
     }
 }
 
-function Write-TestConfig([string]$Path, [string]$Backend, [bool]$OpenAfterDoubleClick) {
+function Write-TestConfig(
+    [string]$Path,
+    [string]$Backend,
+    [bool]$OpenAfterDoubleClick,
+    [string]$Isolation = "appcontainer"
+) {
     if ($Backend.Contains("'")) {
         throw "The E2E backend path cannot contain a single quote: $Backend"
+    }
+    if ($Isolation -notin @("appcontainer", "lpac")) {
+        throw "Unsupported E2E isolation mode: $Isolation"
     }
     $literalBackend = $Backend.Replace("'", "''")
     $openValue = if ($OpenAfterDoubleClick) { "true" } else { "false" }
@@ -157,7 +165,7 @@ directory = '$literalBackend'
 [sandbox]
 timeout_seconds = 30
 memory_limit_mib = 768
-isolation = "appcontainer"
+isolation = "$Isolation"
 
 [limits]
 max_archive_bytes = 134217728
@@ -176,6 +184,74 @@ default_filename_encoding = "auto"
 "@
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $Path)) | Out-Null
     [System.IO.File]::WriteAllText($Path, $text, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Assert-IsolationEvidence(
+    [object]$Evidence,
+    [bool]$ExpectLpac,
+    [string]$ExpectedProbeSha256
+) {
+    $expectedMode = if ($ExpectLpac) { "lpac" } else { "appcontainer" }
+    if ($Evidence.schemaVersion -ne 3 -or
+        $Evidence.requestedMode -cne $expectedMode -or
+        -not $Evidence.token.isAppContainer -or
+        [bool]$Evidence.token.isLessPrivilegedAppContainer -ne $ExpectLpac -or
+        $Evidence.token.capabilityCount -ne 0 -or
+        -not $Evidence.network.denied -or
+        -not $Evidence.timeout.rejected -or
+        -not $Evidence.memory.rejected -or
+        [string]::IsNullOrWhiteSpace($Evidence.processTemp.tempEnvironment) -or
+        [string]::IsNullOrWhiteSpace($Evidence.processTemp.tmpEnvironment) -or
+        [string]::IsNullOrWhiteSpace($Evidence.processTemp.resolvedPath) -or
+        -not $Evidence.processTemp.rngSucceeded -or
+        -not $Evidence.processTemp.deleteOnCloseSucceeded -or
+        -not $Evidence.stagingWriteSeal.aclApplied) {
+        throw "Isolation evidence did not satisfy the zero-capability $expectedMode contract."
+    }
+
+    $expectedReadablePaths = @(
+        "root-file",
+        "nested-file",
+        "parent-directory",
+        "root-directory",
+        "nested-directory",
+        "current-directory"
+    )
+    $expectedDeniedOperations = @(
+        "overwrite-existing-file",
+        "append-existing-file",
+        "create-root-file",
+        "create-parent-file",
+        "create-root-directory",
+        "overwrite-nested-file",
+        "create-nested-file",
+        "rename-file",
+        "delete-file",
+        "change-file-attributes",
+        "open-dacl-for-write",
+        "open-owner-for-write"
+    )
+    $actualReadableJson = ConvertTo-Json `
+        -InputObject @($Evidence.stagingWriteSeal.readablePaths) -Compress
+    $expectedReadableJson = ConvertTo-Json -InputObject $expectedReadablePaths -Compress
+    $actualDeniedJson = ConvertTo-Json `
+        -InputObject @($Evidence.stagingWriteSeal.deniedOperations) -Compress
+    $expectedDeniedJson = ConvertTo-Json -InputObject $expectedDeniedOperations -Compress
+    if ($actualReadableJson -cne $expectedReadableJson -or
+        $actualDeniedJson -cne $expectedDeniedJson) {
+        throw "Staging-source ACL evidence did not match the exact $expectedMode read/write contract."
+    }
+
+    $cleanupRecords = @($Evidence.cleanup)
+    if ($cleanupRecords.Count -ne 5 -or
+        @($cleanupRecords | Where-Object {
+            -not $_.profileDeleteSucceeded -or -not $_.temporaryRootRemoved
+        }).Count -ne 0) {
+        throw "One or more $expectedMode isolation probes left a profile or temporary root behind."
+    }
+    if ($Evidence.probeSha256 -cne $ExpectedProbeSha256) {
+        throw "$expectedMode isolation probe bytes differ from the tested iroha-zip executable."
+    }
 }
 
 $builtExecutablePath = Resolve-Leaf $Executable "iroha-zip executable"
@@ -214,7 +290,7 @@ if ($builtExecutableHash -cne $executableHash -or $builtShellHash -cne $shellHas
 }
 $failure = $null
 $report = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     status = "running"
     generatedAtUtc = [DateTime]::UtcNow.ToString("o")
     runner = [ordered]@{
@@ -233,6 +309,10 @@ $report = [ordered]@{
     sourceTree = $null
     isolation = $null
     doctor = $null
+    lpac = [ordered]@{
+        isolation = $null
+        doctor = $null
+    }
     formats = @()
     readFixtures = @()
     invalidArchive = $null
@@ -246,6 +326,8 @@ $report = [ordered]@{
 try {
     $configPath = Join-Path $testRoot "設定.toml"
     Write-TestConfig $configPath $backendPath $false
+    $lpacConfigPath = Join-Path $testRoot "設定-lpac.toml"
+    Write-TestConfig $lpacConfigPath $backendPath $false "lpac"
 
     $sourceRoot = Join-Path $testRoot "入力-日本語"
     [System.IO.Directory]::CreateDirectory($sourceRoot) | Out-Null
@@ -296,67 +378,15 @@ try {
         "--config", $configPath, "isolation-report"
     )
     $isolation = $isolationRun.stdout | ConvertFrom-Json -Depth 20
-    if ($isolation.schemaVersion -ne 3 -or
-        -not $isolation.token.isAppContainer -or
-        $isolation.token.isLessPrivilegedAppContainer -or
-        $isolation.token.capabilityCount -ne 0 -or
-        -not $isolation.network.denied -or
-        -not $isolation.timeout.rejected -or
-        -not $isolation.memory.rejected -or
-        [string]::IsNullOrWhiteSpace($isolation.processTemp.tempEnvironment) -or
-        [string]::IsNullOrWhiteSpace($isolation.processTemp.tmpEnvironment) -or
-        [string]::IsNullOrWhiteSpace($isolation.processTemp.resolvedPath) -or
-        -not $isolation.processTemp.rngSucceeded -or
-        -not $isolation.processTemp.deleteOnCloseSucceeded -or
-        -not $isolation.stagingWriteSeal.aclApplied) {
-        throw "Isolation evidence did not satisfy the zero-capability AppContainer contract."
-    }
-    $expectedReadablePaths = @(
-        "root-file",
-        "nested-file",
-        "parent-directory",
-        "root-directory",
-        "nested-directory",
-        "current-directory"
-    )
-    $expectedDeniedOperations = @(
-        "overwrite-existing-file",
-        "append-existing-file",
-        "create-root-file",
-        "create-parent-file",
-        "create-root-directory",
-        "overwrite-nested-file",
-        "create-nested-file",
-        "rename-file",
-        "delete-file",
-        "change-file-attributes",
-        "open-dacl-for-write",
-        "open-owner-for-write"
-    )
-    $actualReadableJson = ConvertTo-Json -InputObject @($isolation.stagingWriteSeal.readablePaths) -Compress
-    $expectedReadableJson = ConvertTo-Json -InputObject $expectedReadablePaths -Compress
-    $actualDeniedJson = ConvertTo-Json -InputObject @($isolation.stagingWriteSeal.deniedOperations) -Compress
-    $expectedDeniedJson = ConvertTo-Json -InputObject $expectedDeniedOperations -Compress
-    if ($actualReadableJson -cne $expectedReadableJson -or
-        $actualDeniedJson -cne $expectedDeniedJson) {
-        throw "Staging-source ACL evidence did not match the exact read/write contract."
-    }
-    $cleanupRecords = @($isolation.cleanup)
-    if ($cleanupRecords.Count -ne 5 -or
-        @($cleanupRecords | Where-Object {
-            -not $_.profileDeleteSucceeded -or -not $_.temporaryRootRemoved
-        }).Count -ne 0) {
-        throw "One or more isolation probes left a profile or temporary root behind."
-    }
-    if ($isolation.probeSha256 -cne $report.binaries.irohaZipSha256) {
-        throw "Isolation probe bytes differ from the tested iroha-zip executable."
-    }
+    Assert-IsolationEvidence $isolation $false $report.binaries.irohaZipSha256
     $report.isolation = $isolation
 
     $doctorRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
         "--config", $configPath, "doctor"
     )
-    if ($doctorRun.stdout -notmatch 'AppContainer=true' -or
+    if ($doctorRun.stdout -notmatch 'requested=AppContainer' -or
+        $doctorRun.stdout -notmatch 'AppContainer=true' -or
+        $doctorRun.stdout -notmatch 'LPAC=false' -or
         $doctorRun.stdout -notmatch 'capabilities=0') {
         throw "Doctor output did not expose measured AppContainer token evidence."
     }
@@ -364,6 +394,27 @@ try {
         elapsedMilliseconds = $doctorRun.elapsedMilliseconds
         outputSha256 = Get-StringSha256 $doctorRun.stdout
         backendEvidenceValidationMilliseconds = $backendValidation.elapsedMilliseconds
+    }
+
+    $lpacIsolationRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+        "--config", $lpacConfigPath, "isolation-report"
+    )
+    $lpacIsolation = $lpacIsolationRun.stdout | ConvertFrom-Json -Depth 20
+    Assert-IsolationEvidence $lpacIsolation $true $report.binaries.irohaZipSha256
+    $report.lpac.isolation = $lpacIsolation
+
+    $lpacDoctorRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+        "--config", $lpacConfigPath, "doctor"
+    )
+    if ($lpacDoctorRun.stdout -notmatch 'requested=LPAC' -or
+        $lpacDoctorRun.stdout -notmatch 'AppContainer=true' -or
+        $lpacDoctorRun.stdout -notmatch 'LPAC=true' -or
+        $lpacDoctorRun.stdout -notmatch 'capabilities=0') {
+        throw "Doctor output did not expose measured zero-capability LPAC token evidence."
+    }
+    $report.lpac.doctor = [ordered]@{
+        elapsedMilliseconds = $lpacDoctorRun.elapsedMilliseconds
+        outputSha256 = Get-StringSha256 $lpacDoctorRun.stdout
     }
 
     $archivesRoot = Join-Path $testRoot "archives"
