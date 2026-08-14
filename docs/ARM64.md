@@ -34,11 +34,11 @@ AppContainerがcapability 0であること、7 profile/rootと全一時rootが�
 このWindows 11 ARM環境ではLPAC queryは`ERROR_INVALID_PARAMETER`となり、通常AppContainerへ降格せず
 fail closedしました。
 
-### v0.5.0の配布境界
+### 配布境界
 
 [`v0.5.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.0)は`windows-arm64`と
 `windows-x64`を別名で公開済みです。[Release workflow run 31774707963](https://github.com/hjosugi/iroha-zip/actions/runs/31774707963)はnative ARM64
-runnerでbuild/packageし、次の境界で取り違えを拒否しました。
+runnerでbuild/packageし、次の境界で取り違えを拒否しました。`v0.5.1`も同じtag-driven契約を使います。
 
 1. build直後の3 EXEをPE machine `0xAA64`で検査する。
 2. ARM64名の3つの個別EXEと、ARM64 ZIP内の3 EXEを再検査する。
@@ -54,7 +54,7 @@ ZIP内外のx64／ARM64 PE identity、ZIPと個別EXEのbyte一致、backend非�
 
 ### ARM64での導入
 
-1. `iroha-zip-0.5.0-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
+1. `iroha-zip-0.5.1-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
 2. native ARM64版MSYS2で`mingw-w64-clang-aarch64-libarchive`を導入します。
 3. ARM64版の設定画面で「MSYS2から取り込む」を選びます。設定画面はCLANGARM64を自動指定します。
 4. CLI自動化では次を使用します。
@@ -110,11 +110,12 @@ AppContainer with zero capabilities, and removal of all seven profiles/roots and
 The LPAC query returned `ERROR_INVALID_PARAMETER` on that Windows 11 ARM environment and failed closed
 without a normal-AppContainer fallback.
 
-### v0.5.0 distribution boundary
+### Distribution boundary
 
 [`v0.5.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.0) has published separately named
 `windows-arm64` and `windows-x64` assets. [Release workflow run 31774707963](https://github.com/hjosugi/iroha-zip/actions/runs/31774707963)
-built/packaged on a native ARM64 runner and rejected architecture confusion at these boundaries:
+built/packaged on a native ARM64 runner and rejected architecture confusion at these boundaries.
+`v0.5.1` uses the same tag-driven contract:
 
 1. All three direct build outputs must have PE machine `0xAA64`.
 2. The three ARM64 standalone assets and all three executables inside the ARM64 ZIP are rechecked.
@@ -131,7 +132,7 @@ distinct executables had empty PE Certificate Tables, confirming the disclosed i
 
 ### ARM64 setup
 
-1. Download `iroha-zip-0.5.0-windows-arm64.zip` and verify its SHA-256 and attestation.
+1. Download `iroha-zip-0.5.1-windows-arm64.zip` and verify its SHA-256 and attestation.
 2. Install `mingw-w64-clang-aarch64-libarchive` in native ARM64 MSYS2.
 3. Choose **Import from MSYS2** in the ARM64 Settings build. It selects CLANGARM64 automatically.
 4. For CLI automation, use:

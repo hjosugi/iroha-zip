@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.5.1 - 2026-08-14
+
 - Add two-pass AppContainer handling for standalone GZ, BZ2, XZ, Zstandard, and UNIX compress
   streams. A manifest-pinned libarchive raw reader drains the complete preflight, fixes the expected
   filter and safe output name from the outer extension, repeats extraction in a fresh sandbox, and
