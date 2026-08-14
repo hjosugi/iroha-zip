@@ -47,11 +47,11 @@ fail closedしました。
 5. 2 ZIPと6 EXEへarch別attestation、`SHA256SUMS.txt`へ集約attestationを発行する。
 6. draft時と公開後に全11 assetの大小文字を含む名前、byte長、SHA-256を照合する。
 
-直前の`v0.5.2`公開ではGitHub Releaseから11 assetを独立に再取得し、API digest／byte長、
+`v0.5.3`公開ではGitHub Releaseから11 assetを独立に再取得し、API digest／byte長、
 8 checksum対象、2 sidecar、ZIP内外のx64／ARM64 PE identity、ZIPと個別EXEのbyte一致、
 日英package内容、backend非同梱、annotated tag object、exact tag commit、hosted-runner限定の
 9つのtag-ref attestationを確認しました。6種類のEXEはすべてPE Certificate Tableが空でした。
-`v0.5.3`も同じdraft／公開後readbackを完了するまでstable releaseとして扱いません。
+Release APIはlatest／stable／immutableと、exact 11 assetの公開状態を返しています。
 
 ### ARM64での導入
 
@@ -125,12 +125,12 @@ runner and rejects architecture confusion at these tag-driven boundaries:
 5. Per-architecture attestations cover both ZIPs and six EXEs; a combined attestation covers the inventory.
 6. Draft and published readback compare exact case-sensitive names, byte lengths, and SHA-256 for all assets.
 
-For the immediately preceding `v0.5.2` publication, all 11 assets were independently downloaded from
+For the `v0.5.3` publication, all 11 assets were independently downloaded from
 the GitHub Release. API digests and byte lengths, eight checksum subjects, two sidecars, x64/ARM64 PE
 identities inside and outside the ZIPs, ZIP-to-standalone byte matches, bilingual package content,
 backend non-inclusion, annotated tag object, exact tag commit, and nine hosted-runner-only tag-ref
-attestations all matched. All six distinct executables had empty PE Certificate Tables. `v0.5.3` is
-not treated as a stable release until it completes the same draft and post-publication readback.
+attestations all matched. All six distinct executables had empty PE Certificate Tables. The Release
+API reports it as latest, stable, immutable, and complete with the exact 11-asset inventory.
 
 ### ARM64 setup
 

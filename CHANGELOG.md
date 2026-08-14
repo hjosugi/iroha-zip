@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Record the independently verified immutable `v0.5.3` publication, exact 11-asset inventory,
+  tag-ref attestations, intentionally unsigned PE state, and byte-matched bilingual Pages deployment.
+- Record the reviewed test-only CodeQL alert #234 and refresh issue-reporting guidance for `v0.5.3`.
+
 ## 0.5.3 - 2026-08-14
 
 - Add a crate-version-derived regression for the bilingual Pages fallback, download example,

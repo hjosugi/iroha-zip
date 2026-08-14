@@ -24,6 +24,11 @@ taintとして追跡します。全233 sinkと報告されたdataflow sourceを�
   - `create_new`で公開するdestinationと、同じtransactionが作成したexact cleanup target
   - 保持directory handleまたは検査済みrootから有界列挙したchild path
 
+その後、Pages release behavior regressionの`vm.runInNewContext`に`js/code-injection` alert #234が
+1件出ました。実行対象はconstant相対URLから同期読込するchecked-in `site/assets/site.js`だけで、
+contextもtest内の合成DOM／fetch objectです。利用者入力やproduction sourceは到達しないため
+`used in tests`としてdismissしました。2026-08-14時点のopen CodeQL alertは0件です。
+
 dismissはruleを無効化しません。新しいdataflowやsinkは今後の解析で別alertになり、同じ基準で
 再確認します。CodeQL合格やdismissは、Windows実機検証、fuzzing、manual review、独立security
 auditの代替ではありません。
@@ -51,6 +56,12 @@ source was reviewed and classified as follows:
   - a uniquely created sandbox/staging root with identity, link, reparse, and fingerprint checks;
   - a `create_new` publication destination or an exact cleanup target created by the same transaction;
   - a child path boundedly enumerated from a retained directory handle or inspected root.
+
+The later Pages release-behavior regression produced one `js/code-injection` alert (#234) at
+`vm.runInNewContext`. Its only executed subject is checked-in `site/assets/site.js`, synchronously
+read from a constant relative URL, and its context contains only synthetic DOM/fetch objects. No
+user or production source reaches it, so it was dismissed as `used in tests`. Open CodeQL alerts
+were zero as of 2026-08-14.
 
 Dismissal does not disable the rule. A new dataflow or sink creates a new alert for review against the
 same criteria. A passing or dismissed CodeQL result does not replace physical-Windows validation,

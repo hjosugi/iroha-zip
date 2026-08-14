@@ -166,7 +166,7 @@ child file／directoryを開く操作自体はWin32 path APIを使うため、�
 ## 7. 将来の強化候補
 
 - LPACの実書庫・ACL・network denial matrixと必要capability 0件の実証
-- 最初の実環境Authenticode署名済みrelease証跡と独立レビュー、および署名済みアップデート（未署名`v0.5.3`ではGitHub immutable policy、draft-first検証、公開後のexact asset readbackを要求する。これはpublisher署名の代替ではない）
+- 最初の実環境Authenticode署名済みrelease証跡と独立レビュー、および署名済みアップデート（未署名`v0.5.3`はGitHub immutable policy、draft-first検証、公開後のexact asset readbackを完了した。これはpublisher署名の代替ではない）
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
