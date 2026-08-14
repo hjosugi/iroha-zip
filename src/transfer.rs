@@ -767,7 +767,7 @@ mod tests {
         let source = directory.0.join("source");
         let target = directory.0.join("target");
         let nested = source.join("nested");
-        let moved = source.join("moved");
+        let moved = directory.0.join("audited-original");
         let outside = directory.0.join("outside");
         fs::create_dir(&source).unwrap();
         fs::create_dir(&nested).unwrap();
@@ -799,7 +799,13 @@ mod tests {
             Ok(())
         });
 
-        assert!(result.is_err(), "a post-audit junction must be rejected");
+        let error = result.expect_err("a post-audit junction must be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("NTFS reparse points are rejected"),
+            "the race must reach the product's reparse-point rejection: {error}"
+        );
         assert!(!target.exists(), "a rejected junction must publish nothing");
         assert_eq!(fs::read(outside.join("hostile.txt")).unwrap(), b"hostile");
     }
