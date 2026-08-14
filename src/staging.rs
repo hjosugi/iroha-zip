@@ -76,7 +76,7 @@ pub(crate) fn stage_archive(
     let raw_stream = raw_stream_contract(&archive);
     #[cfg(windows)]
     if let Some(contract) = raw_stream.as_ref()
-        && contract.output_name.as_bytes().len().saturating_add(1) > config.limits.max_path_bytes
+        && contract.output_name.len().saturating_add(1) > config.limits.max_path_bytes
     {
         return Err(IrohaZipError::Policy(format!(
             "raw-stream output name exceeds {} UTF-8 bytes: {:?}",

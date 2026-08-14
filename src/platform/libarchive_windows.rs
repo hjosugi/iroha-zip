@@ -242,7 +242,7 @@ fn validate_raw_paths(
             "raw-stream output name is not one normal component".to_owned(),
         ));
     };
-    if components.next().is_some() || output_name.as_bytes().len() > MAX_INTERNAL_PATH_BYTES {
+    if components.next().is_some() || output_name.len() > MAX_INTERNAL_PATH_BYTES {
         return Err(IrohaZipError::Policy(
             "raw-stream output name exceeds its bounded component contract".to_owned(),
         ));
