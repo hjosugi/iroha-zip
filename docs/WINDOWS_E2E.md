@@ -27,6 +27,8 @@ It then runs the generated malicious archive corpus and `test-settings-ui.ps1` w
 
 The harness invokes verified `bsdtar.exe` directly only to generate BZ2/XZ/Zstandard/compress fixtures from deterministic, harness-owned data on the disposable runner. That generator uses a separate ASCII-only path because the unmodified source binary has no iroha-zip UTF-8 process manifest; trusted PowerShell then copies the result to a Japanese-named product input path. It also generates one single-file LZX CAB with the OS `System32\makecab.exe`, but only after requiring a valid Microsoft Authenticode signature; the report records the generator file hash, signer subject, compression setting, and output hash. All reads of those archives and every product create operation still pass through iroha-zip's AppContainer boundary. Direct generator execution is not a supported path for untrusted or user-owned input.
 
+RAR, RAR5, LHA level 3, and BZIP2-compressed ZIPX use four benign reference fixtures copied byte for byte from the official libarchive `v3.8.9` tag. The repository stores only their UUencoded upstream form together with the upstream BSD-2-Clause terms. A bounded PowerShell decoder requires the exact encoded hash, envelope, decoded length, and decoded hash before creating a temporary archive. CI never asks host-side `bsdtar` to list or extract these inputs. iroha-zip performs both `preview` and `extract` through AppContainer, then the harness compares every path, object kind, byte length, and file SHA-256 with a pinned expected inventory. Exact provenance and hashes are in [`tests/fixtures/libarchive-v3.8.9`](../tests/fixtures/libarchive-v3.8.9/README.md).
+
 ## Assertions
 
 The archive harness fails the job unless all of these checks pass:
@@ -48,7 +50,7 @@ The archive harness fails the job unless all of these checks pass:
 | Doctor | A real `bsdtar --version` run reports measured AppContainer and zero-capability evidence. |
 | Create/read | ZIP, 7z, TAR, and TAR.GZ are converted from the trusted bounded PAX stream, internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. The backend bundle in every sandbox is recursively read/execute-only to its Package SID. |
 | Pass separation | The sandbox archive copy remains handle-pinned and recursively Package-SID read-only across listing/extraction. The extraction directory is absent during listing and is created new only after the child exits, policy accepts the list, and the archive fingerprint still matches. |
-| Additional reads | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures. Validly Microsoft-signed `makecab.exe` creates a controlled LZX CAB. iroha-zip previews and extracts all five to their exact source tree hashes. |
+| Additional reads | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures. Validly Microsoft-signed `makecab.exe` creates a controlled LZX CAB. Four pinned upstream fixtures cover RAR, RAR5, LHA level 3, and BZIP2-compressed ZIPX. iroha-zip previews and extracts the exact nine-format inventory and compares complete trees. |
 | Paths | The source includes Japanese names, an empty directory, deterministic binary data, and a relative path longer than 260 characters. |
 | Directory handles | Windows unit tests enumerate Unicode names through a bounded directory handle, reject an undersized entry budget, and require the retained handle to block directory rename. The archive matrix then exercises the same enumeration path over nested and long-path trees. |
 | Failure | A deliberately invalid ZIP exits nonzero, publishes no destination, and takes the cleanup-required backend-failure path. |
@@ -60,12 +62,13 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 
 ## Evidence format
 
-`windows-e2e.json` is UTF-8 JSON with `schemaVersion: 2`. Its nested isolation report uses `schemaVersion: 4`. It records:
+`windows-e2e.json` is UTF-8 JSON with `schemaVersion: 3`. Its nested isolation report uses `schemaVersion: 4`. It records:
 
 - runner OS/image identity and executable/backend-manifest SHA-256 values;
 - source-tree counts, byte total, manifest hash, and longest path length;
 - token, network, timeout, memory, abnormal-exit status, corrupt-loader rejection, effective process-temp path, CNG/delete-on-close results, staging-source read/write ACL, profile deletion, and root deletion evidence;
 - per-format archive size/hash, tree-manifest hash, operation durations, and controlled additional read-filter fixtures;
+- for every pinned upstream fixture, the libarchive version, annotated tag object, commit, license, UU filename/length/hash, decoded archive length/hash, and expected extracted-tree hash;
 - invalid-input publication result and shell extraction result;
 - final harness-root cleanup and any failure message.
 
@@ -76,7 +79,7 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 The automated Server matrix does not close SAFE-001. Still required:
 
 1. run the same contract on disposable Windows 10 and Windows 11 x64 machines;
-2. add legally redistributable read fixtures for RAR/RAR5, LHA/LZH, ZIPX, and raw compressed streams through SAFE-002;
+2. add raw compressed-stream and further legacy-format fixtures through SAFE-002;
 3. record LPAC format and broader filesystem/registry/COM/LAN/Internet denial results;
 4. add concurrent reparse-race stress beyond the deterministic real-junction replacement regression, plus broader backend-specific crash/cancellation cases;
 5. preserve reviewed evidence outside the 14-day CI artifact window;

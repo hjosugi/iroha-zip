@@ -193,6 +193,37 @@ try {
             -Destination (Join-Path $appRoot "scripts\$script")
     }
 
+    $packagedTestRoot = Join-Path $appRoot "tests"
+    $packagedFixtureRoot = Join-Path $packagedTestRoot "fixtures\libarchive-v3.8.9"
+    New-Item -ItemType Directory -Force -Path $packagedFixtureRoot | Out-Null
+    $packagedTestFiles = @(
+        [pscustomobject]@{
+            source = Join-Path $ProjectRoot "tests\windows-fixture-tools.ps1"
+            destination = Join-Path $packagedTestRoot "windows-fixture-tools.ps1"
+        }
+        foreach ($fixtureName in @(
+            "README.md",
+            "COPYING",
+            "test_read_format_rar_windows.rar.uu",
+            "test_read_format_rar5_stored.rar.uu",
+            "test_read_format_lha_header3.lzh.uu",
+            "test_read_format_zip_bzip2.zipx.uu"
+        )) {
+            [pscustomobject]@{
+                source = Join-Path $ProjectRoot "tests\fixtures\libarchive-v3.8.9\$fixtureName"
+                destination = Join-Path $packagedFixtureRoot $fixtureName
+            }
+        }
+    )
+    foreach ($testFile in $packagedTestFiles) {
+        $sourceItem = Get-Item -LiteralPath $testFile.source -Force -ErrorAction Stop
+        if ($sourceItem.PSIsContainer -or
+            ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Release test fixture is not an ordinary file: $($testFile.source)"
+        }
+        Copy-Item -LiteralPath $sourceItem.FullName -Destination $testFile.destination
+    }
+
     foreach ($file in @(
         "README.md",
         "README.en.md",
@@ -271,6 +302,36 @@ try {
             if ($backendFiles.Count -ne 1 -or $backendFiles[0].Name -cne "README.md" -or
                 $backendFiles[0].PSIsContainer -or $backendFiles[0].LinkType) {
                 throw "Backend-free package contains an unexpected backend payload."
+            }
+        }
+        $expectedTestPaths = @(
+            $packagedTestFiles |
+                ForEach-Object {
+                    [IO.Path]::GetRelativePath($appRoot, $_.destination).Replace('\', '/')
+                } |
+                Sort-Object
+        )
+        $expandedTestFiles = @(
+            Get-ChildItem -LiteralPath (Join-Path $expandedRoot "tests") -File -Force -Recurse |
+                Sort-Object -Property FullName
+        )
+        $actualTestPaths = @(
+            $expandedTestFiles |
+                ForEach-Object {
+                    [IO.Path]::GetRelativePath($expandedRoot, $_.FullName).Replace('\', '/')
+                } |
+                Sort-Object
+        )
+        if ((ConvertTo-Json -InputObject $actualTestPaths -Compress) -cne
+            (ConvertTo-Json -InputObject $expectedTestPaths -Compress)) {
+            throw "Expanded package has an unexpected E2E fixture inventory."
+        }
+        foreach ($testFile in $packagedTestFiles) {
+            $relative = [IO.Path]::GetRelativePath($appRoot, $testFile.destination)
+            $expandedTestFile = Join-Path $expandedRoot $relative
+            if ((Get-FileHash -LiteralPath $testFile.source -Algorithm SHA256).Hash -cne
+                (Get-FileHash -LiteralPath $expandedTestFile -Algorithm SHA256).Hash) {
+                throw "Expanded E2E fixture bytes differ from source: $relative"
             }
         }
         if ($RequireAuthenticode) {

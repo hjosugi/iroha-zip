@@ -15,6 +15,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "..\tests\windows-fixture-tools.ps1")
 
 function Resolve-Leaf([string]$Path, [string]$Description) {
     $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
@@ -138,6 +139,23 @@ function Compare-Tree([string]$Expected, [string]$Actual) {
     $files = @($expectedInventory | Where-Object { $_.kind -eq "file" })
     return [pscustomobject][ordered]@{
         entryCount = $expectedInventory.Count
+        fileCount = $files.Count
+        totalBytes = ($files | Measure-Object -Property bytes -Sum).Sum
+        manifestSha256 = Get-StringSha256 $expectedJson
+    }
+}
+
+function Compare-ExpectedTree([object[]]$ExpectedInventory, [string]$Actual) {
+    $expected = @($ExpectedInventory | Sort-Object -Property path, kind)
+    $actual = @(Get-TreeInventory $Actual)
+    $expectedJson = ConvertTo-Json -InputObject $expected -Depth 5 -Compress
+    $actualJson = ConvertTo-Json -InputObject $actual -Depth 5 -Compress
+    if ($expectedJson -cne $actualJson) {
+        throw "Extracted fixture tree differs from its pinned inventory.`nExpected: $expectedJson`nActual: $actualJson"
+    }
+    $files = @($expected | Where-Object { $_.kind -eq "file" })
+    return [pscustomobject][ordered]@{
+        entryCount = $expected.Count
         fileCount = $files.Count
         totalBytes = ($files | Measure-Object -Property bytes -Sum).Sum
         manifestSha256 = Get-StringSha256 $expectedJson
@@ -293,7 +311,7 @@ if ($builtExecutableHash -cne $executableHash -or $builtShellHash -cne $shellHas
 }
 $failure = $null
 $report = [ordered]@{
-    schemaVersion = 2
+    schemaVersion = 3
     status = "running"
     generatedAtUtc = [DateTime]::UtcNow.ToString("o")
     runner = [ordered]@{
@@ -321,6 +339,7 @@ $report = [ordered]@{
     }
     formats = @()
     readFixtures = @()
+    pinnedFixtureDecoderSelfTest = $null
     invalidArchive = $null
     shell = $null
     cleanup = [ordered]@{
@@ -611,6 +630,207 @@ try {
         explicitCleanupRequired = $true
     }
 
+    $libarchiveFixtureRoot = Resolve-Directory (
+        Join-Path $PSScriptRoot "..\tests\fixtures\libarchive-v3.8.9"
+    ) "pinned libarchive fixture directory"
+    $decoderSelfTestSource = Join-Path $libarchiveFixtureRoot `
+        "test_read_format_rar5_stored.rar.uu"
+    $decoderSelfTestCases = @(
+        [pscustomobject]@{
+            name = "encoded-hash-drift"
+            encodedSha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+            decodedBytes = 109
+            decodedSha256 = "35d75e315d164d2e329afc28f7d844f013271b4fcffd4ddd78efcdd114a383a7"
+            expectedMessage = "Pinned UU fixture hash mismatch:"
+        }
+        [pscustomobject]@{
+            name = "decoded-length-drift"
+            encodedSha256 = "ec73ba623a8e8eee4909dcdf45f0526ff9adc1d856d054ce742e6c1ba1fb5fa8"
+            decodedBytes = 108
+            decodedSha256 = "35d75e315d164d2e329afc28f7d844f013271b4fcffd4ddd78efcdd114a383a7"
+            expectedMessage = "Pinned UU fixture decoded length mismatch:"
+        }
+        [pscustomobject]@{
+            name = "decoded-hash-drift"
+            encodedSha256 = "ec73ba623a8e8eee4909dcdf45f0526ff9adc1d856d054ce742e6c1ba1fb5fa8"
+            decodedBytes = 109
+            decodedSha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+            expectedMessage = "Pinned UU fixture decoded hash mismatch:"
+        }
+    )
+    foreach ($selfTest in $decoderSelfTestCases) {
+        $rejectedDestination = Join-Path $filterArchivesRoot `
+            ("decoder-must-not-publish-$($selfTest.name).rar")
+        $rejected = $false
+        try {
+            Expand-PinnedUuFixture `
+                -SourcePath $decoderSelfTestSource `
+                -ExpectedFileName "test_read_format_rar5_stored.rar" `
+                -ExpectedEncodedSha256 $selfTest.encodedSha256 `
+                -ExpectedDecodedBytes $selfTest.decodedBytes `
+                -ExpectedDecodedSha256 $selfTest.decodedSha256 `
+                -DestinationPath $rejectedDestination | Out-Null
+        }
+        catch {
+            if (-not $_.Exception.Message.StartsWith(
+                $selfTest.expectedMessage,
+                [System.StringComparison]::Ordinal
+            )) {
+                throw "Pinned UU decoder self-test returned an unexpected error: $($_.Exception.Message)"
+            }
+            $rejected = $true
+        }
+        if (-not $rejected -or (Test-Path -LiteralPath $rejectedDestination)) {
+            throw "Pinned UU decoder self-test published a rejected fixture: $($selfTest.name)"
+        }
+    }
+    $report.pinnedFixtureDecoderSelfTest = [ordered]@{
+        passed = $true
+        rejectionCases = @($decoderSelfTestCases | ForEach-Object { $_.name })
+    }
+    $pinnedReadFixtures = @(
+        [pscustomobject]@{
+            format = "rar"
+            extension = "rar"
+            uuFile = "test_read_format_rar_windows.rar.uu"
+            decodedFile = "test_read_format_rar_windows.rar"
+            encodedSha256 = "d934dc7895212d468a2d44111e77d95536d79c3c9eae56690667d483ae9419d7"
+            decodedBytes = 814
+            decodedSha256 = "8d689455e9ecd92c19426604e2360b5ef8eb023890fe46aabbe2864260b70fc9"
+            expectedInventory = @(
+                [pscustomobject][ordered]@{
+                    path = "test.txt"; kind = "file"; bytes = 16
+                    sha256 = "2d45c5f87d1b6cef59a1d67a0ddeea9c75a7df81e5b64d30ecff39199b411bd9"
+                }
+                [pscustomobject][ordered]@{
+                    path = "testdir"; kind = "directory"; bytes = 0; sha256 = $null
+                }
+                [pscustomobject][ordered]@{
+                    path = "testdir/test.txt"; kind = "file"; bytes = 16
+                    sha256 = "2d45c5f87d1b6cef59a1d67a0ddeea9c75a7df81e5b64d30ecff39199b411bd9"
+                }
+                [pscustomobject][ordered]@{
+                    path = "testemptydir"; kind = "directory"; bytes = 0; sha256 = $null
+                }
+                [pscustomobject][ordered]@{
+                    path = "testshortcut.lnk"; kind = "file"; bytes = 441
+                    sha256 = "08b633f146f22534956b11bbc92e85f3f975e2820ecb892f958db5ae7bd7cf1f"
+                }
+            )
+        }
+        [pscustomobject]@{
+            format = "rar5"
+            extension = "rar"
+            uuFile = "test_read_format_rar5_stored.rar.uu"
+            decodedFile = "test_read_format_rar5_stored.rar"
+            encodedSha256 = "ec73ba623a8e8eee4909dcdf45f0526ff9adc1d856d054ce742e6c1ba1fb5fa8"
+            decodedBytes = 109
+            decodedSha256 = "35d75e315d164d2e329afc28f7d844f013271b4fcffd4ddd78efcdd114a383a7"
+            expectedInventory = @(
+                [pscustomobject][ordered]@{
+                    path = "helloworld.txt"; kind = "file"; bytes = 29
+                    sha256 = "fef9ad8cf601b43f76c6320075f62267c6e5c0a526d750a70b80c919a4a0aad8"
+                }
+            )
+        }
+        [pscustomobject]@{
+            format = "lha-level3"
+            extension = "lzh"
+            uuFile = "test_read_format_lha_header3.lzh.uu"
+            decodedFile = "test_read_format_lha_header3.lzh"
+            encodedSha256 = "4bcbe7e493bca4d79eb21d1c2dc8031190b1b41fb487fc61e71c757d3232b33f"
+            decodedBytes = 548
+            decodedSha256 = "d36f9beaf7d1aa482315e810c8cfca327975ffd31a05082004102327310e419d"
+            expectedInventory = @(
+                [pscustomobject][ordered]@{
+                    path = "dir"; kind = "directory"; bytes = 0; sha256 = $null
+                }
+                [pscustomobject][ordered]@{
+                    path = "dir2"; kind = "directory"; bytes = 0; sha256 = $null
+                }
+                [pscustomobject][ordered]@{
+                    path = "file1"; kind = "file"; bytes = 60
+                    sha256 = "d0c504f06bbd64d183524eb35e5482ee5d966d456b905a24147165b2904d301b"
+                }
+                [pscustomobject][ordered]@{
+                    path = "file2"; kind = "file"; bytes = 78
+                    sha256 = "60f47caf717b06cf21b3bbb7775e49269a1b5cd6b94bba62da29a2ecb048ccf2"
+                }
+            )
+        }
+        [pscustomobject]@{
+            format = "zipx-bzip2"
+            extension = "zipx"
+            uuFile = "test_read_format_zip_bzip2.zipx.uu"
+            decodedFile = "test_read_format_zip_bzip2.zipx"
+            encodedSha256 = "7baa771d86ac20a4d1ed079be94088c1628d8a513843981f353bda27ba36d359"
+            decodedBytes = 708
+            decodedSha256 = "373ec637744c762bb6c69c2c4f6cc2d9dad85ed5d4662b0ffb9373077dbf01a5"
+            expectedInventory = @(
+                [pscustomobject][ordered]@{
+                    path = "vimrc"; kind = "file"; bytes = 912
+                    sha256 = "b16e85e457397ab2043a7ee0a3c84307c6b4eac157fd0b721694761f25b3ed5b"
+                }
+            )
+        }
+    )
+    foreach ($fixture in $pinnedReadFixtures) {
+        $sourceUu = Join-Path $libarchiveFixtureRoot $fixture.uuFile
+        $generatedArchive = Join-Path $filterArchivesRoot $fixture.decodedFile
+        $decodeTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        try {
+            $decoded = Expand-PinnedUuFixture `
+                -SourcePath $sourceUu `
+                -ExpectedFileName $fixture.decodedFile `
+                -ExpectedEncodedSha256 $fixture.encodedSha256 `
+                -ExpectedDecodedBytes $fixture.decodedBytes `
+                -ExpectedDecodedSha256 $fixture.decodedSha256 `
+                -DestinationPath $generatedArchive
+        }
+        finally {
+            $decodeTimer.Stop()
+        }
+
+        $archive = Join-Path $archivesRoot ("読取-$($fixture.format).$($fixture.extension)")
+        Copy-Item -LiteralPath $decoded.path -Destination $archive
+        $archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($archiveSha256 -cne $fixture.decodedSha256 -or
+            (Get-Item -LiteralPath $archive).Length -ne $fixture.decodedBytes) {
+            throw "Copied pinned archive differs from the verified decoded fixture: $($fixture.format)"
+        }
+
+        $destination = Join-Path $extractedRoot $fixture.format
+        $previewRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+            "--config", $configPath, "preview", $archive
+        )
+        $extractRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+            "--config", $configPath, "extract", $archive, "--output", $destination
+        )
+        $tree = Compare-ExpectedTree $fixture.expectedInventory $destination
+        $report.readFixtures += [pscustomobject][ordered]@{
+            format = $fixture.format
+            extension = $fixture.extension
+            archiveBytes = $fixture.decodedBytes
+            archiveSha256 = $archiveSha256
+            treeManifestSha256 = $tree.manifestSha256
+            fixtureDecodeMilliseconds = $decodeTimer.ElapsedMilliseconds
+            previewMilliseconds = $previewRun.elapsedMilliseconds
+            extractMilliseconds = $extractRun.elapsedMilliseconds
+            previewOutputSha256 = Get-StringSha256 $previewRun.stdout
+            pinnedSource = [ordered]@{
+                project = "libarchive"
+                version = "3.8.9"
+                tagObject = "f1f785cc218bb05876c54680f10d3d4e54575ea2"
+                commit = "27cbc7827172698143e440801fc0ba39ccb4f1f5"
+                license = "BSD-2-Clause"
+                uuFile = $fixture.uuFile
+                uuBytes = $decoded.encodedBytes
+                uuSha256 = $decoded.encodedSha256
+            }
+            explicitCleanupRequired = $true
+        }
+    }
+
     $invalidArchive = Join-Path $archivesRoot "壊れた.zip"
     [System.IO.File]::WriteAllText(
         $invalidArchive,
@@ -650,6 +870,23 @@ try {
         treeManifestSha256 = $shellTree.manifestSha256
         defaultConfigPathUsed = $true
         explicitCleanupRequired = $true
+    }
+
+    $expectedReadFormats = @(
+        "tar-bz2",
+        "tar-xz",
+        "tar-zstd",
+        "tar-compress",
+        "cab-lzx",
+        "rar",
+        "rar5",
+        "lha-level3",
+        "zipx-bzip2"
+    )
+    $actualReadFormats = @($report.readFixtures | ForEach-Object { $_.format })
+    if ((ConvertTo-Json -InputObject $actualReadFormats -Compress) -cne
+        (ConvertTo-Json -InputObject $expectedReadFormats -Compress)) {
+        throw "Windows E2E did not execute the exact nine-format additional-read matrix."
     }
 
     $report.status = "passed"
