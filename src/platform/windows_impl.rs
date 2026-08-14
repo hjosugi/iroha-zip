@@ -705,9 +705,9 @@ impl Sandbox {
             let resolved = fs::canonicalize(temp_dir).map_err(|error| {
                 IrohaZipError::io_path("cannot resolve process scratch directory", temp_dir, error)
             })?;
-            if resolved == self.root || !resolved.starts_with(&self.root) {
+            if resolved != self.root.join("Temp") {
                 return Err(IrohaZipError::Sandbox(format!(
-                    "process scratch directory is outside its sandbox child: {}",
+                    "process scratch directory is not the AppContainer Temp directory: {}",
                     resolved.display()
                 )));
             }
@@ -718,7 +718,7 @@ impl Sandbox {
         })?;
         match mode {
             Mode::AppContainer { sid, isolation, .. } => {
-                run_in_appcontainer(*sid, *isolation, self.memory_limit_bytes, spec)
+                run_in_appcontainer(*sid, *isolation, self.memory_limit_bytes, &self.root, spec)
             }
             Mode::Unsandboxed => run_unsandboxed(spec),
         }
@@ -1335,6 +1335,7 @@ fn run_in_appcontainer(
     sid: PSID,
     isolation: IsolationMode,
     memory_limit_bytes: usize,
+    sandbox_root: &Path,
     spec: ProcessSpec,
 ) -> Result<ProcessResult> {
     let stdout = File::create(&spec.stdout_log).map_err(|error| {
@@ -1463,8 +1464,15 @@ fn run_in_appcontainer(
         .collect();
     let mut command_line = windows_command_line::encode(&program_units, &argument_units)
         .map_err(|error| IrohaZipError::Sandbox(format!("cannot encode command line: {error}")))?;
-    let environment =
-        minimal_environment(&spec.program, &spec.current_dir, spec.temp_dir.as_deref());
+    // AppContainer path virtualization maps the host LocalAppData\Temp path to
+    // the profile's AC\Temp. Supplying AC\Temp itself would apply the mapping a
+    // second time and produce a non-existent nested Packages\...\AC\Temp path.
+    let host_temp_source = spec
+        .temp_dir
+        .as_ref()
+        .map(|_| appcontainer_host_temp_source(sandbox_root))
+        .transpose()?;
+    let environment = minimal_environment(&spec.program, sandbox_root, host_temp_source.as_deref());
     let mut process_info = PROCESS_INFORMATION::default();
 
     let create_result = unsafe {
@@ -2173,6 +2181,42 @@ fn minimal_environment(program: &Path, root: &Path, temp_dir: Option<&Path>) -> 
     result
 }
 
+fn appcontainer_host_temp_source(root: &Path) -> Result<PathBuf> {
+    let profile_root = root.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox(format!(
+            "AppContainer root has no package profile parent: {}",
+            root.display()
+        ))
+    })?;
+    let packages = profile_root.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox(format!(
+            "AppContainer root has no Packages parent: {}",
+            root.display()
+        ))
+    })?;
+    if !root
+        .file_name()
+        .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("AC"))
+        || !packages
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("Packages"))
+    {
+        return Err(IrohaZipError::Sandbox(format!(
+            "unexpected AppContainer storage layout: {}",
+            root.display()
+        )));
+    }
+    let local_app_data = packages.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox(format!(
+            "AppContainer Packages directory has no LocalAppData parent: {}",
+            packages.display()
+        ))
+    })?;
+    let source = local_app_data.join("Temp");
+    validate_directory_security(&source)?;
+    Ok(source)
+}
+
 fn minimal_environment_pairs(
     program: &Path,
     root: &Path,
@@ -2268,6 +2312,21 @@ mod tests {
                 .expect("explicit process scratch variable must be present");
             assert_eq!(value, scratch.as_os_str());
         }
+    }
+
+    #[test]
+    fn appcontainer_temp_source_uses_the_host_local_app_data_boundary() {
+        let directory = TestDirectory::new();
+        let local_app_data = directory.0.join("Local");
+        let host_temp = local_app_data.join("Temp");
+        let root = local_app_data
+            .join("Packages")
+            .join("iroha-zip.test")
+            .join("AC");
+        fs::create_dir_all(&host_temp).unwrap();
+        fs::create_dir_all(&root).unwrap();
+
+        assert_eq!(appcontainer_host_temp_source(&root).unwrap(), host_temp);
     }
 
     #[test]

@@ -520,6 +520,27 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
                 "process temp probe returned incomplete evidence: {observed:?}"
             )));
         }
+        let observed_path = std::fs::canonicalize(&observed.resolved_path).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot resolve the child-reported process temp directory",
+                Path::new(&observed.resolved_path),
+                error,
+            )
+        })?;
+        let expected_path = std::fs::canonicalize(&scratch).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot resolve the expected process temp directory",
+                &scratch,
+                error,
+            )
+        })?;
+        if observed_path != expected_path {
+            return Err(IrohaZipError::Sandbox(format!(
+                "process temp resolved outside its dedicated scratch: observed={}; expected={}",
+                observed_path.display(),
+                expected_path.display()
+            )));
+        }
         temp_probe.sandbox.finish_process_scratch(&scratch)?;
         Ok((observed, result.isolation))
     })();
