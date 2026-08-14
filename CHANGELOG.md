@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-Nothing yet.
+- Add a crate-version-derived regression for the bilingual Pages fallback, download example,
+  language topology, release hooks, skip links, and section structure.
 
 ## 0.5.2 - 2026-08-14
 

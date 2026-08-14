@@ -56,3 +56,46 @@ fn packaged_release_documents_match_the_crate_version() {
     let updater = include_str!("../docs/UPDATER.md");
     assert!(updater.contains(&tag));
 }
+
+#[test]
+fn bilingual_pages_match_the_crate_version_and_topology() {
+    let version = env!("CARGO_PKG_VERSION");
+    let tag = format!("v{version}");
+    let x64_zip = format!("iroha-zip-{version}-windows-x64.zip");
+    let root = include_str!("../site/index.html");
+    let japanese_page = include_str!("../site/ja/index.html");
+    let english_page = include_str!("../site/en/index.html");
+    let site_script = include_str!("../site/assets/site.js");
+
+    for (language, page) in [("ja", japanese_page), ("en", english_page)] {
+        assert!(page.contains(&format!("<html lang=\"{language}\">")));
+        assert!(page.contains(&tag), "{language} page is missing {tag}");
+        assert!(
+            page.contains(&x64_zip),
+            "{language} page is missing {x64_zip}"
+        );
+        assert_eq!(page.matches("data-download-url=\"x64\"").count(), 2);
+        assert_eq!(page.matches("data-download-url=\"arm64\"").count(), 2);
+        assert_eq!(page.matches("data-release-url").count(), 2);
+        assert!(page.contains("class=\"skip-link\" href=\"#main\""));
+        assert!(page.contains("<main id=\"main\">"));
+
+        for section in ["how", "setup", "formats", "security", "usage", "status"] {
+            assert_eq!(
+                page.matches(&format!("<section class=\"section\" id=\"{section}\">"))
+                    .count(),
+                1,
+                "{language} page must contain section #{section} exactly once"
+            );
+        }
+    }
+
+    assert!(root.contains("data-page=\"language-gate\""));
+    assert!(root.contains("href=\"ja/\" data-language-choice=\"ja\""));
+    assert!(root.contains("href=\"en/\" data-language-choice=\"en\""));
+    assert!(japanese_page.contains("rel=\"alternate\" hreflang=\"en\""));
+    assert!(english_page.contains("rel=\"alternate\" hreflang=\"ja\""));
+    assert!(site_script.contains(&format!("const fallbackVersion = \"{tag}\";")));
+    assert!(site_script.contains("/-windows-x64\\.zip$/i"));
+    assert!(site_script.contains("/-windows-arm64\\.zip$/i"));
+}
