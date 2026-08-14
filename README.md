@@ -168,6 +168,11 @@ Set-ExecutionPolicy -Scope Process Bypass
   -Environment CLANGARM64
 ```
 
+exporter内の各MSYS2 commandは既定で180秒に制限されます。mirrorやpackage database、
+`ldd`が停止しても外側のCI timeoutまで待ち続けません。低速な管理環境でだけ
+`-CommandTimeoutSeconds`を30～1800秒の範囲で明示変更できます。timeout時は未完成の
+bundleを公開せず、失敗した境界を表示してfail closedになります。
+
 すでに最小構成のbsdtarフォルダを持っている場合は、設定画面の「bundleを取り込む」から直接取り込めます。PowerShellで自動化する場合は次のとおりです。
 
 ```powershell

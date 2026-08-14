@@ -4,11 +4,16 @@ param(
     [string]$DestinationDirectory,
 
     [ValidateSet("UCRT64", "CLANGARM64")]
-    [string]$Environment = "UCRT64"
+    [string]$Environment = "UCRT64",
+
+    [ValidateRange(30, 1800)]
+    [int]$CommandTimeoutSeconds = 180
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "msys2-command.ps1")
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
@@ -63,11 +68,11 @@ if (-not (Test-Path -LiteralPath $pacman -PathType Leaf)) {
 }
 
 function Invoke-Msys2([string]$Script, [string[]]$Arguments) {
-    $output = @(& $bash --noprofile --norc -lc $Script iroha-zip @Arguments 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "MSYS2 command failed (exit $LASTEXITCODE).`n$($output -join "`n")"
-    }
-    return @($output | ForEach-Object { [string]$_ })
+    return Invoke-IrohaZipMsys2Command `
+        -BashPath $bash `
+        -Script $Script `
+        -Arguments $Arguments `
+        -TimeoutSeconds $CommandTimeoutSeconds
 }
 
 function Invoke-Msys2Scalar([string]$Script, [string[]]$Arguments) {
@@ -104,15 +109,9 @@ function Export-ArchiveEntry([string]$Archive, [string]$Entry, [string]$Destinat
 
 function Invoke-Ldd([string]$UnixPath) {
     # Pass the path as bash $1 instead of interpolating it into shell syntax.
-    $output = @(
-        & $bash --noprofile --norc -lc `
-            'environment="$1"; PATH="$environment/bin:/usr/bin" ldd "$2"' `
-            iroha-zip-ldd $environmentUnix $UnixPath 2>&1
-    )
-    if ($LASTEXITCODE -ne 0) {
-        throw "ldd failed for $UnixPath`n$($output -join "`n")"
-    }
-    return $output
+    return Invoke-Msys2 `
+        'environment="$1"; PATH="$environment/bin:/usr/bin" ldd "$2"' `
+        @($environmentUnix, $UnixPath)
 }
 
 function Convert-EnvironmentPath([string]$UnixPath) {
@@ -127,6 +126,7 @@ $pending = [System.Collections.Generic.Queue[string]]::new()
 $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $pending.Enqueue("${environmentBinUnix}bsdtar.exe")
 
+Write-Host "Resolving $([string]$environmentContract.displayName) runtime dependencies..."
 while ($pending.Count -gt 0) {
     $current = $pending.Dequeue()
     if (-not $seen.Add($current)) {
@@ -191,6 +191,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
         $secureConfigText,
         [System.Text.UTF8Encoding]::new($false)
     )
+    Write-Host "Refreshing isolated signed MSYS2 package databases..."
     Invoke-Msys2 `
         'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sy --noconfirm' `
         @($secureConfigUnix) | Out-Null
@@ -204,6 +205,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
 
     # Batch package queries. Starting a fresh MSYS2 shell and reopening the
     # package databases for every DLL dominates export time on hosted runners.
+    Write-Host "Resolving installed package ownership and signed repository metadata..."
     $runtimePaths = @($seen | Sort-Object)
     $owners = @(
         Invoke-Msys2 `
@@ -311,6 +313,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
 
     # One download transaction preserves the same Required/TrustedOnly checks
     # while avoiding a separate repository transaction for every package.
+    Write-Host "Downloading and verifying $($packageNames.Count) signed package archives..."
     $downloadArguments = @($secureConfigUnix, $packageCacheUnix) + $packageNames
     Invoke-Msys2 `
         'LANG=C PATH=/usr/bin /usr/bin/pacman --config "$1" -Sddw --noconfirm --cachedir "$2" -- "${@:3}"' `
@@ -319,6 +322,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
         'LANG=C PATH=/usr/bin /usr/bin/pacman -Qkk -- "$@"' `
         -Arguments $packageNames | Out-Null
 
+    Write-Host "Extracting verified payload and license evidence..."
     foreach ($package in $packageMetadata) {
         $uri = [System.Uri]::new([string]$package.downloadUrl)
         $archiveName = [System.Uri]::UnescapeDataString([System.IO.Path]::GetFileName($uri.AbsolutePath))

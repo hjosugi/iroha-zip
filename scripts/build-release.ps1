@@ -181,6 +181,7 @@ try {
     foreach ($script in @(
         "install-backend.ps1",
         "backend-evidence.ps1",
+        "msys2-command.ps1",
         "export-msys2-backend.ps1",
         "register-associations.ps1",
         "test-settings-ui.ps1",

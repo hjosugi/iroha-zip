@@ -41,6 +41,13 @@ This follows the documented MSYS2 package ownership and license queries and pacm
 
 The exporter fails rather than silently treating a stale installed version, another repository, an unsigned package, a weak signature policy, an archive digest mismatch, or installed/archive byte drift as supported provenance.
 
+Each bash, `ldd`, and pacman child is launched through MSYS2 coreutils `timeout`. The default
+per-command limit is 180 seconds; automation may set `-CommandTimeoutSeconds` from 30 through 1800
+seconds when a deliberately slow managed mirror requires it. Exit 124/137 is reported as a timeout,
+the temporary evidence tree is removed, and no destination bundle is installed. Named progress
+boundaries identify dependency resolution, signed-database refresh, metadata resolution, package
+download, and payload extraction without printing package signatures or file contents.
+
 ## Unsupported local bundles
 
 An arbitrary local bundle cannot prove its distributor or acquisition path. The settings screen shows a dedicated warning and requires a second confirmation. The automation script fails unless the caller explicitly adds:

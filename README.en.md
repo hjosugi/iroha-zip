@@ -167,6 +167,11 @@ Set-ExecutionPolicy -Scope Process Bypass
   -Environment CLANGARM64
 ```
 
+Every MSYS2 command inside the exporter has a 180-second default limit, so a stalled mirror,
+package database, or `ldd` process cannot consume the enclosing CI timeout. Only a deliberately
+slow managed environment should override `-CommandTimeoutSeconds`, whose accepted range is 30 to
+1800 seconds. A timeout publishes no partial bundle and fails closed with the stopped boundary.
+
 If you already have a minimal bsdtar bundle, choose **Import bundle**, or use:
 
 ```powershell

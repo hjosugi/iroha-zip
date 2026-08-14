@@ -18,6 +18,8 @@
   same-user/local-path baseline without disabling future path-flow alerts.
 - Document the measured Windows PE/PDB reproducibility boundary so dry-run digests are never reused
   as expected published-asset digests.
+- Bound every MSYS2 backend-export child command independently, preserve batched arguments through
+  the timeout launcher, and report the stalled phase before the enclosing CI job limit is reached.
 
 ## 0.5.2 - 2026-08-14
 

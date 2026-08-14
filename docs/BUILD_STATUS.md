@@ -40,6 +40,7 @@ Updated: 2026-08-14
 - `cargo-deny` advisory, license, ban, and source policy checks
 - `cargo-about` third-party license inventory generation from the locked dependency graph
 - All PowerShell scripts parsed with the official PowerShell 7.6.4 parser; unsupported-source evidence generation, explicit-approval failure/rollback, Rust round-trip validation, strict-mode unsupported-source rejection, and notice-tamper rejection executed on Linux PowerShell
+- Every MSYS2 backend-export child, including `ldd` and pacman, has an independently exercised 180-second default timeout with exact argument preservation, bounded termination, stage reporting, temporary-tree cleanup, and no partial destination installation
 - Release inventory policy: official packages include the three iroha-zip executables but no third-party backend EXE/DLL, MSI, PDB, or backend manifest
 - Tag/version/main-commit release gates, native x64/ARM64 builds, architecture-separated ZIPs and six standalone PE assets, exact PE-machine checks inside and outside both ZIPs, SHA-256 inventories, pinned GitHub artifact attestations, and exact 11-asset pre-publication/post-publication verification
 - Future split build/sign/package boundary with strict three-EXE Authenticode publisher/EKU/timestamp verification retained for an owner-configured signing identity

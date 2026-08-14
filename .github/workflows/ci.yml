@@ -38,6 +38,18 @@ jobs:
         shell: pwsh
         run: ./scripts/test-release-assets.ps1
 
+      - name: Test bounded MSYS2 command launcher on PowerShell
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: ./scripts/test-msys2-command.ps1
+
+      - name: Test bounded MSYS2 command launcher on Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: >-
+          ./scripts/test-msys2-command.ps1
+          -BashPath (Join-Path $env:ProgramFiles 'Git\bin\bash.exe')
+
       - name: Test bilingual Pages release contract
         run: node tests/site_release_contract.mjs
 
