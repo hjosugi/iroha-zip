@@ -25,7 +25,7 @@ Each job builds the release executables, exports a current MSYS2 UCRT64 libarchi
 
 It then runs the generated malicious archive corpus and `test-settings-ui.ps1` with the same verified backend. The three JSON reports are uploaded as `windows-e2e-windows-2022` or `windows-e2e-windows-2025` artifacts for 14 days. Generated hostile ZIP/TAR files are deleted and are never uploaded; see the [corpus contract](MALICIOUS_CORPUS.md).
 
-The harness invokes verified `bsdtar.exe` directly only to generate BZ2/XZ/Zstandard/compress fixtures from deterministic, harness-owned data on the disposable runner. All reads of those archives and every product create operation still pass through iroha-zip's AppContainer boundary. Direct backend execution is not a supported path for untrusted or user-owned input.
+The harness invokes verified `bsdtar.exe` directly only to generate BZ2/XZ/Zstandard/compress fixtures from deterministic, harness-owned data on the disposable runner. That generator uses a separate ASCII-only path because the unmodified source binary has no iroha-zip UTF-8 process manifest; trusted PowerShell then copies the result to a Japanese-named product input path. All reads of those archives and every product create operation still pass through iroha-zip's AppContainer boundary. Direct backend execution is not a supported path for untrusted or user-owned input.
 
 ## Assertions
 

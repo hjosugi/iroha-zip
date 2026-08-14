@@ -188,6 +188,15 @@ $evidenceParent = Split-Path -Parent $evidencePath
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ("iroha-zip-e2e-日本語-" + [Guid]::NewGuid().ToString("N"))
 [System.IO.Directory]::CreateDirectory($testRoot) | Out-Null
+$backendFixtureParent = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+    [System.IO.Path]::GetTempPath()
+}
+else {
+    $env:RUNNER_TEMP
+}
+$backendFixtureRoot = Join-Path $backendFixtureParent `
+    ("iroha-zip-e2e-filters-" + [Guid]::NewGuid().ToString("N"))
+[System.IO.Directory]::CreateDirectory($backendFixtureRoot) | Out-Null
 $runtimeRoot = Join-Path $testRoot "runtime"
 [System.IO.Directory]::CreateDirectory($runtimeRoot) | Out-Null
 $executablePath = Join-Path $runtimeRoot "iroha-zip.exe"
@@ -398,6 +407,21 @@ try {
     }
 
     $backendExecutable = Resolve-Leaf (Join-Path $backendPath "bsdtar.exe") "verified bsdtar"
+    $filterSourceRoot = Join-Path $backendFixtureRoot "source"
+    $filterArchivesRoot = Join-Path $backendFixtureRoot "archives"
+    [System.IO.Directory]::CreateDirectory((Join-Path $filterSourceRoot "nested")) | Out-Null
+    [System.IO.Directory]::CreateDirectory((Join-Path $filterSourceRoot "empty")) | Out-Null
+    [System.IO.Directory]::CreateDirectory($filterArchivesRoot) | Out-Null
+    [System.IO.File]::WriteAllText(
+        (Join-Path $filterSourceRoot "fixture.txt"),
+        "controlled read-filter fixture`n",
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    [System.IO.File]::WriteAllBytes(
+        (Join-Path $filterSourceRoot "nested\bytes.bin"),
+        [byte[]](0, 1, 2, 127, 128, 254, 255)
+    )
+    $filterSourceTree = Compare-Tree $filterSourceRoot $filterSourceRoot
     $readFixtures = @(
         [pscustomobject]@{ name = "tar-bz2"; filter = "-j"; extension = "tar.bz2" },
         [pscustomobject]@{ name = "tar-xz"; filter = "-J"; extension = "tar.xz" },
@@ -406,24 +430,27 @@ try {
     )
     foreach ($fixture in $readFixtures) {
         $archive = Join-Path $archivesRoot ("読取-$($fixture.name).$($fixture.extension)")
+        $generatedArchive = Join-Path $filterArchivesRoot ("$($fixture.name).$($fixture.extension)")
         $destination = Join-Path $extractedRoot $fixture.name
         $generateRun = Invoke-TestProcess -FilePath $backendExecutable -Arguments @(
             "-c", "--format=pax", $fixture.filter,
             "--no-xattrs", "--no-acls", "--no-fflags",
-            "-f", $archive, "-C", $sourceRoot, "."
+            "-f", $generatedArchive, "-C", $filterSourceRoot, "."
         )
+        Copy-Item -LiteralPath $generatedArchive -Destination $archive
         $previewRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
             "--config", $configPath, "preview", $archive
         )
         $extractRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
             "--config", $configPath, "extract", $archive, "--output", $destination
         )
-        $tree = Compare-Tree $sourceRoot $destination
+        $tree = Compare-Tree $filterSourceRoot $destination
         $report.readFixtures += [pscustomobject][ordered]@{
             format = $fixture.name
             extension = $fixture.extension
             archiveBytes = (Get-Item -LiteralPath $archive).Length
             archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            controlledSourceManifestSha256 = $filterSourceTree.manifestSha256
             treeManifestSha256 = $tree.manifestSha256
             controlledFixtureGenerationMilliseconds = $generateRun.elapsedMilliseconds
             previewMilliseconds = $previewRun.elapsedMilliseconds
@@ -482,10 +509,15 @@ catch {
 }
 finally {
     try {
-        if (Test-Path -LiteralPath $testRoot) {
-            Remove-Item -LiteralPath $testRoot -Recurse -Force
+        foreach ($ownedRoot in @($testRoot, $backendFixtureRoot)) {
+            if (Test-Path -LiteralPath $ownedRoot) {
+                Remove-Item -LiteralPath $ownedRoot -Recurse -Force
+            }
         }
-        $report.cleanup.temporaryRootRemoved = -not (Test-Path -LiteralPath $testRoot)
+        $report.cleanup.temporaryRootRemoved = (
+            -not (Test-Path -LiteralPath $testRoot) -and
+            -not (Test-Path -LiteralPath $backendFixtureRoot)
+        )
     }
     catch {
         $report.cleanup.temporaryRootRemoved = $false
