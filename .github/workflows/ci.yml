@@ -78,6 +78,67 @@ jobs:
             -Executable ./target/debug/iroha-zip-settings.exe `
             -Language en
 
+  windows-arm64-build:
+    name: Link Windows ARM64 executables
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pinned Rust toolchain and ARM64 target
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+          rustup target add aarch64-pc-windows-msvc
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: ci-windows-arm64-link
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Link release executables
+        run: >-
+          cargo build --release --bins
+          --target aarch64-pc-windows-msvc --locked
+
+      - name: Verify exact ARM64 PE inventory
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:GITHUB_WORKSPACE `
+            'target/aarch64-pc-windows-msvc/release'
+          $expected = @(
+            'iroha-zip.exe',
+            'iroha-zip-settings.exe',
+            'iroha-zip-shell.exe'
+          )
+          foreach ($name in $expected) {
+            $path = Join-Path $root $name
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "ARM64 executable is missing: $name"
+            }
+            $bytes = [IO.File]::ReadAllBytes($path)
+            if ($bytes.Length -lt 68 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+              throw "ARM64 executable has no valid DOS header: $name"
+            }
+            $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+            if ($peOffset -lt 64 -or $peOffset + 6 -gt $bytes.Length -or
+                $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
+                $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) {
+              throw "ARM64 executable has no valid PE signature: $name"
+            }
+            $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+            if ($machine -ne 0xaa64) {
+              throw ("Expected ARM64 PE machine 0xAA64 for {0}; found 0x{1:X4}" -f `
+                $name, $machine)
+            }
+          }
+          Write-Host 'Verified three linked ARM64 PE executables; no artifact was published.'
+
   windows-e2e:
     # The fixed-label AppContainer/backend matrix is deliberately separated
     # from the fast required checks. It runs weekly or when explicitly started,
