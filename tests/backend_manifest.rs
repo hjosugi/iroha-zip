@@ -218,6 +218,37 @@ fn copied_entry_count_includes_each_distinct_parent_directory() {
 }
 
 #[test]
+fn dll_candidate_list_contains_only_manifest_pinned_libraries() {
+    let directory = TestDirectory::new();
+    fs::create_dir_all(directory.path().join("bin")).unwrap();
+    fs::create_dir_all(directory.path().join("lib/codec")).unwrap();
+    let executable = directory.path().join("bin/bsdtar.exe");
+    let archive = directory.path().join("lib/archive-13.DLL");
+    let codec = directory.path().join("lib/codec/codec.dll");
+    fs::write(&executable, b"test backend").unwrap();
+    fs::write(&archive, b"archive library").unwrap();
+    fs::write(&codec, b"codec library").unwrap();
+    let executable_hash = sha256_file(&executable).unwrap();
+    let archive_hash = sha256_file(&archive).unwrap();
+    let codec_hash = sha256_file(&codec).unwrap();
+    fs::write(
+        directory.path().join("backend-manifest.tsv"),
+        format!(
+            "IROHA-ZIP-BACKEND-MANIFEST\t1\nexecutable\tbin/bsdtar.exe\nsha256\t{executable_hash}\tbin/bsdtar.exe\nsha256\t{archive_hash}\tlib/archive-13.DLL\nsha256\t{codec_hash}\tlib/codec/codec.dll\n"
+        ),
+    )
+    .unwrap();
+
+    let bundle = BackendBundle::verify(directory.path()).unwrap();
+    let candidates = directory.path().join("candidates.txt");
+    assert_eq!(bundle.write_library_candidates(&candidates).unwrap(), 2);
+    assert_eq!(
+        fs::read_to_string(candidates).unwrap(),
+        "lib/archive-13.DLL\nlib/codec/codec.dll\n"
+    );
+}
+
+#[test]
 fn bundle_verification_rejects_a_digest_mismatch() {
     let directory = TestDirectory::new();
     write_bundle(directory.path(), Some(ZERO_HASH));

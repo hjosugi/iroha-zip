@@ -45,7 +45,11 @@ pub struct ProcessResult {
 }
 
 #[cfg(windows)]
+mod libarchive_windows;
+#[cfg(windows)]
 mod windows_impl;
+#[cfg(windows)]
+pub use libarchive_windows::write_utf8_archive_listing;
 #[cfg(windows)]
 pub use windows_impl::{
     AttachmentHandoffSession, ConfigSaveGuard, DirectorySnapshot, Sandbox, create_snapshot_target,

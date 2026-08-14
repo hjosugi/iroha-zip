@@ -8,8 +8,8 @@
 
 - Updated the SHA-1/SHA-256 implementation dependencies to the compatible
   `sha1`/`sha2` 0.11.0 generation.
-- Replaced the crashing AppContainer `bsdtar @archive` conversion with a bounded path that copies only audited regular objects into a unique external staging tree, seals every object read/execute-only to the Package SID, and archives only relative `.` from that working directory.
-- Work around libarchive's Windows 3.8.6+ UTF-8 filename regression by embedding and byte-verifying a fixed UTF-8 process-code-page manifest in each already-verified sandbox executable copy; the imported backend remains unchanged.
+- Replaced AppContainer filesystem-tree conversion with a bounded path that copies only audited regular objects into a unique external staging tree, seals every object read/execute-only to the Package SID, serializes a handle-pinned PAX stream in the trusted parent, and gives the backend only fixed `@source.pax.tar`.
+- Work around libarchive's Windows 3.8.6+ UTF-8 filename regression with a bounded UTF-8 pathname listing child that loads manifest-pinned DLL candidates only after rechecking zero-capability AppContainer isolation; explicitly request UTF-8 ZIP/PAX header names and retain the byte-verified UTF-8 process manifest on disposable backend copies.
 - Localize the complete native Settings surface in Japanese and English, follow the Windows UI language, provide an explicit process-local override, and exercise both languages through UI Automation.
 
 - Added an accessible Japanese/English GitHub Pages site and complete English project guide.
@@ -26,7 +26,7 @@
 - Split formal Windows releases into validated build, Azure OIDC Authenticode signing, fail-closed publisher/EKU/timestamp verification, and packaging phases; attach signature evidence and offline-verifiable SLSA provenance only through an immutable-release gate.
 
 - Added a deterministic, source-generated malicious ZIP/TAR corpus with 18 reject cases, one benign control, native Windows hardlink/ADS/junction fixtures, JSON-only evidence, and mandatory temporary-root cleanup.
-- Added a sandboxed, UTF-8-locale, 64 MiB-bounded `bsdtar -t` preflight that rejects raw absolute/drive/UNC names, unsafe Windows components, depth/path violations, and case-aliasing duplicate members before extraction can normalize or overwrite them.
+- Added a sandboxed, 64 MiB-bounded raw-name preflight (`bsdtar -t` on Unix and libarchive's UTF-8 pathname API on Windows) that rejects absolute/drive/UNC names, unsafe Windows components, depth/path violations, and case-aliasing duplicate members before extraction can normalize or overwrite them.
 - Added fixed-label Windows Server 2022/2025 E2E jobs with machine-readable evidence for verified-backend setup, zero-capability AppContainer tokens, loopback denial, timeout, memory limits, cleanup, archive creation/preview/re-extraction, invalid input, shell invocation, and settings-screen setup.
 - Require explicit AppContainer profile/root cleanup on successful create, extract, preview, shell, and doctor operations and on backend launch, timeout, resource, or nonzero-exit failures; cleanup failures are no longer silently hidden.
 - Extended `doctor` and the dedicated isolation report with measured token flags and capability counts instead of reporting only the requested isolation mode.

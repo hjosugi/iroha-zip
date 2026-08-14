@@ -163,6 +163,41 @@ fn run() -> Result<()> {
                 })?
             );
         }
+        Command::InternalArchiveListing {
+            backend_root,
+            candidates,
+            archive,
+            encoding,
+            max_entries,
+            max_path_bytes,
+            allow_unsandboxed,
+        } => {
+            #[cfg(windows)]
+            iroha_zip::platform::write_utf8_archive_listing(
+                &backend_root,
+                &candidates,
+                &archive,
+                encoding,
+                max_entries,
+                max_path_bytes,
+                allow_unsandboxed,
+            )?;
+            #[cfg(not(windows))]
+            {
+                let _ = (
+                    backend_root,
+                    candidates,
+                    archive,
+                    encoding,
+                    max_entries,
+                    max_path_bytes,
+                    allow_unsandboxed,
+                );
+                return Err(iroha_zip::error::IrohaZipError::Unsupported(
+                    "the internal UTF-8 archive lister is only available on Windows".to_owned(),
+                ));
+            }
+        }
         Command::Preview {
             archive,
             encoding,

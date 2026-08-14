@@ -47,7 +47,9 @@ Copy only audited regular files to isolated staging
     ↓
 Seal every staged file and directory read/execute-only to the Package SID
     ↓
-Set the sealed tree as the working directory and let SHA-256-pinned bsdtar archive only relative `.`
+Serialize the sealed tree into a bounded PAX stream and pin its identity, length, and SHA-256
+    ↓
+Let SHA-256-pinned bsdtar convert only fixed sandbox-local `@source.pax.tar`
     ↓
 Monitor the output archive size
     ↓
@@ -58,7 +60,7 @@ List and re-extract the result in a second AppContainer and compare the complete
 Copy from the same verified handle into a new output file
 ```
 
-Creation needs additional temporary disk space of roughly twice the source tree plus the output archive. This deliberate cost separates normal source files from a compromised backend and detects damaged output before publication.
+Creation needs additional temporary disk space of roughly three times the source tree plus the output archive: the audited copy, bounded PAX stream, and verification extraction remain separate. This deliberate cost separates normal source files from a compromised backend, avoids a volume-root query denied to the AppContainer, and detects damaged output before publication.
 
 ## Supported formats
 
@@ -101,7 +103,7 @@ cp932
 cp437
 ```
 
-Perfect automatic detection is impossible when a ZIP does not record its filename encoding correctly. The Settings application therefore retains an explicit default encoding option for double-click extraction. To avoid the [upstream UTF-8 filename regression](https://github.com/libarchive/libarchive/issues/3063) in Windows libarchive 3.8.6 and later, iroha-zip embeds a UTF-8 process-code-page manifest only into the verified sandbox copy of the backend executable and reads the resource back byte-for-byte before launch. The imported original and DLLs remain unchanged.
+Perfect automatic detection is impossible when a ZIP does not record its filename encoding correctly. The Settings application therefore retains an explicit default encoding option for double-click extraction. For the [upstream UTF-8 filename regression](https://github.com/libarchive/libarchive/issues/3063) in Windows libarchive 3.8.6 and later, iroha-zip does not interpret the current-code-page output of `bsdtar -t` in its normal process. A dedicated AppContainer child loads only DLL candidates derived from the verified manifest, rechecks that its own token is an AppContainer with zero capabilities, and obtains a bounded member list through libarchive's official UTF-8 pathname API. ZIP/PAX creation explicitly requests UTF-8 header names. The verified sandbox copy of the backend executable also receives a fixed UTF-8 process-code-page manifest whose resource is read back byte-for-byte before launch. The imported original and DLLs remain unchanged.
 
 ## Security design
 
@@ -120,7 +122,7 @@ iroha-zip fails closed on:
 - unexpected, missing, or linked files in the backend bundle; and
 - overwriting an existing extraction destination or output archive.
 
-A Job Object restricts the backend to one process, enforces a memory limit, and terminates timeouts. Extracted files are never used directly from temporary storage: only inspected regular files are copied into a new partial folder, which is then renamed atomically. Windows tree audits enumerate names through parent directory handles opened without rename/delete sharing and compare directory identity during audit and copy. For creation, the trusted parent audits and copies the source into a unique external staging tree, protects every object from inherited DACL changes, and grants the Package SID only read/execute access. The backend receives that tree as its working directory and only relative `.`, never the normal source path. Before/after fingerprints and a full re-extraction in a second sandbox must match before publication. The explicit unsandboxed diagnostic path keeps before/after fingerprint detection but cannot apply the Windows DACL seal.
+A Job Object restricts the backend to one process, enforces a memory limit, and terminates timeouts. Extracted files are never used directly from temporary storage: only inspected regular files are copied into a new partial folder, which is then renamed atomically. Windows tree audits enumerate names through parent directory handles opened without rename/delete sharing and compare directory identity during audit and copy. Every sandbox backend tree and input-archive copy is recursively sealed read/execute-only; a retained handle also pins the archive. The parent creates the extraction directory only after the listing process has exited, the list has passed policy, and the archive has been rechecked. A compromised listing process therefore cannot carry an archive replacement, backend self-modification, or pre-seeded output into extraction. For creation, the trusted parent audits and copies the source into a unique external staging tree, protects every object from inherited DACL changes, and grants the Package SID only read/execute access. It serializes that tree into a bounded PAX stream; the backend receives neither the normal source path nor a tree operand, only fixed sandbox-local `@source.pax.tar`. Retained handles and fingerprints recheck the PAX and staging tree, and a full re-extraction in a second sandbox must match before publication. The explicit unsandboxed diagnostic path keeps before/after fingerprint detection but cannot apply the Windows DACL seal.
 
 See the [threat model](docs/THREAT_MODEL.md). The differences between AppContainer and experimental LPAC, fail-closed rules, and unfinished validation are tracked in the [LPAC evaluation](docs/LPAC_EVALUATION.md). Automated Windows evidence and its limits are specified in [Windows E2E](docs/WINDOWS_E2E.md), and generated hostile fixtures are described in the [malicious corpus](docs/MALICIOUS_CORPUS.md).
 

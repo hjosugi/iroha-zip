@@ -44,8 +44,8 @@ The ZIP writer stores data without compression and emits CRC-32, local records, 
 
 Post-extraction inspection cannot recover information that an archive backend normalized or overwrote. In particular, libarchive may remove an absolute, UNC, or drive prefix, and repeated members may collapse to one output path. iroha-zip therefore performs two sandboxed backend operations:
 
-1. Run verified `bsdtar -t` inside the same zero-capability AppContainer/LPAC boundary.
-2. Monitor the listing logs, timeout, memory, and temporary tree. The minimal backend environment fixes `LANG` and `LC_ALL` to `C.UTF-8` on Unix. On Windows, a fixed UTF-8 `activeCodePage` manifest is embedded into the already-verified sandbox EXE copy and read back before launch; `.utf8` locale hints remain in the minimal environment for compatible CRT builds. Listing stdout is capped at 64 MiB and must be UTF-8.
+1. Run raw-name preflight inside the same zero-capability AppContainer/LPAC boundary. Unix uses verified `bsdtar -t`. Windows copies and seals a dedicated iroha-zip child, derives DLL candidates only from the verified backend manifest, rechecks the child token, loads libarchive with DLL-directory/System32-only search, and calls `archive_entry_pathname_utf8`.
+2. Monitor the listing logs, timeout, memory, and temporary tree. The minimal backend environment fixes `LANG` and `LC_ALL` to `C.UTF-8` on Unix. On Windows, the sandbox backend EXE also receives a byte-verified UTF-8 `activeCodePage` manifest for its create/extract operations; `.utf8` locale hints remain in the minimal environment for compatible CRT builds. Listing stdout is capped at 64 MiB and must be UTF-8.
 3. Validate every raw listed member for relative normalized separators, `.`/`..`, Windows-invalid components, device names, ADS syntax, depth, path length, and case-insensitive duplicate aliases.
 4. Only after preflight succeeds, run the existing sandboxed extraction.
 5. Continue live resource monitoring, full post-extraction filesystem audit, fingerprint checks, optional trust handoff, and atomic publication.

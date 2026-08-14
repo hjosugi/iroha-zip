@@ -58,8 +58,8 @@ use windows::Win32::System::LibraryLoader::{
 };
 use windows::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateMutexW, CreateProcessW,
-    DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess,
-    InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
+    DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
+    GetExitCodeProcess, InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
     PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
     PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
     PROCESS_INFORMATION, ReleaseMutex, STARTF_USESTDHANDLES, STARTUPINFOEXW,
@@ -1283,6 +1283,32 @@ fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result
         is_less_privileged_app_container: is_lpac,
         capability_count,
     })
+}
+
+pub fn require_current_process_appcontainer(allow_unsandboxed: bool) -> Result<()> {
+    if allow_unsandboxed {
+        return Ok(());
+    }
+    let process = unsafe { GetCurrentProcess() };
+    let mut token = HANDLE::default();
+    unsafe {
+        windows::Win32::System::Threading::OpenProcessToken(process, TOKEN_QUERY, &raw mut token)
+    }
+    .map_err(|error| windows_error("OpenProcessToken(current process)", error))?;
+    let token = OwnedHandle::new(token);
+    if query_token_flag(token.handle(), TokenIsAppContainer, "TokenIsAppContainer")? == 0 {
+        return Err(IrohaZipError::Sandbox(
+            "internal archive listing refuses to load libarchive outside an AppContainer"
+                .to_owned(),
+        ));
+    }
+    let capability_count = query_token_capability_count(token.handle())?;
+    if capability_count != 0 {
+        return Err(IrohaZipError::Sandbox(format!(
+            "internal archive listing requires zero capabilities, observed {capability_count}"
+        )));
+    }
+    Ok(())
 }
 
 fn query_token_capability_count(token: HANDLE) -> Result<u32> {

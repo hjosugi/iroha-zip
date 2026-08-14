@@ -21,8 +21,10 @@ iroha-zip 0.4.0 は、Windows x64 向けの最初の安定版扱いリリース�
 ### 主な変更
 
 - 生成書庫を別のsandboxで再展開し、監査済み圧縮元と完全一致するまで公開しない作成経路。
-- 監査済み通常objectだけの外部staging treeを全entry単位でread-only封印し、相対`.`だけから作成する経路と、handleを保持したTOCTOU対策。
-- 検証済みsandbox copyへ固定UTF-8 process manifestを埋め込み・再照合する、Windows版libarchive 3.8.6以降の日本語名回帰対策。
+- 監査済み通常objectだけの外部staging treeを全entry単位でread-only封印し、信頼側で作った有界PAX streamだけをbackendに変換させる作成経路と、handleを保持したTOCTOU対策。
+- sandboxへcopyしたbackend tree全体のread／execute専用封印。listing passから展開passへの自己改変を防止。
+- sandbox内の入力書庫をhandleとDACLで固定し、listing検証後にだけ展開先を新規作成するpass間state汚染対策。
+- 検証済みDLL候補だけをzero-capability AppContainer子でloadし、公式UTF-8 pathname APIから有界一覧を取得するWindows版libarchive 3.8.6以降の日本語名回帰対策。作成時のUTF-8 header指定と、sandbox EXEの固定UTF-8 process manifest再照合も併用。
 - raw member名を検査するbounded preflight、悪性書庫回帰コーパス、5つのbounded fuzz target。
 - policy-safe previewと、全書庫監査後に行う選択展開。
 - backend provenance、SPDX SBOM、license evidenceの厳格な検証。
@@ -55,8 +57,10 @@ iroha-zip 0.4.0 is the first release presented as a stable Windows x64 download.
 ### Highlights
 
 - Creation re-extracts every generated archive in a second sandbox and refuses publication unless it exactly reproduces the audited source.
-- A creation path that copies only audited regular objects into external staging, seals every entry read-only to the Package SID, archives only relative `.`, and retains handles across TOCTOU-sensitive boundaries.
-- A fixed UTF-8 process manifest embedded into and read back from each verified sandbox executable copy to avoid the Windows libarchive 3.8.6+ Unicode-name regression.
+- A creation path that copies only audited regular objects into external staging, seals every entry read-only to the Package SID, lets the backend convert only a trusted bounded PAX stream, and retains handles across TOCTOU-sensitive boundaries.
+- Recursive read/execute-only sealing of every sandbox backend tree, preventing persistent self-modification between listing and extraction passes.
+- Handle/DACL pinning of sandbox archive copies and create-new extraction directories only after preflight acceptance, preventing cross-pass archive replacement or output pre-seeding.
+- A bounded listing child that loads only manifest-pinned DLL candidates inside a rechecked zero-capability AppContainer and reads names through libarchive's official UTF-8 API, plus explicit UTF-8 creation headers and a byte-verified UTF-8 process manifest on each disposable backend copy.
 - Bounded raw-member preflight, a generated hostile-archive regression corpus, and five bounded fuzz targets.
 - Policy-safe preview and selective extraction only after auditing the complete archive.
 - Strict backend provenance, SPDX SBOM, and license-evidence verification.

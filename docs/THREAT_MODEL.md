@@ -50,11 +50,12 @@ iroha-zipの中心目標は、攻撃者が作成した書庫を展開すると�
 | Windows予約名や末尾ドット | 各パスコンポーネントをWindows規則で検査 |
 | preview表示のmetadata/control文字注入 | 書庫listing文字列をparseせず、完全展開・監査済みfilesystemから型付きentryだけを生成 |
 | 選択pathによるoption注入・監査迂回 | selectorをbackendへ渡さず、書庫全体監査後のhandle保持copyと選択tree再監査にだけ使用 |
-| バックエンド差し替え | EXEと全DLLをSHA-256マニフェストで固定し、コピー後に再ハッシュ |
+| バックエンド差し替え／pass間の自己改変 | EXEと全DLLをSHA-256マニフェストで固定し、コピー後に再ハッシュして、sandbox copy全体をPackage SIDからread／execute専用に再帰封印 |
+| listing passからextract passへのstate汚染 | sandbox入力書庫を保持handle＋再帰DACLで固定して両pass後にfingerprint再照合し、展開先はlisting子終了・policy通過後にだけ親が`create_new`相当で作成 |
 | DLL横取り | バックエンドディレクトリの余分なファイルを拒否し、最小PATHで起動 |
 | 既存データ上書き | `create_new`、`-k`、既存出力拒否、最終rename |
-| 作成backendから通常の圧縮元treeへアクセス | 親プロセスが通常objectだけを一意な外部stagingへ監査付きcopyし、全entryをPackage SIDからread／execute専用にDACL封印して、current directoryと相対`.`だけを渡す |
-| Windows版libarchiveのUTF-8名回帰 | 取り込み原本を完全検証してsandboxへcopyした後、その一時EXEのresourceだけを固定UTF-8 process manifestへ置換し、resource bytesを再読出し・照合してから起動する |
+| 作成backendから通常の圧縮元treeへアクセス | 親プロセスが通常objectだけを一意な外部stagingへ監査付きcopy・DACL封印し、そこから作った有界PAX streamの固定sandbox-local名だけを渡す |
+| Windows版libarchiveのUTF-8名回帰 | manifest固定済みDLL候補だけをzero-capability AppContainer子でloadし、公式UTF-8 pathname APIから有界一覧を得る。ZIP／PAX作成時はUTF-8 headerを明示し、sandbox EXEの固定UTF-8 process manifestもbyte再照合する |
 | インターネット由来属性の消失 | 入力書庫のZone.Identifierを正規化し、公開する通常ファイルへ再付与 |
 
 ## 4. 展開処理の流れ
@@ -93,20 +94,21 @@ AppContainerプロセス
   4. copy後の完全tree fingerprintを元sourceと照合
   5. backend原本をSHA-256再検証してsandboxへcopy
   6. Windowsではsandbox EXEへ固定UTF-8 process manifestを埋め込み、resourceをbyte単位で再照合
-  7. staging rootと全childのDACLを継承から保護し、Package SIDにはread／executeだけを個別付与
+  7. backend treeとstaging root／全childを、Package SIDからread／execute専用に再帰封印
+  8. staging treeを有界PAX streamへ直列化し、保持handleでidentity・長さ・SHA-256を固定
 
 AppContainerプロセス
-  8. 封印treeをcurrent directoryとしたbackendが相対`.`だけを専用outputへ圧縮
-  9. 親プロセスが出力サイズとオブジェクト数を監視
+  9. backendが固定sandbox-local `@source.pax.tar`だけを専用output形式へ変換
+ 10. 親プロセスが出力サイズとオブジェクト数を監視
 
 通常プロセス
- 10. staging treeのfingerprintを再照合
- 11. 生成書庫をidentity・時刻・長さ・SHA-256付きhandleで固定
- 12. 別AppContainerへhandleからcopyし、raw listingを事前検査して再展開
- 13. 再展開した完全rootと元sourceのtree fingerprintを照合
- 14. staging treeと生成書庫を再照合
- 15. 同じ生成書庫handleからcreate-newで最終出力へcopy
- 16. 両AppContainer profileと一時データを削除
+ 11. staging treeとPAX streamのfingerprintを再照合
+ 12. 生成書庫をidentity・時刻・長さ・SHA-256付きhandleで固定
+ 13. 別AppContainerへhandleからcopyし、manifest固定DLLのUTF-8 APIでraw listingを事前検査して再展開
+ 14. 再展開した完全rootと元sourceのtree fingerprintを照合
+ 15. staging tree、PAX stream、生成書庫を再照合
+ 16. 同じ生成書庫handleからcreate-newで最終出力へcopy
+ 17. 両AppContainer profileと一時データを削除
 ```
 
 ## 6. 残るリスク
@@ -141,11 +143,13 @@ SHA-256マニフェストは「取り込み後の変更」を検出しますが�
 
 圧縮元ツリーは相対パス、種別、長さ、各ファイルのSHA-256を決定的にfingerprintします。実コピー時には各ファイルのidentity・時刻・長さ・内容を監査時の値と照合し、コピー後のツリーfingerprintも再比較します。同一サイズの改変、同じ内容を持つ別ファイルへの置換、rename、hardlink、symlink、およびroot外へ解決されるファイルはfail closedになります。
 
-作成backendへ通常の圧縮元pathは渡しません。信頼する親プロセスが、通常file／directoryだけを一意な外部staging treeへ監査付きでcopyし、path深さ・長さ、file数、directory数、単一file size、合計sizeとtree fingerprintを元sourceに対して再検査します。backend processには封印済みtreeをcurrent directoryとして設定し、相対`.`だけを渡します。これによりMSYS2 UCRT64 `bsdtar`がAppContainer内の`@archive`変換で起こす再現性のあるaccess violationを避け、通常sourceの絶対pathもcommand lineへ載せません。作成終了後はstaging treeのfingerprintを再照合し、生成書庫をhandleから別sandboxへ渡します。libarchiveが付ける単一の`./` prefixまたはroot markerだけを作成物専用のraw listing policyで正規化し、二重prefix、backslash形式、親参照、絶対pathなどは拒否します。再展開した完全rootがsourceと一致し、さらに書庫identity・時刻・長さ・SHA-256が検証時と一致するhandleからだけ最終出力へcopyします。内容不一致、同一サイズ改変、identity置換、危険なlistingはいずれも出力前にfail closedになります。
+作成backendへ通常の圧縮元pathは渡しません。信頼する親プロセスが、通常file／directoryだけを一意な外部staging treeへ監査付きでcopyし、path深さ・長さ、file数、directory数、単一file size、合計sizeとtree fingerprintを元sourceに対して再検査します。全entryをDACL封印した後、親が決定的で有界なPAX streamへ直列化します。各fileは保持中の監査handleからcopyされ、PAX自体もidentity・長さ・SHA-256付きhandleでbackend実行中まで固定します。backend processには通常source、staging tree operand、絶対pathを渡さず、sandbox rootをcurrent directoryとして固定`@source.pax.tar`だけを渡します。これにより、Windows版libarchiveのdisk readerがAppContainerから許可されないvolume rootへ`GetDiskFreeSpaceW`を行う経路を使用しません。以前の日本語名での`@archive` access violationは、sandbox EXEへ固定UTF-8 process manifestを適用する現在の互換境界で回避します。作成終了後はstaging treeとPAX streamを再照合し、生成書庫をhandleから別sandboxへ渡します。libarchiveが付ける単一の`./` prefixまたはroot markerだけを作成物専用のraw listing policyで正規化し、二重prefix、backslash形式、親参照、絶対pathなどは拒否します。再展開した完全rootがsourceと一致し、さらに書庫identity・時刻・長さ・SHA-256が検証時と一致するhandleからだけ最終出力へcopyします。内容不一致、同一サイズ改変、identity置換、危険なlistingはいずれも出力前にfail closedになります。
 
-Windowsの作成経路では、AppContainerが本来書き込めるPackage profile storageからstaging sourceを分離し、通常の一時領域へ複製します。AppContainerにはその一意な親directoryへの非継承read accessだけを用意します。親が完全監査・fingerprint照合した後、rootを含む全file／directoryの既存DACLを継承から個別に保護し、Package SIDにはread／execute専用ACEだけを設定します。file data／append／EA／attribute書込、child削除、delete、DACL変更、owner変更は与えません。通常ユーザー側のallow ACEは維持するため親プロセスは監査とcleanupを続けられます。MicrosoftのAppContainer dual-principal modelどおり、ユーザー側が許可されていてもPackage SID側にread／executeしか許可しないことでcreate passの実効書込権限を止めます。実行ファイルを同じAppContainerへbyte-identical copyしたprobeが親／root／nestedの列挙、root／nested内容の読取成功と、overwrite、append、親／rootでの作成、rename、delete、attribute、DACL、owner各write accessの拒否を測定します。API根拠は[AppContainer isolation](https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-isolation)、[`SetEntriesInAclW`](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setentriesinaclw)、[Launch an AppContainer](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)です。明示的unsandboxed経路ではWindows DACL封印を適用せず、前後fingerprint検査で変更を検出します。
+Windowsの作成経路では、AppContainerが本来書き込めるPackage profile storageからstaging sourceを分離し、通常の一時領域へ複製します。AppContainerにはその一意な親directoryへの非継承read accessだけを用意します。親が完全監査・fingerprint照合した後、rootを含む全file／directoryの既存DACLを継承から個別に保護し、Package SIDにはread／execute専用ACEだけを設定します。file data／append／EA／attribute書込、child削除、delete、DACL変更、owner変更は与えません。通常ユーザー側のallow ACEは維持するため親プロセスはPAX生成、監査、cleanupを続けられます。MicrosoftのAppContainer dual-principal modelどおり、ユーザー側が許可されていてもPackage SID側にread／executeしか許可しないことでcreate passの実効書込権限を止めます。同じ再帰封印を各sandbox内のbackend EXE／DLL／directoryにも適用し、listing processがbackend bytesや補助DLLを変更して後続のextract passへ残すことを予防します。実行ファイルを同じAppContainerへbyte-identical copyしたprobeが親／root／nestedの列挙、root／nested内容の読取成功と、overwrite、append、親／rootでの作成、rename、delete、attribute、DACL、owner各write accessの拒否を測定します。API根拠は[AppContainer isolation](https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-isolation)、[`SetEntriesInAclW`](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setentriesinaclw)、[Launch an AppContainer](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)です。明示的unsandboxed経路ではWindows DACL封印を適用せず、前後fingerprint検査で変更を検出します。
 
-MSYS2が配布するlibarchive 3.8.9の`bsdtar.exe`は長path manifestを持ちますが、Windows版libarchive 3.8.6以降にはUTF-8 member名を現在の非UTF-8 code pageへ損失なく変換できず拒否する[上流回帰](https://github.com/libarchive/libarchive/issues/3063)があります。iroha-zipはbundle原本と全DLLをSHA-256で検証し、sandbox copyもcopy直後に同じhashで照合した後、その一時EXEのresource tableだけを`BeginUpdateResourceW`／`UpdateResourceW`で固定manifestへ置換します。manifestは`asInvoker`、long-path aware、UTF-8 `activeCodePage`だけを宣言し、`LoadLibraryExW`／`FindResourceW`で実行前にbyte単位で再照合します。取り込み原本とDLLは変更せず、変更済みEXEを再配布もしません。この互換処理後のsandbox EXEは原本のSHA-256やAuthenticode署名とは一致しないため、供給元検証は必ず処理前の原本に対して行い、実行copyの信頼は原本検証・固定変換・resource再照合の連鎖として扱います。[MicrosoftのUTF-8 process code page](https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page)はWindows 10 version 1903以降が対象です。
+MSYS2が配布するlibarchive 3.8.9の`bsdtar.exe`は長path manifestを持ちますが、Windows版libarchive 3.8.6以降にはUTF-8 member名を現在の非UTF-8 code pageへ損失なく変換できず拒否する[上流回帰](https://github.com/libarchive/libarchive/issues/3063)があります。iroha-zipのWindows事前一覧は`bsdtar -t`のnarrow文字列へ依存しません。親は完全検証済みmanifestからDLL pathだけを有界fileへ出力し、byte-identicalな専用子EXEとともにread／execute専用へ封印します。子は起動直後に自身がAppContainerかつcapability 0であることを再検査し、候補DLLをそのdirectoryとSystem32だけの探索でloadして、`archive_read_open_filename_w`と`archive_entry_pathname_utf8`からUTF-8名を取得します。候補数、一覧file、member数、1 path、標準出力、時間、memory、process数はすべて上限付きです。作成側はZIP／PAX header charsetをUTF-8へ固定します。
+
+さらにiroha-zipはbundle原本と全DLLをSHA-256で検証し、sandbox copyもcopy直後に同じhashで照合した後、その一時backend EXEのresource tableだけを`BeginUpdateResourceW`／`UpdateResourceW`で固定manifestへ置換します。manifestは`asInvoker`、long-path aware、UTF-8 `activeCodePage`だけを宣言し、`LoadLibraryExW`／`FindResourceW`で実行前にbyte単位で再照合します。取り込み原本とDLLは変更せず、変更済みEXEを再配布もしません。この互換処理後のsandbox EXEは原本のSHA-256やAuthenticode署名とは一致しないため、供給元検証は必ず処理前の原本に対して行い、実行copyの信頼は原本検証・固定変換・resource再照合の連鎖として扱います。[MicrosoftのUTF-8 process code page](https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page)はWindows 10 version 1903以降が対象です。
 
 Windowsのtree member列挙は、`FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT`かつread共有だけで開いたdirectory handleに対し、`GetFileInformationByHandleEx(FileIdBothDirectoryInfo)`を使用します。固定64 KiB bufferを検査し、設定のfile＋directory上限を超えて名前を蓄積しません。handleと現在pathのvolume serial／file indexを列挙前後で照合し、各directory identityを初回監査と実コピーの間でも比較します。これにより列挙対象directory自身のrename／deleteと同名の空directory差替えを検出します。根拠は[`FILE_ID_BOTH_DIR_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info)、[`GetFileInformationByHandle`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle)、[`CreateFileW`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)です。非Windowsの明示的検証経路はdirectory handleとidentityを保持・照合しますが、member名の取得自体は`read_dir`です。
 

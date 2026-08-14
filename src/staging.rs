@@ -76,26 +76,47 @@ pub(crate) fn stage_archive(
         fs::create_dir(&input_dir).map_err(|error| {
             IrohaZipError::io_path("cannot create sandbox input directory", &input_dir, error)
         })?;
-        fs::create_dir(&output_dir).map_err(|error| {
-            IrohaZipError::io_path("cannot create sandbox output directory", &output_dir, error)
-        })?;
 
         let sandbox_backend = backend.copy_verified_to(&backend_dir)?;
+        #[cfg(windows)]
+        let (listing_program, listing_candidates) =
+            prepare_windows_archive_lister(backend, &sandbox, &workspace_root)?;
         let _backend_sealed =
             sandbox.seal_sandbox_tree(&backend_dir, backend.copied_entry_count()?)?;
         let sandbox_archive = input_dir.join("archive.bin");
         archive_snapshot.copy_to_new(&sandbox_archive)?;
+        let sandbox_archive_guard =
+            AuditedFile::open(&sandbox_archive, config.limits.max_archive_bytes)?;
+        if sandbox_archive_guard.fingerprint().length() != archive_snapshot.fingerprint().length()
+            || sandbox_archive_guard.fingerprint().sha256()
+                != archive_snapshot.fingerprint().sha256()
+        {
+            return Err(IrohaZipError::Policy(
+                "sandbox archive copy does not match the retained input handle".to_owned(),
+            ));
+        }
+        let _input_sealed = sandbox.seal_sandbox_tree(&input_dir, 1)?;
 
         let stdout_log = workspace_root.join("bsdtar.stdout.log");
         let stderr_log = workspace_root.join("bsdtar.stderr.log");
 
-        let mut listing_args: Vec<OsString> =
-            ["-t", "-f"].into_iter().map(OsString::from).collect();
-        listing_args.push(sandbox_archive.as_os_str().to_owned());
-        if let Some(option) = encoding.bsdtar_option() {
-            listing_args.push(OsString::from("--options"));
-            listing_args.push(OsString::from(option));
-        }
+        #[cfg(windows)]
+        let listing_args = internal_listing_arguments(
+            &backend_dir,
+            &listing_candidates,
+            &sandbox_archive,
+            encoding,
+            &config.limits,
+            allow_unsandboxed,
+        )?;
+        #[cfg(windows)]
+        let listing_failure_name = "sandboxed libarchive UTF-8 listing";
+        #[cfg(not(windows))]
+        let listing_program = sandbox_backend.clone();
+        #[cfg(not(windows))]
+        let listing_args = bsdtar_listing_arguments(&sandbox_archive, encoding);
+        #[cfg(not(windows))]
+        let listing_failure_name = "bsdtar listing";
         let listing_baseline = policy::measure_tree(&workspace_root)?;
         let listing_limits = monitor::limits_with_baseline(
             &listing_baseline,
@@ -105,7 +126,7 @@ pub(crate) fn stage_archive(
             MAX_ARCHIVE_LISTING_BYTES,
         )?;
         let listing_result = sandbox.run(ProcessSpec {
-            program: sandbox_backend.clone(),
+            program: listing_program,
             args: listing_args,
             current_dir: workspace_root.clone(),
             stdin_file: None,
@@ -119,7 +140,7 @@ pub(crate) fn stage_archive(
             let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
             let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
             return Err(IrohaZipError::Backend(format!(
-                "bsdtar listing exited with code {}. stderr={stderr:?}, stdout={stdout:?}",
+                "{listing_failure_name} exited with code {}. stderr={stderr:?}, stdout={stdout:?}",
                 listing_result.exit_code
             )));
         }
@@ -132,8 +153,16 @@ pub(crate) fn stage_archive(
                 policy::validate_created_archive_listing(&listing, &config.limits)?;
             }
         }
+        require_sandbox_archive_unchanged(&sandbox_archive, sandbox_archive_guard.fingerprint())?;
         remove_process_log(&stdout_log)?;
         remove_process_log(&stderr_log)?;
+        fs::create_dir(&output_dir).map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot create fresh sandbox output directory after preflight",
+                &output_dir,
+                error,
+            )
+        })?;
 
         let mut args: Vec<OsString> = ["-x", "-f"].into_iter().map(OsString::from).collect();
         args.push(sandbox_archive.as_os_str().to_owned());
@@ -208,6 +237,7 @@ pub(crate) fn stage_archive(
                 result.exit_code
             )));
         }
+        require_sandbox_archive_unchanged(&sandbox_archive, sandbox_archive_guard.fingerprint())?;
 
         let summary = policy::audit_tree(&output_dir, &config.limits)?;
         let payload_root = choose_payload_root(&output_dir, &archive)?;
@@ -223,6 +253,91 @@ pub(crate) fn stage_archive(
         }),
         Err(error) => sandbox.fail_after_cleanup(error),
     }
+}
+
+fn require_sandbox_archive_unchanged(
+    archive: &Path,
+    expected: &crate::snapshot::FileFingerprint,
+) -> Result<()> {
+    let observed = AuditedFile::open(archive, expected.length())?;
+    if observed.fingerprint() != expected {
+        return Err(IrohaZipError::Policy(
+            "sandbox archive changed between listing and extraction".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn prepare_windows_archive_lister(
+    backend: &BackendBundle,
+    sandbox: &Sandbox,
+    workspace_root: &Path,
+) -> Result<(PathBuf, PathBuf)> {
+    const MAX_SELF_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
+
+    let lister_dir = workspace_root.join("internal-lister");
+    fs::create_dir(&lister_dir).map_err(|error| {
+        IrohaZipError::io_path(
+            "cannot create internal archive lister directory",
+            &lister_dir,
+            error,
+        )
+    })?;
+    let candidates = lister_dir.join("backend-dll-candidates.txt");
+    backend.write_library_candidates(&candidates)?;
+
+    let current_executable = std::env::current_exe()
+        .map_err(|error| IrohaZipError::io("cannot locate archive lister executable", error))?;
+    let executable = lister_dir.join("iroha-zip-archive-lister.exe");
+    let mut executable_snapshot =
+        AuditedFile::open(&current_executable, MAX_SELF_EXECUTABLE_BYTES)?;
+    executable_snapshot.copy_to_new(&executable)?;
+    let _lister_sealed = sandbox.seal_sandbox_tree(&lister_dir, 2)?;
+    Ok((executable, candidates))
+}
+
+#[cfg(windows)]
+fn internal_listing_arguments(
+    backend_root: &Path,
+    candidates: &Path,
+    archive: &Path,
+    encoding: FilenameEncoding,
+    limits: &policy::Limits,
+    allow_unsandboxed: bool,
+) -> Result<Vec<OsString>> {
+    let max_entries = limits
+        .max_files
+        .checked_add(limits.max_directories)
+        .and_then(|value| value.checked_add(1))
+        .ok_or_else(|| IrohaZipError::Config("archive entry limit overflow".to_owned()))?;
+    let mut args = vec![
+        OsString::from("internal-archive-listing"),
+        backend_root.as_os_str().to_owned(),
+        candidates.as_os_str().to_owned(),
+        archive.as_os_str().to_owned(),
+        OsString::from("--encoding"),
+        OsString::from(encoding.cli_name()),
+        OsString::from("--max-entries"),
+        OsString::from(max_entries.to_string()),
+        OsString::from("--max-path-bytes"),
+        OsString::from(limits.max_path_bytes.to_string()),
+    ];
+    if allow_unsandboxed {
+        args.push(OsString::from("--allow-unsandboxed"));
+    }
+    Ok(args)
+}
+
+#[cfg(not(windows))]
+fn bsdtar_listing_arguments(archive: &Path, encoding: FilenameEncoding) -> Vec<OsString> {
+    let mut args: Vec<OsString> = ["-t", "-f"].into_iter().map(OsString::from).collect();
+    args.push(archive.as_os_str().to_owned());
+    if let Some(option) = encoding.bsdtar_option() {
+        args.push(OsString::from("--options"));
+        args.push(OsString::from(option));
+    }
+    args
 }
 
 fn read_listing(path: &Path) -> Result<Vec<u8>> {

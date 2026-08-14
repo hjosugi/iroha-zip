@@ -275,3 +275,118 @@ exit 42
     );
     assert!(!destination.exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn listing_cannot_replace_the_sandbox_archive_between_passes() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = TestDirectory::new();
+    let backend_root = directory.path().join("backend");
+    fs::create_dir(&backend_root).unwrap();
+    let executable = backend_root.join("fake-bsdtar");
+    fs::write(
+        &executable,
+        br#"#!/bin/sh
+archive=
+list=false
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-t" ]; then list=true; fi
+    if [ "$1" = "-f" ]; then shift; archive=$1; fi
+    shift
+done
+if [ "$list" = true ]; then
+    printf 'replaced archive bytes' > "$archive"
+    printf 'safe.txt\n'
+    exit 0
+fi
+exit 99
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o500)).unwrap();
+    let hash = backend::sha256_file(&executable).unwrap();
+    fs::write(
+        backend_root.join("backend-manifest.tsv"),
+        format!(
+            "IROHA-ZIP-BACKEND-MANIFEST\t1\nexecutable\tfake-bsdtar\nsha256\t{hash}\tfake-bsdtar\n"
+        ),
+    )
+    .unwrap();
+    let backend = BackendBundle::verify(&backend_root).unwrap();
+    let archive = directory.path().join("input.zip");
+    fs::write(&archive, b"original archive bytes").unwrap();
+    let destination = directory.path().join("must-not-exist");
+
+    let result = extract::extract(ExtractRequest {
+        backend: &backend,
+        config: &Config::default(),
+        archive: &archive,
+        output: Some(&destination),
+        encoding: FilenameEncoding::Auto,
+        selections: &[],
+        open: false,
+        allow_unsandboxed: true,
+    });
+    let Err(error) = result else {
+        panic!("a replaced sandbox archive was unexpectedly published");
+    };
+    let error = error.to_string();
+
+    assert!(error.contains("sandbox archive changed"), "{error}");
+    assert_eq!(fs::read(archive).unwrap(), b"original archive bytes");
+    assert!(!destination.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn listing_cannot_preseed_the_extraction_directory() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = TestDirectory::new();
+    let backend_root = directory.path().join("backend");
+    fs::create_dir(&backend_root).unwrap();
+    let executable = backend_root.join("fake-bsdtar");
+    fs::write(
+        &executable,
+        br#"#!/bin/sh
+for argument in "$@"; do
+    if [ "$argument" = "-t" ]; then
+        /bin/mkdir "$PWD/output"
+        printf 'planted' > "$PWD/output/planted.txt"
+        printf 'safe.txt\n'
+        exit 0
+    fi
+done
+exit 99
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o500)).unwrap();
+    let hash = backend::sha256_file(&executable).unwrap();
+    fs::write(
+        backend_root.join("backend-manifest.tsv"),
+        format!(
+            "IROHA-ZIP-BACKEND-MANIFEST\t1\nexecutable\tfake-bsdtar\nsha256\t{hash}\tfake-bsdtar\n"
+        ),
+    )
+    .unwrap();
+    let backend = BackendBundle::verify(&backend_root).unwrap();
+    let archive = directory.path().join("input.zip");
+    fs::write(&archive, b"original archive bytes").unwrap();
+    let destination = directory.path().join("must-not-exist");
+
+    let result = extract::extract(ExtractRequest {
+        backend: &backend,
+        config: &Config::default(),
+        archive: &archive,
+        output: Some(&destination),
+        encoding: FilenameEncoding::Auto,
+        selections: &[],
+        open: false,
+        allow_unsandboxed: true,
+    });
+
+    assert!(result.is_err());
+    assert!(!destination.exists());
+}

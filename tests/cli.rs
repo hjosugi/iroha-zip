@@ -107,6 +107,31 @@ fn internal_failure_probes_are_hidden_but_parseable() {
         staging.command,
         Command::InternalStagingWriteProbe { root } if root == std::path::Path::new("source")
     ));
+
+    let listing = Cli::try_parse_from([
+        "iroha-zip",
+        "internal-archive-listing",
+        "backend",
+        "candidates.txt",
+        "archive.bin",
+        "--encoding",
+        "utf8",
+        "--max-entries",
+        "125001",
+        "--max-path-bytes",
+        "4096",
+    ])
+    .unwrap();
+    assert!(matches!(
+        listing.command,
+        Command::InternalArchiveListing {
+            encoding: FilenameEncoding::Utf8,
+            max_entries: 125_001,
+            max_path_bytes: 4_096,
+            allow_unsandboxed: false,
+            ..
+        }
+    ));
 }
 
 #[test]

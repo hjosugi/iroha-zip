@@ -48,7 +48,9 @@ Mark-of-the-Webを各ファイルへ伝播
     ↓
 全file／directoryのDACLをPackage SIDからread／execute専用に封印
     ↓
-SHA-256固定済みbsdtarに封印treeをcurrent directoryとして与え、相対`.`だけを圧縮
+信頼側で封印treeを有界PAX streamへ直列化し、identity・長さ・SHA-256を固定
+    ↓
+SHA-256固定済みbsdtarがsandbox内の固定`@source.pax.tar`だけを書庫形式へ変換
     ↓
 生成中の書庫サイズを監視
     ↓
@@ -59,7 +61,7 @@ SHA-256固定済みbsdtarに封印treeをcurrent directoryとして与え、相�
 検証時と同じidentity・時刻・長さ・SHA-256のhandleから新規出力へコピー
 ```
 
-圧縮元の監査済みcopyと生成書庫の再展開treeを別々の一時領域に置くため、作成時の追加ディスク容量は最大で圧縮元のおよそ2倍と生成書庫分が必要です。これは、侵害されたバックエンドから通常の圧縮元ツリーを切り離し、壊れた生成物を公開前に検出するための意図的なコストです。
+圧縮元の監査済みcopy、有界PAX stream、生成書庫の再展開treeを別々の一時領域に置くため、作成時の追加ディスク容量は最大で圧縮元のおよそ3倍と生成書庫分が必要です。これは、侵害されたバックエンドから通常の圧縮元ツリーを切り離し、AppContainerから拒否されるドライブ直下の照会を不要にし、壊れた生成物を公開前に検出するための意図的なコストです。
 
 ## 対応形式
 
@@ -102,7 +104,7 @@ cp932
 cp437
 ```
 
-ZIPに文字コード情報が正しく保存されていない場合、完全な自動判定は不可能です。そのため手動指定を残しています。ダブルクリック展開で使う既定値は設定画面から選択できます。Windows版libarchive 3.8.6以降にあるUTF-8名の[上流回帰](https://github.com/libarchive/libarchive/issues/3063)を避けるため、検証済みbackendをsandboxへコピーした後、その一時EXEだけにUTF-8 process code page manifestを埋め込み、埋め込んだbytesを実行前に再読出しして照合します。取り込んだ原本とDLLは変更しません。
+ZIPに文字コード情報が正しく保存されていない場合、完全な自動判定は不可能です。そのため手動指定を残しています。ダブルクリック展開で使う既定値は設定画面から選択できます。Windows版libarchive 3.8.6以降にあるUTF-8名の[上流回帰](https://github.com/libarchive/libarchive/issues/3063)に対しては、通常processで`bsdtar -t`の現在code page向け表示を解釈しません。検証済みmanifestから選んだDLLだけを専用のAppContainer子processでloadし、libarchive公式のUTF-8 pathname APIから有界一覧を取得します。子は起動後にもAppContainerかつcapability 0を自己検査します。作成時のZIP／PAXにはUTF-8 header charsetを明示します。検証済みbackendのsandbox copyには固定UTF-8 process code page manifestも埋め込み、resource bytesを実行前に再照合します。取り込んだ原本とDLLは変更しません。
 
 ## セキュリティ設計
 
@@ -121,7 +123,7 @@ iroha-zipは次をfail-closedで拒否します。
 - バックエンドフォルダ内の余分なファイル、欠落ファイル、リンク
 - 既存の展開先や既存の出力書庫の上書き
 
-さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。backendにはそのtreeをcurrent directoryとして設定し、通常の圧縮元pathではなく相対`.`だけを渡します。作成前後にfingerprintを照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
+さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。sandboxへコピーしたbackend treeと入力書庫copyは再帰的にread／execute専用へ封印し、入力書庫は保持handleでも固定します。展開先directoryはlisting process終了・一覧検証・入力再照合の後に親が新規作成するため、侵害されたlisting processは書庫差替え、backend自己改変、展開先への置き土産を次のpassへ残せません。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。信頼する親プロセスがこのtreeを有界PAX streamへ変換し、backendには通常の圧縮元pathやtree operandを渡さず、sandbox内の固定`@source.pax.tar`だけを渡します。PAXとstaging treeは保持中のhandleとfingerprintで再照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
 
 詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。通常AppContainerと実験的LPACの差、fail-closed条件、未完の検証matrixは[LPAC評価](docs/LPAC_EVALUATION.md)、Windows自動E2Eの証跡項目と限界は[Windows E2E](docs/WINDOWS_E2E.md)、生成型の攻撃書庫と非公開方針は[悪性コーパス](docs/MALICIOUS_CORPUS.md)に分離しています。
 

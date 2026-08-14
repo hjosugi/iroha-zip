@@ -122,6 +122,15 @@ pub enum FilenameEncoding {
 }
 
 impl FilenameEncoding {
+    pub fn cli_name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Utf8 => "utf8",
+            Self::Cp932 => "cp932",
+            Self::Cp437 => "cp437",
+        }
+    }
+
     pub fn bsdtar_option(self) -> Option<&'static str> {
         match self {
             Self::Auto => None,

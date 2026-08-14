@@ -2,7 +2,7 @@
 
 iroha-zip keeps executable backend payloads and their supply-chain evidence at one atomic installation boundary. `backend-manifest.tsv` hashes only the executable payload. The reserved `.iroha-zip-evidence/` directory is never copied into the AppContainer, but when it exists its complete tree is validated before the backend is accepted.
 
-The Windows runtime never changes this installed boundary. After validating and hash-checking a sandbox copy, it replaces only that disposable EXE's manifest resource with fixed `asInvoker`, long-path, and UTF-8 process-code-page declarations, then reads the resource back byte-for-byte before launch. This bounded compatibility transform addresses the [libarchive 3.8.6+ Windows Unicode-name regression](https://github.com/libarchive/libarchive/issues/3063); it neither changes nor redistributes the evidence-covered source bytes.
+The Windows runtime never changes this installed boundary. After validating and hash-checking a sandbox copy, it replaces only that disposable EXE's manifest resource with fixed `asInvoker`, long-path, and UTF-8 process-code-page declarations, then reads the resource back byte-for-byte before launch. It neither changes nor redistributes the evidence-covered source bytes. Raw-name preflight derives its DLL candidate list only from the same verified payload manifest and loads those candidates inside a zero-capability AppContainer child through a restricted DLL search. Names come from libarchive's official UTF-8 pathname API, avoiding the [libarchive 3.8.6+ Windows current-code-page regression](https://github.com/libarchive/libarchive/issues/3063) without adding an unrecorded backend file.
 
 ## Supported source
 

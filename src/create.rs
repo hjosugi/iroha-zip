@@ -252,6 +252,7 @@ fn create_arguments(format: CreateFormat) -> Vec<OsString> {
         CreateFormat::Zip => &[
             "-c",
             "--format=zip",
+            "--options=zip:hdrcharset=UTF-8",
             "--no-xattrs",
             "--no-acls",
             "--no-fflags",
@@ -266,6 +267,7 @@ fn create_arguments(format: CreateFormat) -> Vec<OsString> {
         CreateFormat::Tar => &[
             "-c",
             "--format=pax",
+            "--options=pax:hdrcharset=UTF-8",
             "--no-xattrs",
             "--no-acls",
             "--no-fflags",
@@ -274,6 +276,7 @@ fn create_arguments(format: CreateFormat) -> Vec<OsString> {
             "-c",
             "--format=pax",
             "-z",
+            "--options=pax:hdrcharset=UTF-8",
             "--no-xattrs",
             "--no-acls",
             "--no-fflags",
@@ -350,6 +353,27 @@ mod tests {
         }
 
         assert_eq!(SOURCE_ARCHIVE_ARGUMENT, "@source.pax.tar");
+    }
+
+    #[test]
+    fn creation_requests_utf8_names_for_formats_with_a_header_charset_option() {
+        assert!(
+            create_arguments(CreateFormat::Zip)
+                .iter()
+                .any(|argument| argument == "--options=zip:hdrcharset=UTF-8")
+        );
+        for format in [CreateFormat::Tar, CreateFormat::TarGz] {
+            assert!(
+                create_arguments(format)
+                    .iter()
+                    .any(|argument| argument == "--options=pax:hdrcharset=UTF-8")
+            );
+        }
+        assert!(
+            !create_arguments(CreateFormat::SevenZip)
+                .iter()
+                .any(|argument| argument.to_string_lossy().contains("hdrcharset"))
+        );
     }
 
     #[test]

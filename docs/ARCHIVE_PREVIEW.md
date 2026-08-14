@@ -9,7 +9,10 @@ flow are complete.
 
 ## Why preview performs a complete temporary extraction
 
-The main process does not load libarchive and does not parse archive headers or raw listing text.
+The main process does not load libarchive and does not parse archive headers. On Windows, a
+dedicated zero-capability AppContainer child loads only manifest-pinned backend DLL candidates and
+emits bounded UTF-8 pathnames through libarchive's official API; on Unix, the sandboxed backend
+emits the equivalent bounded listing. The main process validates only that name stream.
 The official [bsdtar manual](https://github.com/libarchive/libarchive/blob/master/tar/bsdtar.1)
 defines `-t` as a filename listing to stdout and describes command-line selections as shell-style
 patterns. Its `--null` option applies only to filename/pattern input through `-I` or `-T`; it does
@@ -21,6 +24,7 @@ Instead, preview intentionally pays the cost of a complete temporary extraction:
 ~~~text
 handle-retaining input snapshot
   -> verified backend copied into an ephemeral AppContainer/LPAC workspace
+  -> bounded raw-name preflight inside the same isolation boundary
   -> full bsdtar extraction with the normal safe flags
   -> the same timeout, Job Object memory/process, live file/directory/byte limits
   -> the same path, link, reparse-point, ADS, hardlink, type, and size audit

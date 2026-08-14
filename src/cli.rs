@@ -110,6 +110,25 @@ pub enum Command {
     #[command(hide = true)]
     InternalStagingWriteProbe { root: PathBuf },
 
+    #[command(hide = true)]
+    InternalArchiveListing {
+        backend_root: PathBuf,
+        candidates: PathBuf,
+        archive: PathBuf,
+
+        #[arg(long, value_enum)]
+        encoding: FilenameEncoding,
+
+        #[arg(long)]
+        max_entries: u64,
+
+        #[arg(long)]
+        max_path_bytes: usize,
+
+        #[arg(long)]
+        allow_unsandboxed: bool,
+    },
+
     /// Write a default configuration file if one does not exist.
     InitConfig,
 

@@ -259,6 +259,62 @@ impl BackendBundle {
             .ok_or_else(|| IrohaZipError::Backend("backend entry count overflow".to_owned()))
     }
 
+    /// Writes the manifest-derived DLL paths that the sandboxed UTF-8 archive
+    /// lister may try to load. The list contains no discovery results from the
+    /// copied tree: every entry was already pinned by the verified manifest.
+    pub fn write_library_candidates(&self, destination: &Path) -> Result<usize> {
+        use std::io::Write as _;
+
+        let candidates = self
+            .files
+            .keys()
+            .filter(|relative| {
+                relative
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("dll"))
+            })
+            .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+            .collect::<Vec<_>>();
+        if candidates.is_empty() {
+            return Err(IrohaZipError::Backend(
+                "verified backend manifest contains no DLL candidate".to_owned(),
+            ));
+        }
+        let mut output = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(destination)
+            .map_err(|error| {
+                IrohaZipError::io_path(
+                    "cannot create verified backend DLL candidate list",
+                    destination,
+                    error,
+                )
+            })?;
+        for normalized in &candidates {
+            validate_manifest_path(normalized)?;
+            output
+                .write_all(normalized.as_bytes())
+                .and_then(|()| output.write_all(b"\n"))
+                .map_err(|error| {
+                    IrohaZipError::io_path(
+                        "cannot write verified backend DLL candidate list",
+                        destination,
+                        error,
+                    )
+                })?;
+        }
+        output.sync_all().map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot flush verified backend DLL candidate list",
+                destination,
+                error,
+            )
+        })?;
+        Ok(candidates.len())
+    }
+
     pub fn copy_verified_to(&self, destination: &Path) -> Result<PathBuf> {
         fs::create_dir_all(destination).map_err(|error| {
             IrohaZipError::io_path(

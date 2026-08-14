@@ -228,9 +228,9 @@ pub fn validate_relative_path(path: &Path, limits: &Limits) -> Result<()> {
     Ok(())
 }
 
-/// Validates the line-oriented member-name stream emitted by a sandboxed
-/// `bsdtar -t` preflight. The backend performs all archive parsing; this
-/// function only accepts a bounded UTF-8 list of normalized Windows-safe names.
+/// Validates the line-oriented member-name stream emitted by sandboxed raw-name
+/// preflight. The isolated backend performs all archive parsing; this function
+/// only accepts a bounded UTF-8 list of normalized Windows-safe names.
 pub fn validate_archive_listing(input: &[u8], limits: &Limits) -> Result<u64> {
     validate_archive_listing_inner(input, limits, false)
 }
