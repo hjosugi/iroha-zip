@@ -135,6 +135,28 @@ pub enum Command {
         allow_unsandboxed: bool,
     },
 
+    #[command(hide = true)]
+    InternalRawArchive {
+        backend_root: PathBuf,
+        candidates: PathBuf,
+        archive: PathBuf,
+
+        #[arg(long, value_enum)]
+        filter: RawFilter,
+
+        #[arg(long, allow_hyphen_values = true)]
+        output_name: String,
+
+        #[arg(long)]
+        max_bytes: u64,
+
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        #[arg(long)]
+        allow_unsandboxed: bool,
+    },
+
     /// Write a default configuration file if one does not exist.
     InitConfig,
 
@@ -151,6 +173,37 @@ pub enum CreateFormat {
     SevenZip,
     Tar,
     TarGz,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum RawFilter {
+    Gzip,
+    Bzip2,
+    Xz,
+    Zstd,
+    Compress,
+}
+
+impl RawFilter {
+    pub const fn cli_name(self) -> &'static str {
+        match self {
+            Self::Gzip => "gzip",
+            Self::Bzip2 => "bzip2",
+            Self::Xz => "xz",
+            Self::Zstd => "zstd",
+            Self::Compress => "compress",
+        }
+    }
+
+    pub const fn libarchive_code(self) -> i32 {
+        match self {
+            Self::Gzip => 1,
+            Self::Bzip2 => 2,
+            Self::Compress => 3,
+            Self::Xz => 6,
+            Self::Zstd => 14,
+        }
+    }
 }
 
 impl CreateFormat {

@@ -145,9 +145,9 @@ function Compare-Tree([string]$Expected, [string]$Actual) {
     }
 }
 
-function Compare-ExpectedTree([object[]]$ExpectedInventory, [string]$Actual) {
+function Compare-ExpectedTree([object[]]$ExpectedInventory, [string]$ActualRoot) {
     $expected = @($ExpectedInventory | Sort-Object -Property path, kind)
-    $actual = @(Get-TreeInventory $Actual)
+    $actual = @(Get-TreeInventory $ActualRoot)
     $expectedJson = ConvertTo-Json -InputObject $expected -Depth 5 -Compress
     $actualJson = ConvertTo-Json -InputObject $actual -Depth 5 -Compress
     if ($expectedJson -cne $actualJson) {
@@ -166,7 +166,8 @@ function Write-TestConfig(
     [string]$Path,
     [string]$Backend,
     [bool]$OpenAfterDoubleClick,
-    [string]$Isolation = "appcontainer"
+    [string]$Isolation = "appcontainer",
+    [uint64]$MaxSingleFileBytes = 67108864
 ) {
     if ($Backend.Contains("'")) {
         throw "The E2E backend path cannot contain a single quote: $Backend"
@@ -190,7 +191,7 @@ max_archive_bytes = 134217728
 max_files = 1000
 max_directories = 500
 max_total_bytes = 268435456
-max_single_file_bytes = 67108864
+max_single_file_bytes = $MaxSingleFileBytes
 max_depth = 64
 max_path_bytes = 4096
 
@@ -311,7 +312,7 @@ if ($builtExecutableHash -cne $executableHash -or $builtShellHash -cne $shellHas
 }
 $failure = $null
 $report = [ordered]@{
-    schemaVersion = 3
+    schemaVersion = 4
     status = "running"
     generatedAtUtc = [DateTime]::UtcNow.ToString("o")
     runner = [ordered]@{
@@ -340,6 +341,7 @@ $report = [ordered]@{
     formats = @()
     readFixtures = @()
     pinnedFixtureDecoderSelfTest = $null
+    rawStreamNegative = $null
     invalidArchive = $null
     shell = $null
     cleanup = [ordered]@{
@@ -570,6 +572,130 @@ try {
             extractMilliseconds = $extractRun.elapsedMilliseconds
             explicitCleanupRequired = $true
         }
+    }
+
+    $rawSourceRoot = Join-Path $backendFixtureRoot "raw-source"
+    [System.IO.Directory]::CreateDirectory($rawSourceRoot) | Out-Null
+    $rawSource = Join-Path $rawSourceRoot "raw-fixture.txt"
+    [System.IO.File]::WriteAllText(
+        $rawSource,
+        "controlled raw compressed stream fixture`n",
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $rawSourceBytes = (Get-Item -LiteralPath $rawSource).Length
+    $rawSourceSha256 = (Get-FileHash -LiteralPath $rawSource -Algorithm SHA256).Hash.ToLowerInvariant()
+    $rawReadFixtures = @(
+        [pscustomobject]@{ name = "raw-gzip"; filter = "-z"; extension = "gz" },
+        [pscustomobject]@{ name = "raw-bzip2"; filter = "-j"; extension = "bz2" },
+        [pscustomobject]@{ name = "raw-xz"; filter = "-J"; extension = "xz" },
+        [pscustomobject]@{ name = "raw-zstd"; filter = "--zstd"; extension = "zst" },
+        [pscustomobject]@{ name = "raw-compress"; filter = "-Z"; extension = "Z" }
+    )
+    $rawCreatedArchives = @{}
+    foreach ($fixture in $rawReadFixtures) {
+        $generatedArchive = Join-Path $filterArchivesRoot `
+            ("$($fixture.name).txt.$($fixture.extension)")
+        $generateRun = Invoke-TestProcess -FilePath $backendExecutable -Arguments @(
+            "-c", "--format=raw", $fixture.filter,
+            "--no-xattrs", "--no-acls", "--no-fflags",
+            "-f", $generatedArchive, "-C", $rawSourceRoot, "raw-fixture.txt"
+        )
+        $generatedArchive = Resolve-Leaf $generatedArchive `
+            "controlled $($fixture.name) fixture"
+        $archiveFileName = "読取-$($fixture.name).txt.$($fixture.extension)"
+        $archive = Join-Path $archivesRoot $archiveFileName
+        Copy-Item -LiteralPath $generatedArchive -Destination $archive
+        $expectedOutputName = "読取-$($fixture.name).txt"
+        $expectedInventory = @(
+            [pscustomobject][ordered]@{
+                path = $expectedOutputName
+                kind = "file"
+                bytes = $rawSourceBytes
+                sha256 = $rawSourceSha256
+            }
+        )
+        $destination = Join-Path $extractedRoot $fixture.name
+        $previewRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+            "--config", $configPath, "preview", $archive
+        )
+        $extractRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+            "--config", $configPath, "extract", $archive, "--output", $destination
+        )
+        $tree = Compare-ExpectedTree $expectedInventory $destination
+        $report.readFixtures += [pscustomobject][ordered]@{
+            format = $fixture.name
+            extension = $fixture.extension
+            archiveBytes = (Get-Item -LiteralPath $archive).Length
+            archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            controlledSourceBytes = $rawSourceBytes
+            controlledSourceSha256 = $rawSourceSha256
+            outputName = $expectedOutputName
+            treeManifestSha256 = $tree.manifestSha256
+            controlledFixtureGenerationMilliseconds = $generateRun.elapsedMilliseconds
+            previewMilliseconds = $previewRun.elapsedMilliseconds
+            extractMilliseconds = $extractRun.elapsedMilliseconds
+            previewOutputSha256 = Get-StringSha256 $previewRun.stdout
+            expectedFilterChecked = $true
+            explicitCleanupRequired = $true
+        }
+        $rawCreatedArchives[$fixture.name] = $archive
+    }
+
+    $mismatchedRawArchive = Join-Path $archivesRoot "raw-filter-mismatch.txt.xz"
+    Copy-Item -LiteralPath $rawCreatedArchives["raw-gzip"] -Destination $mismatchedRawArchive
+    $mismatchedRawDestination = Join-Path $extractedRoot "raw-filter-mismatch-must-not-exist"
+    $mismatchedRawRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+        "--config", $configPath, "extract", $mismatchedRawArchive,
+        "--output", $mismatchedRawDestination
+    ) -ExpectedExitCodes @(2)
+    if ($mismatchedRawRun.stderr -notmatch 'raw-stream filter mismatch: expected xz' -or
+        (Test-Path -LiteralPath $mismatchedRawDestination)) {
+        throw "A raw stream whose bytes disagree with its extension did not fail closed."
+    }
+
+    $rawLimitConfigPath = Join-Path $testRoot "設定-raw-limit.toml"
+    Write-TestConfig $rawLimitConfigPath $backendPath $false "appcontainer" 32
+    $limitedRawDestination = Join-Path $extractedRoot "raw-limit-must-not-exist"
+    $limitedRawRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+        "--config", $rawLimitConfigPath, "extract", $rawCreatedArchives["raw-gzip"],
+        "--output", $limitedRawDestination
+    ) -ExpectedExitCodes @(2)
+    if ($limitedRawRun.stderr -notmatch 'raw-stream output exceeds 32 bytes' -or
+        (Test-Path -LiteralPath $limitedRawDestination)) {
+        throw "A raw stream exceeding the configured single-file limit did not fail closed."
+    }
+
+    $corruptRawArchive = Join-Path $archivesRoot "raw-corrupt.txt.gz"
+    $corruptRawBytes = [System.IO.File]::ReadAllBytes($rawCreatedArchives["raw-gzip"])
+    if ($corruptRawBytes.Length -le 10) {
+        throw "The controlled gzip stream is too short for the corruption regression."
+    }
+    $corruptRawBytes[10] = $corruptRawBytes[10] -bxor 0x01
+    [System.IO.File]::WriteAllBytes($corruptRawArchive, $corruptRawBytes)
+    $corruptRawDestination = Join-Path $extractedRoot "raw-corrupt-must-not-exist"
+    $corruptRawRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+        "--config", $configPath, "extract", $corruptRawArchive,
+        "--output", $corruptRawDestination
+    ) -ExpectedExitCodes @(2)
+    if ($corruptRawRun.stderr -notmatch 'could not open the raw stream' -or
+        (Test-Path -LiteralPath $corruptRawDestination)) {
+        throw "A gzip stream with an invalid compressed payload did not fail closed."
+    }
+    $report.rawStreamNegative = [ordered]@{
+        filterMismatchRejected = $true
+        expectedFilter = "xz"
+        actualFilter = "gzip"
+        filterMismatchExitCode = $mismatchedRawRun.exitCode
+        filterMismatchStderrSha256 = Get-StringSha256 $mismatchedRawRun.stderr
+        byteLimitRejected = $true
+        byteLimit = 32
+        byteLimitExitCode = $limitedRawRun.exitCode
+        byteLimitStderrSha256 = Get-StringSha256 $limitedRawRun.stderr
+        compressedPayloadCorruptionRejected = $true
+        compressedPayloadCorruptionExitCode = $corruptRawRun.exitCode
+        compressedPayloadCorruptionStderrSha256 = Get-StringSha256 $corruptRawRun.stderr
+        allDestinationsAbsent = $true
+        explicitCleanupRequired = $true
     }
 
     $windowsRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)
@@ -864,11 +990,34 @@ try {
         -Environment @{ LOCALAPPDATA = $shellLocalAppData }
     $shellDestination = Join-Path $shellRoot "シェル検証"
     $shellTree = Compare-Tree $sourceRoot $shellDestination
+
+    $rawShellArchive = Join-Path $shellRoot "シェルraw.txt.gz"
+    Copy-Item -LiteralPath $rawCreatedArchives["raw-gzip"] -Destination $rawShellArchive
+    $rawShellRun = Invoke-TestProcess -FilePath $shellExecutablePath `
+        -Arguments @($rawShellArchive) `
+        -Environment @{ LOCALAPPDATA = $shellLocalAppData }
+    $rawShellDestination = Join-Path $shellRoot "シェルraw.txt"
+    $rawShellExpected = @(
+        [pscustomobject][ordered]@{
+            path = "シェルraw.txt"
+            kind = "file"
+            bytes = $rawSourceBytes
+            sha256 = $rawSourceSha256
+        }
+    )
+    $rawShellTree = Compare-ExpectedTree $rawShellExpected $rawShellDestination
     $report.shell = [ordered]@{
         elapsedMilliseconds = $shellRun.elapsedMilliseconds
         destinationCreated = $true
         treeManifestSha256 = $shellTree.manifestSha256
         defaultConfigPathUsed = $true
+        rawStream = [ordered]@{
+            elapsedMilliseconds = $rawShellRun.elapsedMilliseconds
+            destinationCreated = $true
+            treeManifestSha256 = $rawShellTree.manifestSha256
+            outputNameDerivedFromOuterArchive = $true
+            internalReaderDispatchedWithoutUi = $true
+        }
         explicitCleanupRequired = $true
     }
 
@@ -877,6 +1026,11 @@ try {
         "tar-xz",
         "tar-zstd",
         "tar-compress",
+        "raw-gzip",
+        "raw-bzip2",
+        "raw-xz",
+        "raw-zstd",
+        "raw-compress",
         "cab-lzx",
         "rar",
         "rar5",
@@ -886,7 +1040,7 @@ try {
     $actualReadFormats = @($report.readFixtures | ForEach-Object { $_.format })
     if ((ConvertTo-Json -InputObject $actualReadFormats -Compress) -cne
         (ConvertTo-Json -InputObject $expectedReadFormats -Compress)) {
-        throw "Windows E2E did not execute the exact nine-format additional-read matrix."
+        throw "Windows E2E did not execute the exact 14-format additional-read matrix."
     }
 
     $report.status = "passed"

@@ -1,5 +1,5 @@
 use clap::{CommandFactory, Parser};
-use iroha_zip::cli::{Cli, Command, FilenameEncoding};
+use iroha_zip::cli::{Cli, Command, FilenameEncoding, RawFilter};
 
 #[test]
 fn command_name_matches_the_application_name() {
@@ -140,6 +140,35 @@ fn internal_failure_probes_are_hidden_but_parseable() {
             allow_unsandboxed: false,
             ..
         }
+    ));
+
+    let raw = Cli::try_parse_from([
+        "iroha-zip",
+        "internal-raw-archive",
+        "backend",
+        "candidates.txt",
+        "archive.bin",
+        "--filter",
+        "zstd",
+        "--output-name",
+        "-payload.txt",
+        "--max-bytes",
+        "67108864",
+        "--output",
+        "output",
+        "--allow-unsandboxed",
+    ])
+    .unwrap();
+    assert!(matches!(
+        raw.command,
+        Command::InternalRawArchive {
+            filter: RawFilter::Zstd,
+            ref output_name,
+            max_bytes: 67_108_864,
+            ref output,
+            allow_unsandboxed: true,
+            ..
+        } if output_name == "-payload.txt" && output.as_deref() == Some(std::path::Path::new("output"))
     ));
 }
 

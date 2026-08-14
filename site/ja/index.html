@@ -167,7 +167,7 @@
       <section class="section" id="formats">
         <div class="section-heading">
           <h2>日本の古い書庫も。</h2>
-          <p>libarchiveが有効にしている形式を自動判定します。UTF-8 process modeで新しい日本語名を保ち、文字コード情報のない古い日本語ZIP/LZHにはCP932を明示できます。</p>
+          <p>libarchiveが有効にしている形式を自動判定します。UTF-8 process modeで新しい日本語名を保ち、文字コード情報のない古い日本語ZIP/LZHにはCP932を明示できます。単体GZ/BZ2/XZ/Zstandard/.Zは、外側の拡張子を外した安全な1 fileへ、事前検査と実展開を別AppContainerで行います。</p>
         </div>
 
         <table class="format-table">

@@ -212,6 +212,44 @@ fn run() -> Result<()> {
                 ));
             }
         }
+        Command::InternalRawArchive {
+            backend_root,
+            candidates,
+            archive,
+            filter,
+            output_name,
+            max_bytes,
+            output,
+            allow_unsandboxed,
+        } => {
+            #[cfg(windows)]
+            iroha_zip::platform::process_raw_archive(
+                &backend_root,
+                &candidates,
+                &archive,
+                filter,
+                &output_name,
+                max_bytes,
+                output.as_deref(),
+                allow_unsandboxed,
+            )?;
+            #[cfg(not(windows))]
+            {
+                let _ = (
+                    backend_root,
+                    candidates,
+                    archive,
+                    filter,
+                    output_name,
+                    max_bytes,
+                    output,
+                    allow_unsandboxed,
+                );
+                return Err(iroha_zip::error::IrohaZipError::Unsupported(
+                    "the internal raw-stream extractor is only available on Windows".to_owned(),
+                ));
+            }
+        }
         Command::Preview {
             archive,
             encoding,

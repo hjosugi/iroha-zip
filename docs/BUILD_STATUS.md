@@ -24,6 +24,7 @@ Updated: 2026-08-14
 - Recursive Package-SID read/execute-only sealing of each sandbox backend tree after UTF-8 manifest transformation and before launch
 - Handle-pinned, recursively sealed sandbox archive copies; post-listing/post-extraction fingerprint checks; and extraction-directory create-new only after the listing child has exited and its output passed policy
 - Windows raw-name listing through libarchive's UTF-8 pathname API in a dedicated child that loads only manifest-pinned DLL candidates after rechecking AppContainer/zero-capability isolation; fixed `asInvoker`/long-path/UTF-8 process manifests with byte-for-byte resource readback remain on disposable backend copies
+- Windows standalone GZ/BZ2/XZ/Zstandard/compress handling through libarchive's official raw reader in two fresh AppContainer passes; the outer extension fixes both the expected filter and safe output name, preflight drains the complete stream, extraction is create-new and bounded by the single-file limit, and mismatch/error cleanup removes partial output. Platform-neutral naming/CLI tests, x64/ARM64 cross-target checks, and a direct libarchive 3.8.9 five-filter API proof pass locally.
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Safe UI Automation button paths for three folder-picker cancellations, Restore Defaults, and unsaved-change Cancel
@@ -62,7 +63,7 @@ A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` bui
 - LPAC `bsdtar --version`, archive-format, registry/file/COM denial, and network-denial measurements beyond the fixed-Server fail-closed token-query result
 - Settings-screen visual fit at 100–300% and mixed DPI, screen readers, completed folder-picker actions, Default Apps, backend-import rollback, and other external-state rollback paths
 - Native archive-preview tree/search/selection UI, progress/cancellation accessibility, and real-format selected-publication matrix
-- RAR/RAR5, LHA/LZH, ZIPX, and raw compressed-stream read fixtures with a pinned libarchive bundle
+- First passing Server 2022/2025 and native ARM64 evidence for the new pinned RAR/RAR5/LHA/ZIPX plus standalone raw-stream matrix
 - Broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures beyond the passing generated corpus
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring

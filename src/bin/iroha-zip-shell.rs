@@ -13,7 +13,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            if is_internal_archive_listing_invocation() {
+            if is_internal_archive_reader_invocation() {
                 eprintln!("iroha-zip: {error}");
             } else {
                 show_error(&error.to_string());
@@ -25,7 +25,7 @@ fn main() -> ExitCode {
 
 fn run() -> iroha_zip::error::Result<()> {
     #[cfg(windows)]
-    if let Some(result) = run_internal_archive_listing() {
+    if let Some(result) = run_internal_archive_reader() {
         return result;
     }
 
@@ -49,51 +49,70 @@ fn run() -> iroha_zip::error::Result<()> {
 }
 
 #[cfg(windows)]
-fn run_internal_archive_listing() -> Option<iroha_zip::error::Result<()>> {
+fn run_internal_archive_reader() -> Option<iroha_zip::error::Result<()>> {
     use iroha_zip::cli::{Cli, Command};
 
-    if !is_internal_archive_listing_invocation() {
+    if !is_internal_archive_reader_invocation() {
         return None;
     }
     let operation = (|| {
         let cli = Cli::try_parse_from(std::env::args_os()).map_err(|error| {
             iroha_zip::error::IrohaZipError::Usage(format!(
-                "invalid internal archive listing arguments: {error}"
+                "invalid internal archive reader arguments: {error}"
             ))
         })?;
-        let Command::InternalArchiveListing {
-            backend_root,
-            candidates,
-            archive,
-            encoding,
-            max_entries,
-            max_path_bytes,
-            allow_unsandboxed,
-        } = cli.command
-        else {
-            return Err(iroha_zip::error::IrohaZipError::Usage(
-                "internal archive listing dispatch mismatch".to_owned(),
-            ));
-        };
-        iroha_zip::platform::write_utf8_archive_listing(
-            &backend_root,
-            &candidates,
-            &archive,
-            encoding,
-            max_entries,
-            max_path_bytes,
-            allow_unsandboxed,
-        )
+        match cli.command {
+            Command::InternalArchiveListing {
+                backend_root,
+                candidates,
+                archive,
+                encoding,
+                max_entries,
+                max_path_bytes,
+                allow_unsandboxed,
+            } => iroha_zip::platform::write_utf8_archive_listing(
+                &backend_root,
+                &candidates,
+                &archive,
+                encoding,
+                max_entries,
+                max_path_bytes,
+                allow_unsandboxed,
+            ),
+            Command::InternalRawArchive {
+                backend_root,
+                candidates,
+                archive,
+                filter,
+                output_name,
+                max_bytes,
+                output,
+                allow_unsandboxed,
+            } => iroha_zip::platform::process_raw_archive(
+                &backend_root,
+                &candidates,
+                &archive,
+                filter,
+                &output_name,
+                max_bytes,
+                output.as_deref(),
+                allow_unsandboxed,
+            ),
+            _ => Err(iroha_zip::error::IrohaZipError::Usage(
+                "internal archive reader dispatch mismatch".to_owned(),
+            )),
+        }
     })();
     Some(operation)
 }
 
-fn is_internal_archive_listing_invocation() -> bool {
+fn is_internal_archive_reader_invocation() -> bool {
     use std::ffi::OsStr;
 
-    std::env::args_os()
-        .nth(1)
-        .is_some_and(|argument| argument == OsStr::new("internal-archive-listing"))
+    std::env::args_os().nth(1).is_some_and(|argument| {
+        argument == OsStr::new("internal-archive-listing")
+            || argument == OsStr::new("internal-raw-archive")
+    })
 }
 
 #[cfg(windows)]

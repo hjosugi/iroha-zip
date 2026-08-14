@@ -167,7 +167,7 @@
       <section class="section" id="formats">
         <div class="section-heading">
           <h2>Including legacy Japanese archives.</h2>
-          <p>libarchive automatically detects enabled formats. UTF-8 process mode preserves modern Japanese names; old ZIP and LZH archives that omit encoding metadata can explicitly use CP932.</p>
+          <p>libarchive automatically detects enabled formats. UTF-8 process mode preserves modern Japanese names; old ZIP and LZH archives that omit encoding metadata can explicitly use CP932. A standalone GZ/BZ2/XZ/Zstandard/.Z stream becomes one safely named file after separate AppContainer preflight and extraction passes.</p>
         </div>
 
         <table class="format-table">

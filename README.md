@@ -80,6 +80,8 @@ libarchive/bsdtarが読み取れる形式を自動判定します。主な対象
 - UNIX compress `.Z`
 - CABなど、使用するlibarchiveビルドが有効にしている形式
 
+単体のGZ／BZ2／XZ／Zstandard／`.Z` streamは、外側の拡張子を1つ外した安全な名前の通常fileとして展開します。たとえば`logs.txt.gz`の出力は`logs.txt`です。Windowsではmanifest固定DLLを専用AppContainer子processだけがloadし、事前検査でもstream全体を復号して、拡張子から期待したfilter、raw形式、単一file容量、timeout、memory、process数を確認します。実展開は別の新規AppContainer passで同じ検査を繰り返します。stream内の元filenameは出力名に使わず、拡張子と実データのfilterが違う場合、libarchiveが報告した形式／復号error、容量超過、既存出力は公開せずfail closedになります。圧縮形式は暗号学的な内容真正性を提供しないため、出力内容が信頼済みであるとは扱いません。`tar.gz`などの複合書庫は従来どおり書庫として処理します。
+
 ### 作成
 
 - ZIP
@@ -124,6 +126,7 @@ iroha-zipは次をfail-closedで拒否します。
 - SHA-256マニフェストと一致しないバックエンドEXE/DLL
 - バックエンドフォルダ内の余分なファイル、欠落ファイル、リンク
 - 既存の展開先や既存の出力書庫の上書き
+- 単体圧縮streamで、拡張子から期待したfilterと実データが一致しない場合
 
 さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。Windowsの子processはsuspended状態で生成し、要求したAppContainer／LPAC tokenとcapability 0を親が確認した後だけ実行を開始します。照合やresumeに失敗した場合は、backendの実行開始前にJobごと終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。sandboxへコピーしたbackend treeと入力書庫copyは再帰的にread／execute専用へ封印し、入力書庫は保持handleでも固定します。展開先directoryはlisting process終了・一覧検証・入力再照合の後に親が新規作成するため、侵害されたlisting processは書庫差替え、backend自己改変、展開先への置き土産を次のpassへ残せません。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。信頼する親プロセスがこのtreeを有界PAX streamへ変換し、backendには通常の圧縮元pathやtree operandを渡さず、sandbox内の固定`@source.pax.tar`だけを渡します。7z writerが必要とする削除時close付き一時fileには、sandbox内の専用scratchだけをread／write／delete可能にし、全使用量を監視し、process終了後に空であることを必須検証して削除します。PAXとstaging treeは保持中のhandleとfingerprintで再照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
 

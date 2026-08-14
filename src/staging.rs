@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::backend::BackendBundle;
+#[cfg(any(windows, test))]
+use crate::cli::RawFilter;
 use crate::config::{Config, FilenameEncoding};
 use crate::error::{IrohaZipError, Result};
 use crate::platform::{ProcessSpec, Sandbox};
@@ -26,6 +28,13 @@ pub(crate) struct StagedArchive {
 pub(crate) enum ListingPolicy {
     External,
     CreatedByIrohaZip,
+}
+
+#[cfg(any(windows, test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RawStreamContract {
+    filter: RawFilter,
+    output_name: String,
 }
 
 impl StagedArchive {
@@ -63,6 +72,17 @@ pub(crate) fn stage_archive(
     allow_unsandboxed: bool,
 ) -> Result<StagedArchive> {
     let archive = archive_snapshot.path().to_path_buf();
+    #[cfg(windows)]
+    let raw_stream = raw_stream_contract(&archive);
+    #[cfg(windows)]
+    if let Some(contract) = raw_stream.as_ref()
+        && contract.output_name.as_bytes().len().saturating_add(1) > config.limits.max_path_bytes
+    {
+        return Err(IrohaZipError::Policy(format!(
+            "raw-stream output name exceeds {} UTF-8 bytes: {:?}",
+            config.limits.max_path_bytes, contract.output_name
+        )));
+    }
     let sandbox = Sandbox::new(
         config.sandbox.memory_limit_mib,
         allow_unsandboxed,
@@ -101,16 +121,32 @@ pub(crate) fn stage_archive(
         let stderr_log = workspace_root.join("bsdtar.stderr.log");
 
         #[cfg(windows)]
-        let listing_args = internal_listing_arguments(
-            &backend_dir,
-            &listing_candidates,
-            &sandbox_archive,
-            encoding,
-            &config.limits,
-            allow_unsandboxed,
-        )?;
-        #[cfg(windows)]
-        let listing_failure_name = "sandboxed libarchive UTF-8 listing";
+        let (listing_args, listing_failure_name) = if let Some(contract) = raw_stream.as_ref() {
+            (
+                internal_raw_arguments(
+                    &backend_dir,
+                    &listing_candidates,
+                    &sandbox_archive,
+                    contract,
+                    config.limits.max_single_file_bytes,
+                    None,
+                    allow_unsandboxed,
+                ),
+                "sandboxed libarchive raw-stream preflight",
+            )
+        } else {
+            (
+                internal_listing_arguments(
+                    &backend_dir,
+                    &listing_candidates,
+                    &sandbox_archive,
+                    encoding,
+                    &config.limits,
+                    allow_unsandboxed,
+                )?,
+                "sandboxed libarchive UTF-8 listing",
+            )
+        };
         #[cfg(not(windows))]
         let listing_program = sandbox_backend.clone();
         #[cfg(not(windows))]
@@ -126,7 +162,7 @@ pub(crate) fn stage_archive(
             MAX_ARCHIVE_LISTING_BYTES,
         )?;
         let listing_result = sandbox.run(ProcessSpec {
-            program: listing_program,
+            program: listing_program.clone(),
             args: listing_args,
             current_dir: workspace_root.clone(),
             temp_dir: None,
@@ -165,11 +201,11 @@ pub(crate) fn stage_archive(
             )
         })?;
 
-        let mut args: Vec<OsString> = ["-x", "-f"].into_iter().map(OsString::from).collect();
-        args.push(sandbox_archive.as_os_str().to_owned());
-        args.push(OsString::from("-C"));
-        args.push(output_dir.as_os_str().to_owned());
-        args.extend(
+        let mut bsdtar_args: Vec<OsString> = ["-x", "-f"].into_iter().map(OsString::from).collect();
+        bsdtar_args.push(sandbox_archive.as_os_str().to_owned());
+        bsdtar_args.push(OsString::from("-C"));
+        bsdtar_args.push(output_dir.as_os_str().to_owned());
+        bsdtar_args.extend(
             [
                 "--safe-writes",
                 "--no-same-owner",
@@ -184,9 +220,32 @@ pub(crate) fn stage_archive(
             .map(OsString::from),
         );
         if let Some(option) = encoding.bsdtar_option() {
-            args.push(OsString::from("--options"));
-            args.push(OsString::from(option));
+            bsdtar_args.push(OsString::from("--options"));
+            bsdtar_args.push(OsString::from(option));
         }
+
+        #[cfg(windows)]
+        let (extraction_program, extraction_args, extraction_failure_name) =
+            if let Some(contract) = raw_stream.as_ref() {
+                (
+                    listing_program,
+                    internal_raw_arguments(
+                        &backend_dir,
+                        &listing_candidates,
+                        &sandbox_archive,
+                        contract,
+                        config.limits.max_single_file_bytes,
+                        Some(&output_dir),
+                        allow_unsandboxed,
+                    ),
+                    "sandboxed libarchive raw-stream extraction",
+                )
+            } else {
+                (sandbox_backend, bsdtar_args, "bsdtar extraction")
+            };
+        #[cfg(not(windows))]
+        let (extraction_program, extraction_args, extraction_failure_name) =
+            (sandbox_backend, bsdtar_args, "bsdtar extraction");
 
         let baseline = policy::measure_tree(&workspace_root)?;
         let transient_bytes = config
@@ -220,8 +279,8 @@ pub(crate) fn stage_archive(
         )?;
 
         let result = sandbox.run(ProcessSpec {
-            program: sandbox_backend,
-            args,
+            program: extraction_program,
+            args: extraction_args,
             current_dir: workspace_root.clone(),
             temp_dir: None,
             stdin_file: None,
@@ -235,8 +294,8 @@ pub(crate) fn stage_archive(
             let stderr = util::read_limited(&stderr_log, 64 * 1024)?;
             let stdout = util::read_limited(&stdout_log, 16 * 1024)?;
             return Err(IrohaZipError::Backend(format!(
-                "bsdtar exited with code {}. stderr={stderr:?}, stdout={stdout:?}",
-                result.exit_code
+                "{extraction_failure_name} exited with code {}. stderr={stderr:?}, stdout={stdout:?}",
+                result.exit_code,
             )));
         }
         require_sandbox_archive_unchanged(&sandbox_archive, sandbox_archive_guard.fingerprint())?;
@@ -331,6 +390,38 @@ fn internal_listing_arguments(
     Ok(args)
 }
 
+#[cfg(windows)]
+fn internal_raw_arguments(
+    backend_root: &Path,
+    candidates: &Path,
+    archive: &Path,
+    contract: &RawStreamContract,
+    max_bytes: u64,
+    output: Option<&Path>,
+    allow_unsandboxed: bool,
+) -> Vec<OsString> {
+    let mut args = vec![
+        OsString::from("internal-raw-archive"),
+        backend_root.as_os_str().to_owned(),
+        candidates.as_os_str().to_owned(),
+        archive.as_os_str().to_owned(),
+        OsString::from("--filter"),
+        OsString::from(contract.filter.cli_name()),
+        OsString::from("--output-name"),
+        OsString::from(&contract.output_name),
+        OsString::from("--max-bytes"),
+        OsString::from(max_bytes.to_string()),
+    ];
+    if let Some(output) = output {
+        args.push(OsString::from("--output"));
+        args.push(output.as_os_str().to_owned());
+    }
+    if allow_unsandboxed {
+        args.push(OsString::from("--allow-unsandboxed"));
+    }
+    args
+}
+
 #[cfg(not(windows))]
 fn bsdtar_listing_arguments(archive: &Path, encoding: FilenameEncoding) -> Vec<OsString> {
     let mut args: Vec<OsString> = ["-t", "-f"].into_iter().map(OsString::from).collect();
@@ -402,5 +493,97 @@ fn choose_payload_root(output_root: &Path, archive: &Path) -> Result<PathBuf> {
         Ok(first.path())
     } else {
         Ok(output_root.to_path_buf())
+    }
+}
+
+#[cfg(any(windows, test))]
+fn raw_stream_contract(archive: &Path) -> Option<RawStreamContract> {
+    const COMPOUND_EXTENSIONS: &[&str] = &[
+        ".tar.gz",
+        ".tgz",
+        ".tar.bz2",
+        ".tbz",
+        ".tbz2",
+        ".tar.xz",
+        ".txz",
+        ".tar.zst",
+        ".tar.zstd",
+        ".tzst",
+        ".tar.z",
+    ];
+    const RAW_EXTENSIONS: &[(&str, RawFilter)] = &[
+        (".zstd", RawFilter::Zstd),
+        (".bz2", RawFilter::Bzip2),
+        (".zst", RawFilter::Zstd),
+        (".gz", RawFilter::Gzip),
+        (".xz", RawFilter::Xz),
+        (".z", RawFilter::Compress),
+    ];
+
+    let filename = archive.file_name()?.to_str()?;
+    let lowercase = filename.to_ascii_lowercase();
+    if COMPOUND_EXTENSIONS
+        .iter()
+        .any(|extension| lowercase.ends_with(extension))
+    {
+        return None;
+    }
+    let (_, filter) = RAW_EXTENSIONS.iter().find(|(extension, _)| {
+        filename.len() > extension.len() && lowercase.ends_with(extension)
+    })?;
+    Some(RawStreamContract {
+        filter: *filter,
+        output_name: util::archive_base_name(filename),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RawFilter, RawStreamContract, raw_stream_contract};
+    use std::path::Path;
+
+    #[test]
+    fn raw_stream_extensions_select_a_fixed_filter_and_safe_output_name() {
+        let cases = [
+            ("notes.txt.gz", RawFilter::Gzip, "notes.txt"),
+            ("notes.txt.bz2", RawFilter::Bzip2, "notes.txt"),
+            ("notes.txt.xz", RawFilter::Xz, "notes.txt"),
+            ("notes.txt.zst", RawFilter::Zstd, "notes.txt"),
+            ("notes.txt.zstd", RawFilter::Zstd, "notes.txt"),
+            ("notes.txt.Z", RawFilter::Compress, "notes.txt"),
+            ("NOTES.TXT.GZ", RawFilter::Gzip, "NOTES.TXT"),
+            ("CON.gz", RawFilter::Gzip, "archive"),
+        ];
+        for (archive, filter, output_name) in cases {
+            assert_eq!(
+                raw_stream_contract(Path::new(archive)),
+                Some(RawStreamContract {
+                    filter,
+                    output_name: output_name.to_owned(),
+                }),
+                "{archive}",
+            );
+        }
+    }
+
+    #[test]
+    fn compound_and_non_raw_archives_do_not_use_the_raw_stream_path() {
+        for archive in [
+            "archive.tar.gz",
+            "archive.tgz",
+            "archive.tar.bz2",
+            "archive.tbz",
+            "archive.tbz2",
+            "archive.tar.xz",
+            "archive.txz",
+            "archive.tar.zst",
+            "archive.tar.zstd",
+            "archive.tzst",
+            "archive.tar.Z",
+            "archive.zip",
+            ".gz",
+        ] {
+            assert_eq!(raw_stream_contract(Path::new(archive)), None, "{archive}");
+        }
     }
 }
