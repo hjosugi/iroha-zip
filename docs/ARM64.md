@@ -36,9 +36,9 @@ fail closedしました。
 
 ### 配布境界
 
-[`v0.5.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.1)は`windows-arm64`と
-`windows-x64`を別名で公開済みです。[Release workflow run 31782247651](https://github.com/hjosugi/iroha-zip/actions/runs/31782247651)はnative ARM64
-runnerでbuild/packageし、次のtag-driven境界で取り違えを拒否しました。`v0.5.2`も同じ契約を使います。
+[`v0.5.2`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.2)は`windows-arm64`と
+`windows-x64`を別名で公開済みです。[Release workflow run 31784888614](https://github.com/hjosugi/iroha-zip/actions/runs/31784888614)はnative ARM64
+runnerでbuild/packageし、次のtag-driven境界で取り違えを拒否しました。
 
 1. build直後の3 EXEをPE machine `0xAA64`で検査する。
 2. ARM64名の3つの個別EXEと、ARM64 ZIP内の3 EXEを再検査する。
@@ -113,10 +113,10 @@ without a normal-AppContainer fallback.
 
 ### Distribution boundary
 
-[`v0.5.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.1) has published separately named
-`windows-arm64` and `windows-x64` assets. [Release workflow run 31782247651](https://github.com/hjosugi/iroha-zip/actions/runs/31782247651)
+[`v0.5.2`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.2) has published separately named
+`windows-arm64` and `windows-x64` assets. [Release workflow run 31784888614](https://github.com/hjosugi/iroha-zip/actions/runs/31784888614)
 built/packaged on a native ARM64 runner and rejected architecture confusion at these tag-driven
-boundaries. `v0.5.2` uses the same contract:
+boundaries:
 
 1. All three direct build outputs must have PE machine `0xAA64`.
 2. The three ARM64 standalone assets and all three executables inside the ARM64 ZIP are rechecked.

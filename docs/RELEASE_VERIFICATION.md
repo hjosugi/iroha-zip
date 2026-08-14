@@ -65,17 +65,18 @@ matching tag and an explicit `publish` choice.
     immutable, latest, and an exact match for all 11 assets.
 
 The repository immutable-release policy was enabled on 2026-08-14. The stable unsigned
-[`v0.5.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.1) publication passed the complete
-dual-architecture contract from commit `65a99b74d99ea138ca1ffe95559290cc9cec8322` in
-[Actions run 31782247651](https://github.com/hjosugi/iroha-zip/actions/runs/31782247651), after the same
+[`v0.5.2`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.2) publication passed the complete
+dual-architecture contract from commit `a8ff7e0f30c33131e67e957226f26ba8faf4b214` in
+[Actions run 31784888614](https://github.com/hjosugi/iroha-zip/actions/runs/31784888614), after the same
 path passed without publication in
-[dry run 31781678934](https://github.com/hjosugi/iroha-zip/actions/runs/31781678934). An independent
+[dry run 31784269152](https://github.com/hjosugi/iroha-zip/actions/runs/31784269152). An independent
 public re-download matched all 11 Release API digests and byte lengths, eight subjects in
 `SHA256SUMS.txt`, both one-line sidecars, all direct and ZIP-contained PE machine identities, every
 ZIP-to-standalone executable byte, bilingual package content, backend non-inclusion, annotated tag
-object `138bff62391af738789fbc00344c88a166a0c443`, the exact tag commit, and all nine tag-ref
-attestations with hosted-runner enforcement. The Certificate Table was empty in all six distinct
-executables, confirming the disclosed intentionally unsigned state. `v0.5.0` was the preceding
+object `b54c8ae9dfb898258a61074cb8445f4ef20bb14a`, the exact tag commit, all 174 packaged local
+Markdown link resolutions, and all nine tag-ref attestations with hosted-runner enforcement. The
+Certificate Table was empty in all six distinct executables, confirming the disclosed intentionally
+unsigned state. `v0.5.1` was the preceding
 complete-contract release; unsigned `v0.4.1` was the first publication under the immutable policy,
 while `v0.4.0` predates enforcement and remains mutable according to GitHub's API. A failed future
 draft remains unpublished for investigation; it is not silently deleted or overwritten.
