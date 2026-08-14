@@ -261,15 +261,13 @@ fn list_archive(
 }
 
 fn read_candidates(backend_root: &Path, candidate_file: &Path) -> Result<Vec<PathBuf>> {
+    if !backend_root.is_absolute() {
+        return Err(IrohaZipError::Backend(
+            "sandbox backend directory must be absolute".to_owned(),
+        ));
+    }
     validate_directory_security(backend_root)?;
     validate_regular_file_security(candidate_file)?;
-    let backend_root = fs::canonicalize(backend_root).map_err(|error| {
-        IrohaZipError::io_path(
-            "cannot resolve sandbox backend directory",
-            backend_root,
-            error,
-        )
-    })?;
     let bytes = fs::read(candidate_file).map_err(|error| {
         IrohaZipError::io_path(
             "cannot read libarchive candidate list",
@@ -306,18 +304,16 @@ fn read_candidates(backend_root: &Path, candidate_file: &Path) -> Result<Vec<Pat
                 relative.display()
             )));
         }
+        let mut parent = backend_root.to_path_buf();
+        if let Some(relative_parent) = relative.parent() {
+            for component in relative_parent.components() {
+                parent.push(component.as_os_str());
+                validate_directory_security(&parent)?;
+            }
+        }
         let candidate = backend_root.join(&relative);
         validate_regular_file_security(&candidate)?;
-        let resolved = fs::canonicalize(&candidate).map_err(|error| {
-            IrohaZipError::io_path("cannot resolve libarchive candidate", &candidate, error)
-        })?;
-        if !resolved.starts_with(&backend_root) {
-            return Err(IrohaZipError::Backend(format!(
-                "libarchive candidate escaped the backend root: {}",
-                relative.display()
-            )));
-        }
-        candidates.push(resolved);
+        candidates.push(candidate);
     }
     if candidates.is_empty() {
         return Err(IrohaZipError::Backend(
