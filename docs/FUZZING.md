@@ -1,6 +1,6 @@
 # Reproducible fuzzing and regression promotion
 
-Updated: 2026-08-10
+Updated: 2026-08-14
 
 QA-001 covers parser and normalization code that consumes attacker-controlled bytes before or
 around the archive backend. The fuzz workspace is intentionally separate from the release
@@ -47,7 +47,10 @@ while the overall length bound comes from
 permissions. It runs each of the five targets for at most 45 seconds, limits input to 65,536
 bytes, limits a single execution to 10 seconds, caps RSS at 2 GiB, and caps the whole job at 20
 minutes. Checked-in seeds are copied to `$RUNNER_TEMP`, so fuzzing cannot rewrite the source
-corpus. A failure uploads `fuzz/artifacts/` for 14 days.
+corpus. A failure uploads `fuzz/artifacts/` for 14 days. Both `actions/checkout` and
+`actions/upload-artifact` are pinned to reviewed full commit SHAs. The final five-target campaign
+for the exact `v0.5.0` tag commit passed in
+[Actions run 31774302200](https://github.com/hjosugi/iroha-zip/actions/runs/31774302200).
 
 ## Local run
 

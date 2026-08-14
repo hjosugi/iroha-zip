@@ -64,12 +64,16 @@ matching tag and an explicit `publish` choice.
 10. Only that verified draft is published as latest. Published readback must be stable, non-prerelease,
     immutable, latest, and an exact match for all 11 assets.
 
-The repository immutable-release policy was enabled on 2026-08-14. Unsigned
-[`v0.4.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.4.1) was the first publication under
-that policy and passed exact six-asset immutable readback in
-[Actions run 31769440507](https://github.com/hjosugi/iroha-zip/actions/runs/31769440507). The older
-`v0.4.0` predates enforcement and remains mutable according to GitHub's API. A failed future draft
-remains unpublished for investigation; it is not silently deleted or overwritten.
+The repository immutable-release policy was enabled on 2026-08-14. The stable unsigned
+[`v0.5.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.0) publication passed the complete
+dual-architecture contract in [Actions run 31774707963](https://github.com/hjosugi/iroha-zip/actions/runs/31774707963).
+An independent public re-download matched all 11 Release API digests, eight subjects in
+`SHA256SUMS.txt`, both one-line sidecars, all direct and ZIP-contained PE machine identities, every
+ZIP-to-standalone executable byte, backend non-inclusion, the exact tag commit, and all nine
+tag-ref attestations. The Certificate Table was empty in all six distinct executables, confirming
+the disclosed intentionally unsigned state. Unsigned `v0.4.1` was the first publication under the
+immutable policy; `v0.4.0` predates enforcement and remains mutable according to GitHub's API. A
+failed future draft remains unpublished for investigation; it is not silently deleted or overwritten.
 
 GitHub's immutable-policy status endpoint requires repository `Administration: read`, which the
 standard Actions token cannot request. Do not add a long-lived administrator token. Immediately

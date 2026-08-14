@@ -21,16 +21,17 @@ CIはGitHubのnative `windows-11-arm` runner上で、OS／process architecture�
   7 profile/root cleanup
 - LPAC成功時は同じschema-v4契約、非対応時はexact failure class、exit 2、空stdout、完全cleanup
 
-この全契約はcommit `c990fbcf3f3e8515564d276f0e8c5a71c356893e`の
-[Actions run 31770908971](https://github.com/hjosugi/iroha-zip/actions/runs/31770908971)で合格しました。
+この全契約は`v0.5.0`のcommit `947b693b96857992bf32a73366c57f537daf0aa5`である
+[Actions run 31774280671](https://github.com/hjosugi/iroha-zip/actions/runs/31774280671)で合格しました。
 downloadした5つのJSONは、全matrixが実行済みであること、全PEが`0xAA64`であること、通常
 AppContainerがcapability 0であること、全一時rootが削除されたことを記録しています。このWindows 11
 ARM環境ではLPAC queryは`ERROR_INVALID_PARAMETER`となり、通常AppContainerへ降格せずfail closedしました。
 
 ### v0.5.0の配布境界
 
-`v0.5.0`は`windows-arm64`と`windows-x64`を別名で公開します。Release workflowはnative ARM64
-runnerでbuild/packageし、次の境界で取り違えを拒否します。
+[`v0.5.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.0)は`windows-arm64`と
+`windows-x64`を別名で公開済みです。[Release workflow run 31774707963](https://github.com/hjosugi/iroha-zip/actions/runs/31774707963)はnative ARM64
+runnerでbuild/packageし、次の境界で取り違えを拒否しました。
 
 1. build直後の3 EXEをPE machine `0xAA64`で検査する。
 2. ARM64名の3つの個別EXEと、ARM64 ZIP内の3 EXEを再検査する。
@@ -38,6 +39,11 @@ runnerでbuild/packageし、次の境界で取り違えを拒否します。
 4. 2 ZIP、2 sidecar、6個別EXE、全体`SHA256SUMS.txt`のexact 11 assetだけを許可する。
 5. 2 ZIPと6 EXEへarch別attestation、`SHA256SUMS.txt`へ集約attestationを発行する。
 6. draft時と公開後に全11 assetの大小文字を含む名前、byte長、SHA-256を照合する。
+
+公開後にGitHub Releaseから11 assetを独立に再取得し、API digest、8 checksum対象、2 sidecar、
+ZIP内外のx64／ARM64 PE identity、ZIPと個別EXEのbyte一致、backend非同梱、exact tag commit、
+9つのtag-ref attestationを確認しました。6種類のEXEはすべてPE Certificate Tableが空で、
+表示どおり意図的な未署名版です。
 
 ### ARM64での導入
 
@@ -82,8 +88,9 @@ CI first requires `Arm64` for both OS and process architecture and
 - the same schema-v4 contract on LPAC success, or exact failure class, exit 2, empty stdout, and full
   cleanup when LPAC is unsupported.
 
-The complete contract passed for commit `c990fbcf3f3e8515564d276f0e8c5a71c356893e` in
-[Actions run 31770908971](https://github.com/hjosugi/iroha-zip/actions/runs/31770908971).
+The complete contract passed for the `v0.5.0` commit
+`947b693b96857992bf32a73366c57f537daf0aa5` in
+[Actions run 31774280671](https://github.com/hjosugi/iroha-zip/actions/runs/31774280671).
 The five downloaded JSON files record every matrix as executed, `0xAA64` for every PE, normal
 AppContainer with zero capabilities, and removal of every temporary root. The LPAC query returned
 `ERROR_INVALID_PARAMETER` on that Windows 11 ARM environment and failed closed without a normal-
@@ -91,8 +98,9 @@ AppContainer fallback.
 
 ### v0.5.0 distribution boundary
 
-`v0.5.0` publishes separately named `windows-arm64` and `windows-x64` assets. The Release workflow
-builds/packages on a native ARM64 runner and rejects architecture confusion at these boundaries:
+[`v0.5.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.0) has published separately named
+`windows-arm64` and `windows-x64` assets. [Release workflow run 31774707963](https://github.com/hjosugi/iroha-zip/actions/runs/31774707963)
+built/packaged on a native ARM64 runner and rejected architecture confusion at these boundaries:
 
 1. All three direct build outputs must have PE machine `0xAA64`.
 2. The three ARM64 standalone assets and all three executables inside the ARM64 ZIP are rechecked.
@@ -101,6 +109,11 @@ builds/packages on a native ARM64 runner and rejects architecture confusion at t
    combined `SHA256SUMS.txt`.
 5. Per-architecture attestations cover both ZIPs and six EXEs; a combined attestation covers the inventory.
 6. Draft and published readback compare exact case-sensitive names, byte lengths, and SHA-256 for all assets.
+
+After publication, all 11 assets were independently downloaded from the GitHub Release. The API digests,
+eight checksum subjects, two sidecars, x64/ARM64 PE identities inside and outside the ZIPs, ZIP-to-standalone
+byte matches, backend non-inclusion, exact tag commit, and nine tag-ref attestations all matched. All six
+distinct executables had empty PE Certificate Tables, confirming the disclosed intentionally unsigned state.
 
 ### ARM64 setup
 
