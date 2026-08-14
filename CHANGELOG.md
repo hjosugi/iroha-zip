@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.3 - 2026-08-14
+
 - Add a crate-version-derived regression for the bilingual Pages fallback, download example,
   language topology, release hooks, skip links, and section structure.
 - Add a restrictive static-site CSP, referrer policy, SVG favicon, language-aware sitemap, crawler

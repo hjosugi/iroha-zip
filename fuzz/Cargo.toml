@@ -13,7 +13,7 @@ libfuzzer-sys = "=0.4.13"
 
 [dependencies.iroha-zip]
 path = ".."
-version = "=0.5.2"
+version = "=0.5.3"
 features = ["fuzzing"]
 
 [workspace]

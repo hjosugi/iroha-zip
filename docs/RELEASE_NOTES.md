@@ -1,17 +1,18 @@
-# iroha-zip 0.5.2
+# iroha-zip 0.5.3
 
 ## 日本語
 
-iroha-zip 0.5.2は、配布package内の日英Security policyを現行`0.5.x`へ訂正するpatch安定版です。
-archive／sandboxのruntime動作は0.5.1から変更していません。Windows x64とnative Windows ARM64を
+iroha-zip 0.5.3は、検証済みのbackend export timeout、Windows PowerShell 5.1互換launcher、
+日英GitHub Pagesと公開Release inventory検証を配布物へ反映するpatch安定版です。
+archive／sandboxのruntime動作は0.5.2から変更していません。Windows x64とnative Windows ARM64を
 別々のnative runnerで再buildし、ZIP内外の全EXEをPE machine値で照合してから、別のimmutable
 Releaseへ公開します。
 
 ### ダウンロードの選び方
 
-- **一般的なIntel/AMD PC**: `iroha-zip-0.5.2-windows-x64.zip`
-- **Windows on ARM PC**: `iroha-zip-0.5.2-windows-arm64.zip`
-- CLIだけが必要な場合は、対応する`iroha-zip-0.5.2-windows-<arch>.exe`を選べます。
+- **一般的なIntel/AMD PC**: `iroha-zip-0.5.3-windows-x64.zip`
+- **Windows on ARM PC**: `iroha-zip-0.5.3-windows-arm64.zip`
+- CLIだけが必要な場合は、対応する`iroha-zip-0.5.3-windows-<arch>.exe`を選べます。
 - native設定画面と関連付けlauncherも、各architecture向けの個別EXEがあります。
 - `SHA256SUMS.txt`は2つのZIPと6つの個別EXEをまとめて対象にします。各ZIPには専用の
   `.zip.sha256`もあります。
@@ -26,16 +27,27 @@ Releaseへ公開します。
 - セキュリティ監査済み製品ではありません。Windows 10/11 x64 desktop実機、実験的LPAC、
   screen reader／mixed DPI、さらに広いmalformed format／race試験は未完です。
 
-### v0.5.1からの変更
+### v0.5.2からの変更
 
-- package内の`SECURITY.md`を日英とも訂正し、最新`main`と`0.5.x`をサポート対象、`0.4.x`以前を
-  source review用の旧版として明示しました。
-- `CARGO_PKG_VERSION`から現行tag／support系列を導く通常CI回帰testを追加し、package対象文書に
-  古いversionが残るとRelease build前に拒否します。
-- immutable `v0.5.1`の公開後再取得で確認した11 API digest／byte長、8 checksum、2 sidecar、
-  PE identity、空Certificate Table、日英内容、tag object／commit、9 attestationを文書化しました。
-- runtime codeとtrust boundaryは変更していません。同一versionのassetを置換せず、Security policyを
-  訂正した新しいpatch versionとして全build／package／attestation／公開検証を再実行します。
+- MSYS2 backend exporterの全bash／`ldd`／pacman子commandを既定180秒で制限し、mirror、package
+  database、子processの停止が外側の45分CI制限まで残らないようにしました。timeout時は一時証拠を
+  削除し、未完成bundleをinstallせず、停止したstageを表示します。
+- PowerShell 5.1のlegacy native quotingでもshell programとbatched引数を壊さないよう、commandを
+  新規UTF-8一時fileから実行します。空間、glob文字、日本語、非ゼロ終了、実timeout、残留ゼロを
+  Linux PowerShellとWindows PowerShell 5.1の通常CIで検証します。
+- 日英Pagesを公開し、language gate、skip link、dark mode、responsive layout、WCAG 2 AA contrast、
+  CSP、referrer policy、favicon、sitemap、crawler policy、project-root-safe 404を揃えました。
+- Pagesのdynamic downloadは、stable／immutableでexact 11 uploaded assetと公式download URLを持つ
+  Releaseだけを受理します。不完全、draft、prerelease、mutableなAPI応答では静的fallbackを維持します。
+- Pages deployをread-only validation jobの後だけに許可し、deploy jobだけへPages／OIDC write権限を
+  与えました。Rust文書契約とdependency-free Node behavior testをLinux／Windows／deploy前に実行します。
+- CodeQL extended setupでRust、Actions、JavaScript/TypeScriptをhosted runner上で解析し、既存の
+  path-flow 233件を全件reviewしてtest-only 188件とexpected local boundary 45件へ分類しました。
+  ruleは無効化せず、新規flowを検出し続けます。
+- dry runとtag buildのPE差を測定し、COFF/debug timestampとCodeView PDB GUID以外の差を観測しなかった
+  範囲を文書化しました。bit-reproducible／build-path-independentとは主張しません。
+- archive runtime codeとtrust boundaryは変更していません。同一versionのassetを置換せず、全build、
+  package、attestation、公開検証を新しいpatch versionで再実行します。
 
 ### v0.5.1で追加された主な機能
 
@@ -54,24 +66,25 @@ Releaseへ公開します。
 - backend置換は、旧treeをbackupへrenameした直後の失敗をCIで注入し、byte同一の復元、
   stage／backup残留ゼロ、その後の正常importを要求します。
 
-実測範囲は [Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.5.2/docs/WINDOWS_E2E.md)、
-[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.5.2/docs/ARM64.md)、
-[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.5.2/docs/BUILD_STATUS.md)を確認してください。
+実測範囲は [Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.5.3/docs/WINDOWS_E2E.md)、
+[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.5.3/docs/ARM64.md)、
+[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.5.3/docs/BUILD_STATUS.md)を確認してください。
 
 ---
 
 ## English
 
-iroha-zip 0.5.2 is a stable patch release that corrects the packaged bilingual Security policy to
-the current `0.5.x` line. Runtime archive and sandbox behavior is unchanged from 0.5.1. Windows x64
-and native Windows ARM64 are rebuilt on separate native runners. Every executable inside and outside
-both ZIPs is checked by PE machine value before a separate immutable Release is published.
+iroha-zip 0.5.3 is a stable patch release that ships the verified backend-export timeout, a Windows
+PowerShell 5.1-compatible launcher, the bilingual GitHub Pages site, and public Release-inventory
+validation. Runtime archive and sandbox behavior is unchanged from 0.5.2. Windows x64 and native
+Windows ARM64 are rebuilt on separate native runners. Every executable inside and outside both ZIPs
+is checked by PE machine value before a separate immutable Release is published.
 
 ### Which download to choose
 
-- **Typical Intel/AMD PC**: `iroha-zip-0.5.2-windows-x64.zip`
-- **Windows on ARM PC**: `iroha-zip-0.5.2-windows-arm64.zip`
-- If you need only the CLI, choose the matching `iroha-zip-0.5.2-windows-<arch>.exe`.
+- **Typical Intel/AMD PC**: `iroha-zip-0.5.3-windows-x64.zip`
+- **Windows on ARM PC**: `iroha-zip-0.5.3-windows-arm64.zip`
+- If you need only the CLI, choose the matching `iroha-zip-0.5.3-windows-<arch>.exe`.
 - Separate native Settings and file-association launcher executables are available for each architecture.
 - `SHA256SUMS.txt` covers both ZIPs and all six standalone executables. Each ZIP also has its own
   `.zip.sha256` sidecar.
@@ -86,18 +99,28 @@ both ZIPs is checked by PE machine value before a separate immutable Release is 
 - This is not a security-audited product. Windows 10/11 x64 desktop devices, experimental LPAC,
   screen-reader/mixed-DPI validation, and broader malformed-format/race testing remain open.
 
-### Changes from v0.5.1
+### Changes from v0.5.2
 
-- Correct `SECURITY.md` in both languages: the latest `main` and `0.5.x` are supported, while
-  `0.4.x` and earlier are identified as historical releases retained for source review.
-- Add an ordinary-CI regression that derives the tag and support line from `CARGO_PKG_VERSION` and
-  rejects stale versions in packaged release documents before a Release build.
-- Record the independent post-publication verification of immutable `v0.5.1`: 11 API digests and
-  sizes, eight checksum subjects, two sidecars, PE identities, empty Certificate Tables, bilingual
-  content, tag object/commit, and nine attestations.
-- Runtime code and trust boundaries are unchanged. No same-version asset is replaced; the complete
-  build, package, attestation, and publication path is repeated under a new patch version so the
-  corrected Security policy is inside both packages.
+- Bound every bash, `ldd`, and pacman child in the MSYS2 backend exporter to 180 seconds by default,
+  so a stalled mirror, package database, or process cannot consume the enclosing 45-minute CI limit.
+  Timeout removes temporary evidence, installs no partial bundle, and names the stopped stage.
+- Run shell programs from fresh UTF-8 files so Windows PowerShell 5.1 legacy native quoting cannot
+  alter them or their batched arguments. Ordinary Linux PowerShell and Windows PowerShell 5.1 CI
+  cover whitespace, glob characters, Japanese text, nonzero exit, real timeout, and zero residue.
+- Publish complete Japanese and English Pages with a language gate, skip link, dark mode, responsive
+  layout, WCAG 2 AA contrast, CSP, referrer policy, favicon, sitemap, crawler policy, and project-safe 404.
+- Accept dynamic downloads only from a stable, immutable Release with the exact 11 uploaded assets
+  and official download URLs. Incomplete, draft, prerelease, or mutable API responses retain static fallbacks.
+- Gate Pages deployment on a read-only validation job and grant Pages/OIDC write permissions only to
+  deployment. Rust document contracts and dependency-free Node behavior tests run on Linux, Windows,
+  and before deployment.
+- Enable hosted CodeQL extended analysis for Rust, Actions, and JavaScript/TypeScript. Review all 233
+  existing path flows as 188 test-only and 45 expected local boundaries while leaving the rule enabled
+  for new flows.
+- Measure the dry-run/tag-build PE boundary: observed differences were confined to COFF/debug
+  timestamps and CodeView PDB GUIDs. Bit-reproducible or build-path-independent output is not claimed.
+- Archive runtime code and trust boundaries are unchanged. No same-version asset is replaced; the
+  complete build, package, attestation, and publication path runs under the new patch version.
 
 ### Major features added in v0.5.1
 
@@ -118,6 +141,6 @@ both ZIPs is checked by PE machine value before a separate immutable Release is 
 - Backend replacement CI injects failure immediately after renaming the prior tree to its backup and
   requires byte-identical restoration, zero stage/backup residue, and a subsequent successful import.
 
-See [Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.5.2/docs/WINDOWS_E2E.md),
-[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.5.2/docs/ARM64.md), and
-[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.5.2/docs/BUILD_STATUS.md) for the measured boundary.
+See [Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.5.3/docs/WINDOWS_E2E.md),
+[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.5.3/docs/ARM64.md), and
+[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.5.3/docs/BUILD_STATUS.md) for the measured boundary.
