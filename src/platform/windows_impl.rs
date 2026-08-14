@@ -603,11 +603,40 @@ impl Sandbox {
     }
 
     pub fn create_process_scratch(&self) -> Result<PathBuf> {
-        let path = self.root.join("process-temp");
-        fs::create_dir(&path).map_err(|error| {
-            IrohaZipError::io_path("cannot create process scratch directory", &path, error)
-        })?;
+        // Windows reroutes TEMP and TMP for an AppContainer to this fixed
+        // profile-relative name, regardless of the supplied environment block.
+        let path = self.root.join("Temp");
+        match fs::create_dir(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(IrohaZipError::io_path(
+                    "cannot create process scratch directory",
+                    &path,
+                    error,
+                ));
+            }
+        }
         validate_directory_security(&path)?;
+        if fs::read_dir(&path)
+            .map_err(|error| {
+                IrohaZipError::io_path(
+                    "cannot inspect fresh process scratch directory",
+                    &path,
+                    error,
+                )
+            })?
+            .next()
+            .transpose()
+            .map_err(|error| {
+                IrohaZipError::io_path("cannot read fresh process scratch directory", &path, error)
+            })?
+            .is_some()
+        {
+            return Err(IrohaZipError::Policy(
+                "fresh process scratch directory is unexpectedly non-empty".to_owned(),
+            ));
+        }
         let mode = self.mode.as_ref().ok_or_else(|| {
             IrohaZipError::Sandbox(
                 "cannot create a process scratch directory after sandbox cleanup".to_owned(),
@@ -628,7 +657,7 @@ impl Sandbox {
 
     pub fn finish_process_scratch(&self, path: &Path) -> Result<()> {
         validate_directory_security(path)?;
-        if path != self.root.join("process-temp") {
+        if path != self.root.join("Temp") {
             return Err(IrohaZipError::Sandbox(format!(
                 "refusing to inspect an unexpected process scratch directory: {}",
                 path.display()
@@ -2052,7 +2081,7 @@ mod tests {
 
     #[test]
     fn backend_environment_keeps_explicit_utf8_locale_hints() {
-        let scratch = Path::new(r"C:\sandbox\process-temp");
+        let scratch = Path::new(r"C:\sandbox\Temp");
         let pairs = minimal_environment_pairs(
             Path::new(r"C:\backend\bsdtar.exe"),
             Path::new(r"C:\sandbox"),
