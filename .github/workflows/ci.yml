@@ -38,6 +38,9 @@ jobs:
         shell: pwsh
         run: ./scripts/test-release-assets.ps1
 
+      - name: Test bilingual Pages release contract
+        run: node tests/site_release_contract.mjs
+
       - name: Install pinned Rust toolchain
         shell: bash
         run: |

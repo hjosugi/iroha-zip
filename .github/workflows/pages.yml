@@ -37,8 +37,10 @@ jobs:
       - name: Validate bilingual documents and site topology
         run: cargo test --locked --test release_documents
 
-      - name: Validate site JavaScript syntax
-        run: node --check site/assets/site.js
+      - name: Validate site JavaScript and release behavior
+        run: |
+          node --check site/assets/site.js
+          node tests/site_release_contract.mjs
 
   deploy:
     name: Deploy bilingual website

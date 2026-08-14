@@ -146,8 +146,23 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     assert!(japanese_page.contains("rel=\"alternate\" hreflang=\"en\""));
     assert!(english_page.contains("rel=\"alternate\" hreflang=\"ja\""));
     assert!(site_script.contains(&format!("const fallbackVersion = \"{tag}\";")));
-    assert!(site_script.contains("/-windows-x64\\.zip$/i"));
-    assert!(site_script.contains("/-windows-arm64\\.zip$/i"));
+    assert!(site_script.contains("const stableTagPattern = /^v(\\d+\\.\\d+\\.\\d+)$/;"));
+    assert!(site_script.contains("release.immutable !== true"));
+    assert!(site_script.contains("assets.length !== expectedAssetNames.length"));
+    assert!(site_script.contains("asset?.state !== \"uploaded\""));
+    assert!(site_script.contains("releases/download/${tag}/${name}"));
+    assert_eq!(site_script.matches("expectedAssetNames").count(), 3);
+    for expected in [
+        "iroha-zip-${versionNumber}-windows-arm64.zip",
+        "iroha-zip-${versionNumber}-windows-x64.zip",
+        "iroha-zip-settings-${versionNumber}-windows-arm64.exe",
+        "iroha-zip-settings-${versionNumber}-windows-x64.exe",
+        "iroha-zip-shell-${versionNumber}-windows-arm64.exe",
+        "iroha-zip-shell-${versionNumber}-windows-x64.exe",
+        "SHA256SUMS.txt",
+    ] {
+        assert!(site_script.contains(expected));
+    }
     assert!(site_styles.contains("--on-accent: #ffffff;"));
     assert!(site_styles.contains("--on-accent: #0d131b;"));
     assert!(site_styles.contains("--footer: #17202a;"));

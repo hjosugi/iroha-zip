@@ -29,6 +29,7 @@
 
   const locale = document.documentElement.lang === "ja" ? "ja-JP" : "en-US";
   const fallbackVersion = "v0.5.2";
+  const stableTagPattern = /^v(\d+\.\d+\.\d+)$/;
 
   const setText = (selector, value) => {
     document.querySelectorAll(selector).forEach((node) => {
@@ -57,10 +58,47 @@
       return response.json();
     })
     .then((release) => {
-      const version = release.tag_name || fallbackVersion;
+      const tag = typeof release.tag_name === "string" ? release.tag_name : "";
+      const versionMatch = stableTagPattern.exec(tag);
+      if (
+        !versionMatch ||
+        release.draft !== false ||
+        release.prerelease !== false ||
+        release.immutable !== true
+      ) {
+        throw new Error("Latest release does not satisfy the stable immutable contract");
+      }
+
+      const versionNumber = versionMatch[1];
+      const expectedAssetNames = [
+        `iroha-zip-${versionNumber}-windows-arm64.exe`,
+        `iroha-zip-${versionNumber}-windows-arm64.zip`,
+        `iroha-zip-${versionNumber}-windows-arm64.zip.sha256`,
+        `iroha-zip-${versionNumber}-windows-x64.exe`,
+        `iroha-zip-${versionNumber}-windows-x64.zip`,
+        `iroha-zip-${versionNumber}-windows-x64.zip.sha256`,
+        `iroha-zip-settings-${versionNumber}-windows-arm64.exe`,
+        `iroha-zip-settings-${versionNumber}-windows-x64.exe`,
+        `iroha-zip-shell-${versionNumber}-windows-arm64.exe`,
+        `iroha-zip-shell-${versionNumber}-windows-x64.exe`,
+        "SHA256SUMS.txt",
+      ];
       const assets = Array.isArray(release.assets) ? release.assets : [];
-      const x64Zip = assets.find((asset) => /-windows-x64\.zip$/i.test(asset.name));
-      const arm64Zip = assets.find((asset) => /-windows-arm64\.zip$/i.test(asset.name));
+      const assetByName = new Map(assets.map((asset) => [asset.name, asset]));
+      if (
+        assets.length !== expectedAssetNames.length ||
+        expectedAssetNames.some((name) => {
+          const asset = assetByName.get(name);
+          const expectedUrl = `https://github.com/${repository}/releases/download/${tag}/${name}`;
+          return asset?.state !== "uploaded" || asset.browser_download_url !== expectedUrl;
+        })
+      ) {
+        throw new Error("Latest release does not have the exact uploaded asset inventory");
+      }
+
+      const x64Zip = assetByName.get(`iroha-zip-${versionNumber}-windows-x64.zip`);
+      const arm64Zip = assetByName.get(`iroha-zip-${versionNumber}-windows-arm64.zip`);
+      const releaseUrl = `https://github.com/${repository}/releases/tag/${tag}`;
       const date = release.published_at
         ? new Intl.DateTimeFormat(locale, {
             year: "numeric",
@@ -69,17 +107,13 @@
           }).format(new Date(release.published_at))
         : "";
 
-      setText("[data-release-version]", version);
+      setText("[data-release-version]", tag);
       setText("[data-release-date]", date);
-      setHref("[data-release-url]", release.html_url || releasePage);
-      if (x64Zip) {
-        setHref('[data-download-url="x64"]', x64Zip.browser_download_url);
-        setText('[data-download-label="x64"]', x64Zip.name);
-      }
-      if (arm64Zip) {
-        setHref('[data-download-url="arm64"]', arm64Zip.browser_download_url);
-        setText('[data-download-label="arm64"]', arm64Zip.name);
-      }
+      setHref("[data-release-url]", releaseUrl);
+      setHref('[data-download-url="x64"]', x64Zip.browser_download_url);
+      setText('[data-download-label="x64"]', x64Zip.name);
+      setHref('[data-download-url="arm64"]', arm64Zip.browser_download_url);
+      setText('[data-download-label="arm64"]', arm64Zip.name);
     })
     .catch(() => {
       // Static fallbacks deliberately remain usable during API limits or outages.
