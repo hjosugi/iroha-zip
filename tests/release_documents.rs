@@ -83,6 +83,7 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     let english_page = include_str!("../site/en/index.html");
     let not_found_page = include_str!("../site/404.html");
     let site_script = include_str!("../site/assets/site.js");
+    let site_styles = include_str!("../site/assets/styles.css");
     let favicon = include_str!("../site/assets/favicon.svg");
     let robots = include_str!("../site/robots.txt");
     let sitemap = include_str!("../site/sitemap.xml");
@@ -147,6 +148,12 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     assert!(site_script.contains(&format!("const fallbackVersion = \"{tag}\";")));
     assert!(site_script.contains("/-windows-x64\\.zip$/i"));
     assert!(site_script.contains("/-windows-arm64\\.zip$/i"));
+    assert!(site_styles.contains("--on-accent: #ffffff;"));
+    assert!(site_styles.contains("--on-accent: #0d131b;"));
+    assert!(site_styles.contains("--footer: #17202a;"));
+    assert!(site_styles.contains("--footer: #070b10;"));
+    assert_eq!(site_styles.matches("color: var(--on-accent);").count(), 3);
+    assert_eq!(site_styles.matches("background: var(--footer);").count(), 1);
     assert!(not_found_page.contains("name=\"robots\" content=\"noindex\""));
     for path in [
         "/iroha-zip/assets/favicon.svg",

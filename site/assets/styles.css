@@ -8,12 +8,14 @@
   --accent: #3858c9;
   --accent-strong: #263d96;
   --accent-soft: #e8edff;
+  --on-accent: #ffffff;
   --warm: #c6522b;
   --warm-soft: #fff0e8;
   --safe: #167455;
   --safe-soft: #e3f5ed;
   --code: #111827;
   --code-ink: #edf2f7;
+  --footer: #17202a;
   --shadow: 0 18px 50px rgb(23 32 42 / 0.1);
   --radius: 18px;
   --content: 1160px;
@@ -250,12 +252,12 @@ h1 {
 .button-primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .button-primary:hover {
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .release-card {
@@ -350,7 +352,7 @@ h1 {
   place-items: center;
   border-radius: 50%;
   background: var(--warm);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 900;
 }
 
@@ -601,7 +603,7 @@ code {
 .site-footer {
   margin-top: 3rem;
   border-top: 1px solid var(--line);
-  background: var(--ink);
+  background: var(--footer);
   color: #d7dee7;
 }
 
@@ -787,10 +789,12 @@ code {
     --accent: #8098ff;
     --accent-strong: #aebdff;
     --accent-soft: #202c53;
+    --on-accent: #0d131b;
     --warm: #f2875f;
     --warm-soft: #3b211c;
     --safe: #55c99d;
     --safe-soft: #14362c;
+    --footer: #070b10;
     --shadow: 0 18px 50px rgb(0 0 0 / 0.35);
   }
 

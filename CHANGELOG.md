@@ -8,6 +8,8 @@
   policy, and project-root-safe 404 links.
 - Gate Pages deployment on a read-only pinned-toolchain validation job; grant Pages and OIDC write
   permissions only to the dependent deployment job.
+- Correct dark-mode contrast for primary actions, the warning icon, and footer content, and lock the
+  foreground/background theme tokens into the Pages regression contract.
 - Document the measured Windows PE/PDB reproducibility boundary so dry-run digests are never reused
   as expected published-asset digests.
 
