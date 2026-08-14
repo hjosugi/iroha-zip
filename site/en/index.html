@@ -2,8 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="iroha-zip — a security-oriented Windows archive wrapper that isolates libarchive in AppContainer.">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="theme-color" content="#3858c9">
     <meta property="og:type" content="website">
     <meta property="og:title" content="iroha-zip — archives with fewer privileges">
@@ -12,6 +14,8 @@
     <link rel="canonical" href="https://hjosugi.github.io/iroha-zip/en/">
     <link rel="alternate" hreflang="ja" href="https://hjosugi.github.io/iroha-zip/ja/">
     <link rel="alternate" hreflang="en" href="https://hjosugi.github.io/iroha-zip/en/">
+    <link rel="alternate" hreflang="x-default" href="https://hjosugi.github.io/iroha-zip/">
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
     <title>iroha-zip — archives with fewer privileges</title>
     <link rel="stylesheet" href="../assets/styles.css">
     <script defer src="../assets/site.js"></script>

@@ -4,6 +4,8 @@
 
 - Add a crate-version-derived regression for the bilingual Pages fallback, download example,
   language topology, release hooks, skip links, and section structure.
+- Add a restrictive static-site CSP, referrer policy, SVG favicon, language-aware sitemap, crawler
+  policy, and project-root-safe 404 links.
 
 ## 0.5.2 - 2026-08-14
 

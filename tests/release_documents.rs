@@ -65,7 +65,11 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     let root = include_str!("../site/index.html");
     let japanese_page = include_str!("../site/ja/index.html");
     let english_page = include_str!("../site/en/index.html");
+    let not_found_page = include_str!("../site/404.html");
     let site_script = include_str!("../site/assets/site.js");
+    let favicon = include_str!("../site/assets/favicon.svg");
+    let robots = include_str!("../site/robots.txt");
+    let sitemap = include_str!("../site/sitemap.xml");
 
     for (language, page) in [("ja", japanese_page), ("en", english_page)] {
         assert!(page.contains(&format!("<html lang=\"{language}\">")));
@@ -79,6 +83,12 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
         assert_eq!(page.matches("data-release-url").count(), 2);
         assert!(page.contains("class=\"skip-link\" href=\"#main\""));
         assert!(page.contains("<main id=\"main\">"));
+        assert!(page.contains("http-equiv=\"Content-Security-Policy\""));
+        assert!(page.contains("connect-src 'self' https://api.github.com;"));
+        assert!(page.contains("style-src 'self'; script-src 'self';"));
+        assert!(page.contains("name=\"referrer\" content=\"strict-origin-when-cross-origin\""));
+        assert!(page.contains("hreflang=\"x-default\""));
+        assert!(page.contains("rel=\"icon\" href=\"../assets/favicon.svg\""));
 
         for section in ["how", "setup", "formats", "security", "usage", "status"] {
             assert_eq!(
@@ -93,9 +103,29 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     assert!(root.contains("data-page=\"language-gate\""));
     assert!(root.contains("href=\"ja/\" data-language-choice=\"ja\""));
     assert!(root.contains("href=\"en/\" data-language-choice=\"en\""));
+    assert!(root.contains("http-equiv=\"Content-Security-Policy\""));
+    assert!(root.contains("connect-src 'self' https://api.github.com;"));
+    assert!(root.contains("style-src 'self'; script-src 'self';"));
+    assert!(root.contains("hreflang=\"x-default\""));
+    assert!(root.contains("rel=\"icon\" href=\"assets/favicon.svg\""));
     assert!(japanese_page.contains("rel=\"alternate\" hreflang=\"en\""));
     assert!(english_page.contains("rel=\"alternate\" hreflang=\"ja\""));
     assert!(site_script.contains(&format!("const fallbackVersion = \"{tag}\";")));
     assert!(site_script.contains("/-windows-x64\\.zip$/i"));
     assert!(site_script.contains("/-windows-arm64\\.zip$/i"));
+    assert!(not_found_page.contains("name=\"robots\" content=\"noindex\""));
+    for path in [
+        "/iroha-zip/assets/favicon.svg",
+        "/iroha-zip/assets/styles.css",
+        "/iroha-zip/ja/",
+        "/iroha-zip/en/",
+    ] {
+        assert!(not_found_page.contains(path));
+    }
+    assert!(favicon.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\""));
+    assert!(robots.contains("Sitemap: https://hjosugi.github.io/iroha-zip/sitemap.xml"));
+    assert_eq!(sitemap.matches("<url>").count(), 3);
+    assert_eq!(sitemap.matches("hreflang=\"ja\"").count(), 3);
+    assert_eq!(sitemap.matches("hreflang=\"en\"").count(), 3);
+    assert_eq!(sitemap.matches("hreflang=\"x-default\"").count(), 3);
 }
