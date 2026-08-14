@@ -152,6 +152,9 @@ fn run() -> Result<()> {
         Command::InternalMemoryProbe { bytes } => {
             iroha_zip::isolation::memory_probe(bytes)?;
         }
+        Command::InternalCrashProbe => {
+            std::process::abort();
+        }
         Command::InternalProcessTempProbe => {
             let report = iroha_zip::isolation::process_temp_probe()?;
             println!(

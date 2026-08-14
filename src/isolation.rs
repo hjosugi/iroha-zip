@@ -313,6 +313,21 @@ struct MemoryIsolationReport {
 #[cfg(windows)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct CrashIsolationReport {
+    terminated_without_success: bool,
+    exit_code: i32,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LoaderFailureIsolationReport {
+    create_process_rejected: bool,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct StagingWriteIsolationReport {
     acl_applied: bool,
     readable_paths: Vec<String>,
@@ -339,6 +354,8 @@ pub struct IsolationReport {
     network: NetworkIsolationReport,
     timeout: TimeoutIsolationReport,
     memory: MemoryIsolationReport,
+    crash: CrashIsolationReport,
+    loader_failure: LoaderFailureIsolationReport,
     process_temp: ProcessTempProbeResult,
     staging_write_seal: StagingWriteIsolationReport,
     cleanup: Vec<CleanupReport>,
@@ -480,6 +497,80 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
             "isolation token evidence changed between probes".to_owned(),
         ));
     }
+
+    let crash_probe = PreparedProbe::new(config, config.sandbox.memory_limit_mib, "crash")?;
+    let crash_result = crash_probe.sandbox.run(ProcessSpec {
+        program: crash_probe.executable.clone(),
+        args: vec![OsString::from("internal-crash-probe")],
+        current_dir: crash_probe.root.clone(),
+        temp_dir: None,
+        stdin_file: None,
+        stdout_log: crash_probe.root.join("crash-probe.stdout.log"),
+        stderr_log: crash_probe.root.join("crash-probe.stderr.log"),
+        timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 10)),
+        monitor_root: None,
+        limits: config.limits.clone(),
+    });
+    let crash_operation = crash_result.and_then(|result| {
+        if result.exit_code == 0 {
+            return Err(IrohaZipError::Sandbox(
+                "crash probe unexpectedly exited successfully".to_owned(),
+            ));
+        }
+        Ok((
+            CrashIsolationReport {
+                terminated_without_success: true,
+                exit_code: result.exit_code,
+            },
+            result.isolation,
+        ))
+    });
+    let ((crash, crash_isolation), crash_cleanup) = finish_probe(crash_probe, crash_operation)?;
+    if crash_isolation != network_result.isolation {
+        return Err(IrohaZipError::Sandbox(
+            "isolation token evidence changed during the crash probe".to_owned(),
+        ));
+    }
+
+    let loader_probe =
+        PreparedProbe::new(config, config.sandbox.memory_limit_mib, "loader-failure")?;
+    let loader_operation = (|| {
+        std::fs::write(&loader_probe.executable, b"not a Windows executable\n").map_err(
+            |error| {
+                IrohaZipError::io_path(
+                    "cannot prepare invalid loader probe executable",
+                    &loader_probe.executable,
+                    error,
+                )
+            },
+        )?;
+        match loader_probe.sandbox.run(ProcessSpec {
+            program: loader_probe.executable.clone(),
+            args: Vec::new(),
+            current_dir: loader_probe.root.clone(),
+            temp_dir: None,
+            stdin_file: None,
+            stdout_log: loader_probe.root.join("loader-failure-probe.stdout.log"),
+            stderr_log: loader_probe.root.join("loader-failure-probe.stderr.log"),
+            timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 10)),
+            monitor_root: None,
+            limits: config.limits.clone(),
+        }) {
+            Err(IrohaZipError::Sandbox(message)) if message.contains("CreateProcessW") => {
+                Ok(LoaderFailureIsolationReport {
+                    create_process_rejected: true,
+                })
+            }
+            Err(error) => Err(IrohaZipError::Sandbox(format!(
+                "loader-failure probe failed for an unexpected reason: {error}"
+            ))),
+            Ok(result) => Err(IrohaZipError::Sandbox(format!(
+                "invalid loader probe unexpectedly started and exited with code {}",
+                result.exit_code
+            ))),
+        }
+    })();
+    let (loader_failure, loader_cleanup) = finish_probe(loader_probe, loader_operation)?;
 
     let temp_probe = PreparedProbe::new(config, config.sandbox.memory_limit_mib, "process-temp")?;
     let temp_operation = (|| {
@@ -641,7 +732,7 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
     }
 
     Ok(IsolationReport {
-        schema_version: 3,
+        schema_version: 4,
         requested_mode: if config.sandbox.isolation.is_lpac() {
             "lpac"
         } else {
@@ -663,6 +754,8 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
         },
         timeout,
         memory,
+        crash,
+        loader_failure,
         process_temp,
         staging_write_seal: StagingWriteIsolationReport {
             acl_applied,
@@ -673,6 +766,8 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
             network_cleanup,
             timeout_cleanup,
             memory_cleanup,
+            crash_cleanup,
+            loader_cleanup,
             temp_cleanup,
             staging_cleanup,
         ],

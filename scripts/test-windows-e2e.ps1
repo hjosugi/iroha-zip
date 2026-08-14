@@ -192,7 +192,7 @@ function Assert-IsolationEvidence(
     [string]$ExpectedProbeSha256
 ) {
     $expectedMode = if ($ExpectLpac) { "lpac" } else { "appcontainer" }
-    if ($Evidence.schemaVersion -ne 3 -or
+    if ($Evidence.schemaVersion -ne 4 -or
         $Evidence.requestedMode -cne $expectedMode -or
         -not $Evidence.token.isAppContainer -or
         [bool]$Evidence.token.isLessPrivilegedAppContainer -ne $ExpectLpac -or
@@ -200,6 +200,9 @@ function Assert-IsolationEvidence(
         -not $Evidence.network.denied -or
         -not $Evidence.timeout.rejected -or
         -not $Evidence.memory.rejected -or
+        -not $Evidence.crash.terminatedWithoutSuccess -or
+        $Evidence.crash.exitCode -eq 0 -or
+        -not $Evidence.loaderFailure.createProcessRejected -or
         [string]::IsNullOrWhiteSpace($Evidence.processTemp.tempEnvironment) -or
         [string]::IsNullOrWhiteSpace($Evidence.processTemp.tmpEnvironment) -or
         [string]::IsNullOrWhiteSpace($Evidence.processTemp.resolvedPath) -or
@@ -243,7 +246,7 @@ function Assert-IsolationEvidence(
     }
 
     $cleanupRecords = @($Evidence.cleanup)
-    if ($cleanupRecords.Count -ne 5 -or
+    if ($cleanupRecords.Count -ne 7 -or
         @($cleanupRecords | Where-Object {
             -not $_.profileDeleteSucceeded -or -not $_.temporaryRootRemoved
         }).Count -ne 0) {

@@ -95,7 +95,7 @@ pub enum Command {
         require_supported: bool,
     },
 
-    /// Measure the selected AppContainer/LPAC token, capabilities, network denial, and cleanup.
+    /// Measure token/capability isolation, denial/resource failures, and cleanup.
     IsolationReport,
 
     #[command(hide = true)]
@@ -106,6 +106,9 @@ pub enum Command {
 
     #[command(hide = true)]
     InternalMemoryProbe { bytes: u64 },
+
+    #[command(hide = true)]
+    InternalCrashProbe,
 
     #[command(hide = true)]
     InternalProcessTempProbe,
