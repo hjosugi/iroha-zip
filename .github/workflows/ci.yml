@@ -78,6 +78,13 @@ jobs:
             -Executable ./target/debug/iroha-zip-settings.exe `
             -Language en
 
+      - name: Exercise association registration round trip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          ./scripts/test-associations.ps1
+          -ShellExecutable ./target/debug/iroha-zip-shell.exe
+
   windows-arm64-build:
     name: Link Windows ARM64 executables
     runs-on: windows-2025
