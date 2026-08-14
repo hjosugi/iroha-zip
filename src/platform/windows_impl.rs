@@ -64,12 +64,12 @@ use windows::Win32::System::LibraryLoader::{
     UpdateResourceW,
 };
 use windows::Win32::System::Threading::{
-    CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateMutexW, CreateProcessW,
+    CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateMutexW, CreateProcessW,
     DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
     GetExitCodeProcess, InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
     PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
     PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
-    PROCESS_INFORMATION, ReleaseMutex, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    PROCESS_INFORMATION, ReleaseMutex, ResumeThread, STARTF_USESTDHANDLES, STARTUPINFOEXW,
     UpdateProcThreadAttribute, WaitForSingleObject,
 };
 use windows::Win32::System::WindowsProgramming::PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
@@ -90,6 +90,9 @@ const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
 const CONFIG_SAVE_MUTEX_NAME: &str = r"Local\iroha-zip.ConfigSave.v1";
 const CONFIG_SAVE_MUTEX_TIMEOUT_MS: u32 = 30_000;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
+#[cfg(test)]
+static FORCE_ISOLATION_VERIFICATION_FAILURE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 const BACKEND_MANIFEST_RESOURCE_ID: u16 = 1;
 const BACKEND_MANIFEST_LANGUAGE_EN_US: u16 = 0x0409;
 const UTF8_BACKEND_MANIFEST: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
@@ -1478,7 +1481,10 @@ fn run_in_appcontainer(
             None,
             None,
             true,
-            EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW,
+            EXTENDED_STARTUPINFO_PRESENT
+                | CREATE_UNICODE_ENVIRONMENT
+                | CREATE_NO_WINDOW
+                | CREATE_SUSPENDED,
             Some(environment.as_ptr().cast::<c_void>()),
             PCWSTR(current_directory.as_ptr()),
             &raw const startup.StartupInfo,
@@ -1493,7 +1499,6 @@ fn run_in_appcontainer(
 
     let process = OwnedHandle::new(process_info.hProcess);
     let thread_handle = OwnedHandle::new(process_info.hThread);
-    drop(thread_handle);
 
     let isolation_evidence = match verify_process_isolation(process.handle(), isolation) {
         Ok(evidence) => evidence,
@@ -1504,10 +1509,37 @@ fn run_in_appcontainer(
         }
     };
 
+    // The backend must not execute until the token and capability checks above
+    // have positively established the requested isolation. CREATE_SUSPENDED
+    // closes the interval between CreateProcessW and that fail-closed decision.
+    let previous_suspend_count = unsafe { ResumeThread(thread_handle.handle()) };
+    if previous_suspend_count == u32::MAX {
+        let error = WindowsError::from_thread();
+        let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0005) };
+        let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
+        return Err(windows_error("ResumeThread", error));
+    }
+    if previous_suspend_count != 1 {
+        let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0006) };
+        let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
+        return Err(IrohaZipError::Sandbox(format!(
+            "unexpected initial process suspend count: {previous_suspend_count}"
+        )));
+    }
+    drop(thread_handle);
+
     wait_for_process(&process, &job, &spec, isolation_evidence)
 }
 
 fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result<ProcessIsolation> {
+    #[cfg(test)]
+    if FORCE_ISOLATION_VERIFICATION_FAILURE.load(std::sync::atomic::Ordering::SeqCst) {
+        thread::sleep(Duration::from_secs(2));
+        return Err(IrohaZipError::Sandbox(
+            "forced isolation verification failure".to_owned(),
+        ));
+    }
+
     let mut token = HANDLE::default();
     unsafe {
         windows::Win32::System::Threading::OpenProcessToken(process, TOKEN_QUERY, &raw mut token)
@@ -2329,6 +2361,63 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    struct ForcedIsolationVerificationFailure;
+
+    impl ForcedIsolationVerificationFailure {
+        fn new() -> Self {
+            assert!(
+                !FORCE_ISOLATION_VERIFICATION_FAILURE
+                    .swap(true, std::sync::atomic::Ordering::SeqCst),
+                "forced isolation verification failure is already active"
+            );
+            Self
+        }
+    }
+
+    impl Drop for ForcedIsolationVerificationFailure {
+        fn drop(&mut self) {
+            FORCE_ISOLATION_VERIFICATION_FAILURE.store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn appcontainer_process_stays_suspended_until_isolation_is_verified() {
+        let sandbox = Sandbox::new(256, false, IsolationMode::AppContainer).unwrap();
+        let root = sandbox.root().to_path_buf();
+        let executable = root.join("suspended-verification-probe.exe");
+        fs::copy(std::env::current_exe().unwrap(), &executable).unwrap();
+        let stdout = root.join("suspended-verification-probe.stdout.log");
+        let stderr = root.join("suspended-verification-probe.stderr.log");
+
+        let forced_failure = ForcedIsolationVerificationFailure::new();
+        let result = sandbox.run(ProcessSpec {
+            program: executable,
+            args: vec![OsString::from("--list")],
+            current_dir: root.clone(),
+            temp_dir: None,
+            stdin_file: None,
+            stdout_log: stdout.clone(),
+            stderr_log: stderr,
+            timeout: Duration::from_secs(5),
+            monitor_root: None,
+            limits: crate::policy::Limits::default(),
+        });
+        drop(forced_failure);
+
+        let error = result.expect_err("forced verification must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("forced isolation verification failure")
+        );
+        assert_eq!(
+            fs::read(&stdout).unwrap(),
+            b"",
+            "a process rejected by isolation verification must never execute"
+        );
+        sandbox.cleanup().unwrap();
     }
 
     #[test]
