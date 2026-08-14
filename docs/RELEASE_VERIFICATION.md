@@ -34,10 +34,15 @@ Before creating a tag, maintainers can manually dispatch the Release workflow on
 5. SHA-256 inventories are generated from the final bytes.
 6. A pinned GitHub action creates artifact attestations for the published binaries, ZIP, and checksum inventory.
 7. The exact assets are also retained as one short-lived workflow artifact.
-8. `gh release create --verify-tag --latest` publishes a non-draft, non-prerelease release. Existing releases are never overwritten.
-9. The workflow reads the release back, requires the tag to be the latest stable release, and requires the exact six-asset count including `SHA256SUMS.txt`.
+8. The repository immutable-release policy must be confirmed by an administrator before publication. The workflow creates an explicit draft and refuses to overwrite any existing release.
+9. Before publication, the workflow reads the draft back and verifies all six assets by exact case-sensitive name, byte length, upload state, and SHA-256 digest.
+10. Only that verified draft is published and marked latest. The workflow then requires a stable, immutable release and repeats the complete asset verification.
 
-The workflow uses fixed action commit SHAs, a fixed Windows runner generation, the pinned Rust toolchain, and both locked Cargo workspaces. A failure before `gh release create` publishes no release. A failure after publication is visible in Actions and requires maintainer investigation; assets must not be silently replaced.
+The repository immutable-release policy was enabled on 2026-08-14 and applies only to releases published after it was enabled. The already-published unsigned `v0.4.0` release therefore remains mutable according to GitHub's API; its six public assets, tag commit, checksums, and attestations were independently read back and verified after publication. Once a verified draft is published under the policy, GitHub locks its assets and associated tag and creates a release attestation. A failed draft remains unpublished for investigation rather than being silently deleted or overwritten.
+
+GitHub's policy-status endpoint requires repository `Administration: read`, which the standard Actions `GITHUB_TOKEN` cannot request. Do not add a long-lived administrator token to work around that boundary. Immediately before creating a release tag, an administrator must confirm **Settings → General → Releases → Enable release immutability**, or independently call `GET /repos/hjosugi/iroha-zip/immutable-releases`. The workflow requires immutable readback after publication. If that check ever fails, treat the mutable publication as an incident; do not repair it by replacing assets under the same version.
+
+The workflow uses fixed action commit SHAs, a fixed Windows runner generation, the pinned Rust toolchain, and both locked Cargo workspaces. A failure before the publish transition exposes no stable release. A failure after publication is visible in Actions and requires a new version for corrections; immutable assets must never be replaced.
 
 ## Verify a download on Windows
 
@@ -87,4 +92,4 @@ This path is not active in the current GitHub release workflow because no reposi
 - Artifact attestations and checksums establish provenance, not safety. They do not replace Windows E2E evidence, dependency review, malware defenses, or independent security review.
 - If Authenticode is enabled in the future, treat the signing profile and its authorization environment as separate high-value trust boundaries.
 
-Primary references: [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations), [GitHub CLI attestation verification](https://cli.github.com/manual/gh_attestation_verify), and [Microsoft Authenticode](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/authenticode).
+Primary references: [GitHub immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases), [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations), [GitHub CLI attestation verification](https://cli.github.com/manual/gh_attestation_verify), and [Microsoft Authenticode](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/authenticode).

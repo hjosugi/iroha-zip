@@ -198,20 +198,45 @@ jobs:
           if (gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY 2>$null) {
             throw "Release $env:RELEASE_TAG already exists; assets are never overwritten."
           }
+          $assetFiles = @(
+            $env:ZIP,
+            $env:ZIP_CHECKSUM,
+            $env:MAIN_EXE,
+            $env:SETTINGS_EXE,
+            $env:SHELL_EXE,
+            $env:CHECKSUMS
+          )
           gh release create $env:RELEASE_TAG `
-            $env:ZIP `
-            $env:ZIP_CHECKSUM `
-            $env:MAIN_EXE `
-            $env:SETTINGS_EXE `
-            $env:SHELL_EXE `
-            $env:CHECKSUMS `
+            $assetFiles `
             --repo $env:GITHUB_REPOSITORY `
             --verify-tag `
-            --latest `
+            --draft `
             --title "iroha-zip $env:VERSION" `
             --notes-file docs/RELEASE_NOTES.md
           if ($LASTEXITCODE -ne 0) {
-            throw 'GitHub release publication failed.'
+            throw 'GitHub draft release creation failed.'
+          }
+
+          $draftJson = Join-Path $env:RUNNER_TEMP 'iroha-zip-release-draft.json'
+          gh release view $env:RELEASE_TAG `
+            --repo $env:GITHUB_REPOSITORY `
+            --json isDraft,isImmutable,isPrerelease,assets | `
+            Out-File -LiteralPath $draftJson -Encoding utf8
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub draft release readback failed.'
+          }
+          ./scripts/verify-release-inventory.ps1 `
+            -ReleaseJson $draftJson `
+            -AssetFiles $assetFiles `
+            -ExpectedState Draft
+
+          gh release edit $env:RELEASE_TAG `
+            --repo $env:GITHUB_REPOSITORY `
+            --verify-tag `
+            --draft=false `
+            --latest
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub release publication failed; the verified draft was not intentionally removed.'
           }
 
       - name: Verify the published release inventory
@@ -220,19 +245,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          ZIP: ${{ steps.assets.outputs.zip }}
+          ZIP_CHECKSUM: ${{ steps.assets.outputs.zip_checksum }}
+          MAIN_EXE: ${{ steps.assets.outputs.main_exe }}
+          SETTINGS_EXE: ${{ steps.assets.outputs.settings_exe }}
+          SHELL_EXE: ${{ steps.assets.outputs.shell_exe }}
+          CHECKSUMS: ${{ steps.assets.outputs.checksums }}
         run: |
+          $releaseJson = Join-Path $env:RUNNER_TEMP 'iroha-zip-release-published.json'
           $release = gh release view $env:RELEASE_TAG `
             --repo $env:GITHUB_REPOSITORY `
-            --json isDraft,isPrerelease,assets | ConvertFrom-Json
+            --json isDraft,isImmutable,isPrerelease,assets
+          $release | Out-File -LiteralPath $releaseJson -Encoding utf8
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Published release readback failed.'
+          }
+          ./scripts/verify-release-inventory.ps1 `
+            -ReleaseJson $releaseJson `
+            -AssetFiles @(
+              $env:ZIP,
+              $env:ZIP_CHECKSUM,
+              $env:MAIN_EXE,
+              $env:SETTINGS_EXE,
+              $env:SHELL_EXE,
+              $env:CHECKSUMS
+            ) `
+            -ExpectedState PublishedImmutable
           $latestTag = gh release view `
             --repo $env:GITHUB_REPOSITORY `
             --json tagName --jq .tagName
-          if ($release.isDraft -or $release.isPrerelease -or $latestTag -cne $env:RELEASE_TAG) {
+          if ($LASTEXITCODE -ne 0 -or $latestTag -cne $env:RELEASE_TAG) {
             throw 'The published release is not the latest stable release.'
-          }
-          $names = @($release.assets | ForEach-Object name)
-          if ($names.Count -ne 6 -or 'SHA256SUMS.txt' -notin $names) {
-            throw "Unexpected release inventory: $($names -join ', ')"
           }
 
       - name: Summarize non-publishing validation
