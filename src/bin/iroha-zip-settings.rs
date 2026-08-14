@@ -71,6 +71,14 @@ mod windows_app {
     const CONTENT_HEIGHT: i32 = 720;
     const PRIMARY_LANGUAGE_JAPANESE: u16 = 0x11;
 
+    fn native_msys2_environment() -> &'static str {
+        if cfg!(target_arch = "aarch64") {
+            "CLANGARM64"
+        } else {
+            "UCRT64"
+        }
+    }
+
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     enum Language {
         Japanese,
@@ -1014,7 +1022,10 @@ mod windows_app {
                         OsString::from("-DestinationDirectory"),
                         destination.as_os_str().to_owned(),
                     ];
-                    if !from_msys2 {
+                    if from_msys2 {
+                        arguments.push(OsString::from("-Environment"));
+                        arguments.push(OsString::from(native_msys2_environment()));
+                    } else {
                         arguments.push(OsString::from("-AllowUnsupportedSource"));
                     }
                     let output = run_script(script, &arguments)?;
@@ -1044,10 +1055,16 @@ mod windows_app {
                 ),
             );
             let source_description = if evidence.is_supported() {
-                tr(
-                    "MSYS2 UCRT64（署名方針を強制して検証済み）",
-                    "MSYS2 UCRT64 (verified with enforced signature policy)",
-                )
+                match native_msys2_environment() {
+                    "CLANGARM64" => tr(
+                        "MSYS2 CLANGARM64（署名方針を強制して検証済み）",
+                        "MSYS2 CLANGARM64 (verified with enforced signature policy)",
+                    ),
+                    _ => tr(
+                        "MSYS2 UCRT64（署名方針を強制して検証済み）",
+                        "MSYS2 UCRT64 (verified with enforced signature policy)",
+                    ),
+                }
             } else {
                 tr(
                     "未対応・未検証（明示承認済み）",
@@ -2289,6 +2306,14 @@ mod windows_app {
                 Some(Language::English)
             );
             assert_eq!(language_from_tag(OsStr::new("fr-FR")), None);
+        }
+
+        #[test]
+        fn msys2_environment_matches_the_native_target() {
+            #[cfg(target_arch = "aarch64")]
+            assert_eq!(native_msys2_environment(), "CLANGARM64");
+            #[cfg(target_arch = "x86_64")]
+            assert_eq!(native_msys2_environment(), "UCRT64");
         }
     }
 }

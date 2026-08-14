@@ -30,6 +30,14 @@ jobs:
         shell: pwsh
         run: ./scripts/test-release-inventory.ps1
 
+      - name: Test release PE architecture verifier
+        shell: pwsh
+        run: ./scripts/test-pe-architecture.ps1
+
+      - name: Test dual-architecture release asset assembly
+        shell: pwsh
+        run: ./scripts/test-release-assets.ps1
+
       - name: Install pinned Rust toolchain
         shell: bash
         run: |

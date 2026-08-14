@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Path $testRoot | Out-Null
 try {
     $assetFiles = @()
     $remoteAssets = @()
-    foreach ($index in 1..6) {
+    foreach ($index in 1..11) {
         $path = Join-Path $testRoot ("asset-$index.bin")
         [IO.File]::WriteAllBytes($path, [byte[]](0..$index))
         $item = Get-Item -LiteralPath $path

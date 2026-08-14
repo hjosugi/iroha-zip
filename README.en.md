@@ -6,11 +6,11 @@ iroha-zip is a Rust wrapper for extracting untrusted archives on Windows with mi
 
 It does not attempt to reimplement every archive format in Rust. It runs a current libarchive / `bsdtar.exe` backend as a separate process inside an ephemeral AppContainer, then inspects inputs and outputs in Rust. Neither extraction nor creation runs `bsdtar.exe` directly with the user's normal privileges.
 
-This is not a security-audited product. Version `v0.4.1` is a practical preview whose design and real-world behavior are still being validated.
+This is not a security-audited product. Version `v0.5.0` is a practical stable build whose design and real-world behavior are still being validated.
 
 ## Download
 
-Download the Windows x64 ZIP or individual executables from [GitHub Releases](https://github.com/hjosugi/iroha-zip/releases/latest). The current official binaries are unsigned. Verify their origin with `SHA256SUMS.txt` and the GitHub artifact attestation; see [About unsigned releases](docs/UNSIGNED_RELEASE.md).
+Download the Windows x64 or native ARM64 ZIP, or architecture-specific standalone executables, from [GitHub Releases](https://github.com/hjosugi/iroha-zip/releases/latest). The current official binaries are unsigned. Verify their origin with `SHA256SUMS.txt` and the GitHub artifact attestation; see [About unsigned releases](docs/UNSIGNED_RELEASE.md).
 
 The package does not bundle libarchive / `bsdtar.exe`. After the first launch, import a backend you trust in Settings.
 
@@ -130,7 +130,7 @@ See the [threat model](docs/THREAT_MODEL.md). The differences between AppContain
 
 ## Runtime requirements
 
-- Windows 10 version 1903 or later; normal use targets Windows 11 x64
+- Windows 10 version 1903 or later; x64 and native ARM64 packages are available, with automated ARM64 device evidence on Windows 11 ARM
 - A libarchive 3.8.9-series `bsdtar.exe` and its required DLLs
 - PowerShell 5.1 or later
 
@@ -142,18 +142,26 @@ The project avoids redistributing third-party executables without independently 
 
 Provide a libarchive build you trust and use **Import bundle** or **Import from MSYS2** in Settings. Import creates a SHA-256 manifest for the executable and every DLL, then verifies the complete installed tree. The included scripts expose the same flow for automation.
 
-Example using MSYS2 UCRT64:
+Use MSYS2 UCRT64 on Windows x64 and MSYS2 CLANGARM64 on Windows ARM64:
 
 ```powershell
 # Run in an MSYS2 UCRT64 shell
 pacman -S mingw-w64-ucrt-x86_64-libarchive
+
+# Run in a native ARM64 MSYS2 CLANGARM64 shell
+pacman -S mingw-w64-clang-aarch64-libarchive
 ```
 
-Then choose **Import from MSYS2** in Settings and select `C:\msys64`. The PowerShell equivalent is:
+Then choose **Import from MSYS2** in Settings and select `C:\msys64`. Settings automatically selects UCRT64 in the x64 build and CLANGARM64 in the ARM64 build. The PowerShell equivalents are:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\export-msys2-backend.ps1 -Msys2Root C:\msys64
+
+# Windows ARM64
+.\scripts\export-msys2-backend.ps1 `
+  -Msys2Root C:\msys64 `
+  -Environment CLANGARM64
 ```
 
 If you already have a minimal bsdtar bundle, choose **Import bundle**, or use:
@@ -166,7 +174,7 @@ If you already have a minimal bsdtar bundle, choose **Import bundle**, or use:
 
 An arbitrary local bundle is an unsupported source whose publisher signature cannot be established by the importer. Settings requires a dedicated confirmation, and the CLI requires `-AllowUnsupportedSource`. Every payload directly under `SourceDirectory` or its descendants is pinned, so do not include unrelated executables or DLLs.
 
-The [backend manifest specification](docs/BACKEND_MANIFEST.md) defines format, input limits, path rules, and verification coverage. The [backend evidence specification](docs/BACKEND_EVIDENCE.md) covers required MSYS2 signatures, unsupported-source warnings, machine-readable provenance, SPDX 2.3 SBOMs, license inventories, and fail-closed private packaging.
+The [backend manifest specification](docs/BACKEND_MANIFEST.md) defines format, input limits, path rules, and verification coverage. The [backend evidence specification](docs/BACKEND_EVIDENCE.md) covers signature-enforcing MSYS2 UCRT64/CLANGARM64 exports, unsupported-source warnings, machine-readable provenance, SPDX 2.3 SBOMs, license inventories, and fail-closed private packaging.
 
 ## Build
 
@@ -191,10 +199,10 @@ Successful output is written to:
 
 ```text
 dist\iroha-zip\
-dist\iroha-zip-0.4.1-windows-x64.zip
+dist\iroha-zip-0.5.0-windows-x64.zip
 ```
 
-Both the normal build and tag-driven release workflow produce unsigned binaries. Official releases attach a ZIP, three individual EXEs, and SHA-256 checksums, and publish a GitHub artifact attestation. See [About unsigned releases](docs/UNSIGNED_RELEASE.md) for SmartScreen and independent verification guidance. The strict verification path required for future Authenticode-signed releases remains documented in the [release verification specification](docs/RELEASE_VERIFICATION.md).
+The normal invocation creates the x64 package; pass `-Target aarch64-pc-windows-msvc` for a local ARM64 build. The tag-driven workflow builds both packages independently on native x64 and ARM64 runners. Official releases attach two ZIPs, six standalone executables, two ZIP sidecars, one combined SHA-256 inventory, and GitHub artifact attestations. See [About unsigned releases](docs/UNSIGNED_RELEASE.md) for SmartScreen and independent verification guidance. The strict verification path required for future Authenticode-signed releases remains documented in the [release verification specification](docs/RELEASE_VERIFICATION.md).
 
 If `Cargo.lock` is initially absent, the script creates it. Review and commit it; all subsequent builds use `--locked`.
 
@@ -305,7 +313,7 @@ This validates configuration, every backend hash, `bsdtar --version`, and AppCon
 - It cannot guarantee protection from unknown vulnerabilities in AppContainer, the Windows kernel, or libarchive.
 - Normal AppContainer is the default. Experimental LPAC must be selected explicitly and used only after `doctor` succeeds with the chosen backend. There is no silent compatibility downgrade.
 - It cannot fully eliminate races against an attacker who already controls the same user account.
-- `v0.4.1` is Windows x64 only. [ARM64 status](docs/ARM64.md) records the native Rust/AppContainer CI boundary and the backend/archive/release work that remains.
+- `v0.5.0` distributes Windows x64 and native ARM64 as separate assets. [ARM64 status](docs/ARM64.md) records the measured boundary and untested device scope.
 - The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. The schema-v4 Server 2022/2025 E2E and generated malicious corpus passed in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143). This is not a substitute for Windows 10/11 device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
 
 Remaining work and acceptance criteria are tracked in [`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md). Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing a change.

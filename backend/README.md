@@ -7,7 +7,13 @@
 通常は`iroha-zip 設定`の「bundleを取り込む」または「MSYS2から取り込む」を使用してください。次のスクリプトは自動化用です。
 
 ```powershell
+# Windows x64
 .\scripts\export-msys2-backend.ps1 -Msys2Root C:\msys64
+
+# Windows ARM64
+.\scripts\export-msys2-backend.ps1 `
+  -Msys2Root C:\msys64 `
+  -Environment CLANGARM64
 ```
 
 または、用意済みの最小bundleを取り込みます。
@@ -29,7 +35,13 @@
 Normally use **Import bundle** or **Import from MSYS2** in iroha-zip Settings. For automation, use:
 
 ```powershell
+# Windows x64
 .\scripts\export-msys2-backend.ps1 -Msys2Root C:\msys64
+
+# Windows ARM64
+.\scripts\export-msys2-backend.ps1 `
+  -Msys2Root C:\msys64 `
+  -Environment CLANGARM64
 ```
 
 To import a prepared minimal bundle instead:

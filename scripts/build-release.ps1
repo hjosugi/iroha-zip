@@ -9,6 +9,7 @@ use Package with RequireAuthenticode and the exact expected publisher certificat
 #>
 [CmdletBinding()]
 param(
+    [ValidateSet("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc")]
     [string]$Target = "x86_64-pc-windows-msvc",
     [switch]$IncludeBackend,
     [switch]$AllowUnsupportedBackendSource,
@@ -28,6 +29,11 @@ $ExpectedBinaryNames = @(
     "iroha-zip-shell.exe"
 )
 $FailedPackageCleanupPaths = @()
+$Architecture = switch ($Target) {
+    "x86_64-pc-windows-msvc" { "x64" }
+    "aarch64-pc-windows-msvc" { "arm64" }
+}
+$PeVerifier = Join-Path $PSScriptRoot "verify-pe-architecture.ps1"
 
 function Assert-BackendEvidence(
     [string]$Validator,
@@ -121,8 +127,8 @@ try {
     $releaseSource = Join-Path $ProjectRoot "target\$Target\release"
     $distRoot = Join-Path $ProjectRoot "dist"
     $appRoot = Join-Path $distRoot "iroha-zip"
-    $zip = Join-Path $distRoot "iroha-zip-$version-windows-x64.zip"
-    $signatureEvidenceAsset = Join-Path $distRoot "iroha-zip-$version-windows-x64.signatures.json"
+    $zip = Join-Path $distRoot "iroha-zip-$version-windows-$Architecture.zip"
+    $signatureEvidenceAsset = Join-Path $distRoot "iroha-zip-$version-windows-$Architecture.signatures.json"
     $FailedPackageCleanupPaths = @($appRoot, $zip, "$zip.sha256", $signatureEvidenceAsset)
     if (Test-Path -LiteralPath $appRoot) {
         Remove-Item -LiteralPath $appRoot -Recurse -Force
@@ -134,12 +140,17 @@ try {
     }
     New-Item -ItemType Directory -Path $appRoot | Out-Null
 
-    foreach ($binary in @("iroha-zip.exe", "iroha-zip-shell.exe", "iroha-zip-settings.exe")) {
-        $source = Join-Path $releaseSource $binary
+    $builtBinaries = @($ExpectedBinaryNames | ForEach-Object {
+        Join-Path $releaseSource $_
+    })
+    foreach ($source in $builtBinaries) {
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "Built binary is missing: $source"
         }
-        Copy-Item -LiteralPath $source -Destination (Join-Path $appRoot $binary)
+    }
+    & $PeVerifier -Files $builtBinaries -Architecture $Architecture
+    foreach ($source in $builtBinaries) {
+        Copy-Item -LiteralPath $source -Destination (Join-Path $appRoot ([IO.Path]::GetFileName($source)))
     }
 
     if ($RequireAuthenticode) {
@@ -175,6 +186,7 @@ try {
         "test-settings-ui.ps1",
         "test-windows-e2e.ps1",
         "unregister-associations.ps1",
+        "verify-pe-architecture.ps1",
         "verify-release-signatures.ps1"
     )) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts\$script") `
@@ -240,21 +252,28 @@ try {
     }
 
     Compress-Archive -LiteralPath $appRoot -DestinationPath $zip -CompressionLevel Optimal
-    if ($IncludeBackend -or $RequireAuthenticode) {
-        $expandedPackage = Join-Path $distRoot (".iroha-zip-package-check-" + [Guid]::NewGuid().ToString("N"))
-        try {
-            Expand-Archive -LiteralPath $zip -DestinationPath $expandedPackage
-            if ($IncludeBackend) {
-                Assert-BackendEvidence `
-                    $validator `
-                    (Join-Path $expandedPackage "iroha-zip\backend\libarchive") `
-                    $AllowUnsupportedBackendSource
+    $expandedPackage = Join-Path $distRoot (".iroha-zip-package-check-" + [Guid]::NewGuid().ToString("N"))
+    try {
+        Expand-Archive -LiteralPath $zip -DestinationPath $expandedPackage
+        $expandedRoot = Join-Path $expandedPackage "iroha-zip"
+        $expandedBinaries = @($ExpectedBinaryNames | ForEach-Object {
+            Join-Path $expandedRoot $_
+        })
+        & $PeVerifier -Files $expandedBinaries -Architecture $Architecture
+        if ($IncludeBackend) {
+            Assert-BackendEvidence `
+                $validator `
+                (Join-Path $expandedRoot "backend\libarchive") `
+                $AllowUnsupportedBackendSource
+        }
+        else {
+            $backendFiles = @(Get-ChildItem -LiteralPath (Join-Path $expandedRoot "backend") -Force)
+            if ($backendFiles.Count -ne 1 -or $backendFiles[0].Name -cne "README.md" -or
+                $backendFiles[0].PSIsContainer -or $backendFiles[0].LinkType) {
+                throw "Backend-free package contains an unexpected backend payload."
             }
-            if ($RequireAuthenticode) {
-                $expandedRoot = Join-Path $expandedPackage "iroha-zip"
-                $expandedBinaries = @($ExpectedBinaryNames | ForEach-Object {
-                    Join-Path $expandedRoot $_
-                })
+        }
+        if ($RequireAuthenticode) {
                 $expandedEvidence = Join-Path $expandedRoot "release-signatures.json"
                 & $signatureVerifier `
                     -Files $expandedBinaries `
@@ -267,12 +286,11 @@ try {
                 if ($embeddedHash -cne $assetHash) {
                     throw "Embedded and detached signature evidence differ."
                 }
-            }
         }
-        finally {
-            if (Test-Path -LiteralPath $expandedPackage) {
-                Remove-Item -LiteralPath $expandedPackage -Recurse -Force
-            }
+    }
+    finally {
+        if (Test-Path -LiteralPath $expandedPackage) {
+            Remove-Item -LiteralPath $expandedPackage -Recurse -Force
         }
     }
     $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()

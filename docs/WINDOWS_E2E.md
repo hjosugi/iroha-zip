@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 
-This document defines the automated SAFE-001 evidence contract. The schema-v4 contract passed on both fixed-label GitHub runners in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143) from commit `e81b42aaeb1a4826dfe38043e33564271889c1f8`. The reviewed JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven explicitly removed AppContainer profiles/roots, all archive assertions below, the generated malicious corpus, and the English settings setup/diagnosis path. These results are evidence for the named disposable Server images, not Windows 10/11 desktop certification or a security audit.
+This document defines the automated SAFE-001 evidence contract. The schema-v4 contract passed on both fixed-label GitHub runners in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143) from commit `e81b42aaeb1a4826dfe38043e33564271889c1f8`. The controlled CAB extension then passed on both images in [Actions run 31770399421](https://github.com/hjosugi/iroha-zip/actions/runs/31770399421) from commit `c03372d09414c6b1456ecfedf03087351539bc77`. The reviewed JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven explicitly removed AppContainer profiles/roots, all archive assertions below, the generated malicious corpus, and the English settings setup/diagnosis path. These results are evidence for the named disposable Server images, not Windows 10/11 desktop certification or a security audit.
 
 ## Automated matrix
 
@@ -25,7 +25,7 @@ Each job builds the release executables, exports a current MSYS2 UCRT64 libarchi
 
 It then runs the generated malicious archive corpus and `test-settings-ui.ps1` with the same verified backend. The three JSON reports are uploaded as `windows-e2e-windows-2022` or `windows-e2e-windows-2025` artifacts for 14 days. Generated hostile ZIP/TAR files are deleted and are never uploaded; see the [corpus contract](MALICIOUS_CORPUS.md).
 
-The harness invokes verified `bsdtar.exe` directly only to generate BZ2/XZ/Zstandard/compress fixtures from deterministic, harness-owned data on the disposable runner. That generator uses a separate ASCII-only path because the unmodified source binary has no iroha-zip UTF-8 process manifest; trusted PowerShell then copies the result to a Japanese-named product input path. All reads of those archives and every product create operation still pass through iroha-zip's AppContainer boundary. Direct backend execution is not a supported path for untrusted or user-owned input.
+The harness invokes verified `bsdtar.exe` directly only to generate BZ2/XZ/Zstandard/compress fixtures from deterministic, harness-owned data on the disposable runner. That generator uses a separate ASCII-only path because the unmodified source binary has no iroha-zip UTF-8 process manifest; trusted PowerShell then copies the result to a Japanese-named product input path. It also generates one single-file LZX CAB with the OS `System32\makecab.exe`, but only after requiring a valid Microsoft Authenticode signature; the report records the generator file hash, signer subject, compression setting, and output hash. All reads of those archives and every product create operation still pass through iroha-zip's AppContainer boundary. Direct generator execution is not a supported path for untrusted or user-owned input.
 
 ## Assertions
 
@@ -48,7 +48,7 @@ The archive harness fails the job unless all of these checks pass:
 | Doctor | A real `bsdtar --version` run reports measured AppContainer and zero-capability evidence. |
 | Create/read | ZIP, 7z, TAR, and TAR.GZ are converted from the trusted bounded PAX stream, internally re-extracted in a second AppContainer before publication, then independently previewed, extracted, and compared by relative path, type, length, and SHA-256 by the harness. The backend bundle in every sandbox is recursively read/execute-only to its Package SID. |
 | Pass separation | The sandbox archive copy remains handle-pinned and recursively Package-SID read-only across listing/extraction. The extraction directory is absent during listing and is created new only after the child exits, policy accepts the list, and the archive fingerprint still matches. |
-| Additional read filters | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures; iroha-zip previews and extracts them to the same tree hash. |
+| Additional reads | The verified backend creates controlled TAR.BZ2, TAR.XZ, TAR.ZST, and TAR.Z fixtures. Validly Microsoft-signed `makecab.exe` creates a controlled LZX CAB. iroha-zip previews and extracts all five to their exact source tree hashes. |
 | Paths | The source includes Japanese names, an empty directory, deterministic binary data, and a relative path longer than 260 characters. |
 | Directory handles | Windows unit tests enumerate Unicode names through a bounded directory handle, reject an undersized entry budget, and require the retained handle to block directory rename. The archive matrix then exercises the same enumeration path over nested and long-path trees. |
 | Failure | A deliberately invalid ZIP exits nonzero, publishes no destination, and takes the cleanup-required backend-failure path. |
@@ -76,9 +76,9 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 The automated Server matrix does not close SAFE-001. Still required:
 
 1. run the same contract on disposable Windows 10 and Windows 11 x64 machines;
-2. add legally redistributable read fixtures for RAR/RAR5, LHA/LZH, CAB, ZIPX, and raw compressed streams through SAFE-002;
+2. add legally redistributable read fixtures for RAR/RAR5, LHA/LZH, ZIPX, and raw compressed streams through SAFE-002;
 3. record LPAC format and broader filesystem/registry/COM/LAN/Internet denial results;
-4. exercise real Windows reparse-race paths and broader backend-specific crash/cancellation cases;
+4. add concurrent reparse-race stress beyond the deterministic real-junction replacement regression, plus broader backend-specific crash/cancellation cases;
 5. preserve reviewed evidence outside the 14-day CI artifact window;
 6. complete visual DPI, keyboard-only, and screen-reader validation on desktop Windows.
 

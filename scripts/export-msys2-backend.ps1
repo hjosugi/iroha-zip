@@ -23,6 +23,7 @@ $environmentContract = switch ($Environment) {
             directory = "ucrt64"
             packagePrefix = "mingw-w64-ucrt-x86_64-"
             sourceKind = "msys2-ucrt64-pacman"
+            assetArchitecture = "x64"
         }
     }
     "CLANGARM64" {
@@ -31,6 +32,7 @@ $environmentContract = switch ($Environment) {
             directory = "clangarm64"
             packagePrefix = "mingw-w64-clang-aarch64-"
             sourceKind = "msys2-clangarm64-pacman"
+            assetArchitecture = "arm64"
         }
     }
 }
@@ -401,6 +403,18 @@ Include = /etc/pacman.d/mirrorlist.mingw
             packageId = $packageIdByName[$packageName]
         }
     }
+
+    $verifiedPayloads = @(
+        Get-ChildItem -LiteralPath $temporaryBundle -File -Force |
+            Sort-Object Name |
+            ForEach-Object { $_.FullName }
+    )
+    if ($verifiedPayloads.Count -ne $seen.Count) {
+        throw "Verified backend payload count changed before PE architecture validation."
+    }
+    & (Join-Path $PSScriptRoot "verify-pe-architecture.ps1") `
+        -Files $verifiedPayloads `
+        -Architecture ([string]$environmentContract.assetArchitecture)
 
     $metadata = [ordered]@{
         source = [ordered]@{

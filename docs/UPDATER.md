@@ -6,7 +6,7 @@ Updated: 2026-08-14
 
 ### 現在の状態
 
-iroha-zipはupdaterを出荷しておらず、backgroundでnetworkへ接続しません。公開済み`v0.4.1`は
+iroha-zipはupdaterを出荷しておらず、backgroundでnetworkへ接続しません。`v0.5.0`を含む公式版は
 未署名なので、digestやGitHub artifact attestationだけを根拠に自己更新を有効化しません。
 Authenticode publisher identityとcustodyが独立に確立され、署名付きimmutable Releaseが成功するまで
 OPS-001は実装開始不可です。
@@ -42,14 +42,15 @@ identity、長さ、SHA-256、Authenticodeを検証します。
 3. 未署名、期限切れ、publisher違い、EKU違い、timestampなし／不正。
 4. download中断、disk full、AV quarantine、rename拒否、同時更新、起動失敗、rollback失敗。
 5. 更新前後でconfigとbackend treeのidentity/hashが不変であること。
-6. Windows x64と将来のARM64 assetを相互に受理しないこと。
+6. Windows x64とARM64 assetを相互に受理しないこと。
 7. 全失敗で未検証binaryを実行せず、回復可能な旧版または明示されたbackupを残すこと。
 
 ## English
 
 ### Current state
 
-iroha-zip ships no updater and makes no background network connection. Published `v0.4.1` is
+iroha-zip ships no updater and makes no background network connection. Official builds, including
+`v0.5.0`, are
 unsigned, so a digest or GitHub artifact attestation alone cannot authorize self-update. OPS-001
 must remain disabled until an Authenticode publisher identity and custody process are independently
 established and a signed immutable release succeeds.
@@ -90,7 +91,7 @@ launch. An immutable asset is never repaired or replaced under the same version.
 4. Interrupted download, disk full, AV quarantine, denied rename, concurrent update, launch failure,
    and rollback failure.
 5. Identical configuration and backend-tree identities/hashes before and after every path.
-6. Mutual rejection of Windows x64 and future ARM64 assets.
+6. Mutual rejection of Windows x64 and ARM64 assets.
 7. No unverified binary execution on any failure, with either a recoverable old version or an exact
    preserved-backup path.
 

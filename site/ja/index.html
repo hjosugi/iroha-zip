@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
   <head>
     <meta charset="utf-8">
@@ -45,8 +45,11 @@
               iroha-zipは、libarchiveを一時AppContainerに隔離し、展開前後と圧縮元をRust側で検査するWindows用アーカイブラッパーです。
             </p>
             <div class="hero-actions">
-              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
-                Windows x64をダウンロード
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="x64">
+                Windows x64版
+              </a>
+              <a class="button" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="arm64">
+                Windows ARM64版
               </a>
               <a class="button" href="https://github.com/hjosugi/iroha-zip">GitHubでソースを見る</a>
             </div>
@@ -55,15 +58,18 @@
           <aside class="release-card" aria-label="最新リリース">
             <div class="release-card-head">Latest stable release</div>
             <div class="release-card-body">
-              <p class="release-version" data-release-version>v0.4.1</p>
+              <p class="release-version" data-release-version>v0.5.0</p>
               <p class="release-meta">
-                Windows x64 · <span data-release-date>2026年8月</span> · 未署名
+                Windows x64 / ARM64 · <span data-release-date>2026年8月</span> · 未署名
               </p>
-              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
-                <span data-download-label>配布ZIPを取得</span>
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="x64">
+                <span data-download-label="x64">x64 ZIPを取得</span>
+              </a>
+              <a class="button" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="arm64">
+                <span data-download-label="arm64">ARM64 ZIPを取得</span>
               </a>
               <ul class="release-list">
-                <li>ZIPと3つの個別EXE</li>
+                <li>x64／ARM64の2 ZIPと6個別EXE</li>
                 <li>SHA-256一覧</li>
                 <li>GitHub artifact attestation</li>
                 <li>日本語・英語ガイド／設定画面</li>
@@ -73,13 +79,13 @@
         </div>
       </section>
 
-      <div class="section" style="padding-top: 0">
+      <div class="section section-notice">
         <div class="notice" role="note">
           <span class="notice-icon" aria-hidden="true">!</span>
           <div>
             <strong>現在の公式バイナリはAuthenticode未署名です。</strong>
             <p>SmartScreenの警告を無効化せず、SHA-256とGitHub artifact attestationを確認してください。libarchive / bsdtarは同梱していません。</p>
-            <p><code>v0.4.0</code>を利用中の場合は、sandbox子processの検証前実行を防ぐ<code>v0.4.1</code>へ置き換えてください。</p>
+            <p><code>v0.4.0</code>を利用中の場合は、sandbox子processの検証前実行を防ぐ<code>v0.5.0</code>へ置き換えてください。</p>
           </div>
         </div>
       </div>
@@ -92,15 +98,15 @@
           </p>
         </div>
 
-        <div class="flow" aria-label="展開処理の流れ">
-          <div class="flow-step"><strong>1. 固定</strong><span>bsdtar一式をSHA-256マニフェストで完全照合</span></div>
-          <div class="flow-step"><strong>2. 隔離</strong><span>capabilityなし・ネットワークなしの一時AppContainer</span></div>
-          <div class="flow-step"><strong>3. 監視</strong><span>時間、メモリ、プロセス数、ファイル数、展開容量を制限</span></div>
-          <div class="flow-step"><strong>4. 再検査</strong><span>パス、リンク、ADS、予約名、identity、内容を監査</span></div>
-          <div class="flow-step"><strong>5. 公開</strong><span>検査済みの通常ファイルだけを新規フォルダへatomic publish</span></div>
-        </div>
+        <ol class="flow" aria-label="展開処理の流れ">
+          <li class="flow-step"><strong>1. 固定</strong><span>bsdtar一式をSHA-256マニフェストで完全照合</span></li>
+          <li class="flow-step"><strong>2. 隔離</strong><span>capabilityなし・ネットワークなしの一時AppContainer</span></li>
+          <li class="flow-step"><strong>3. 監視</strong><span>時間、メモリ、プロセス数、ファイル数、展開容量を制限</span></li>
+          <li class="flow-step"><strong>4. 再検査</strong><span>パス、リンク、ADS、予約名、identity、内容を監査</span></li>
+          <li class="flow-step"><strong>5. 公開</strong><span>検査済みの通常ファイルだけを新規フォルダへatomic publish</span></li>
+        </ol>
 
-        <div class="card-grid" style="margin-top: 1rem">
+        <div class="card-grid card-grid-spaced">
           <article class="card">
             <span class="card-number">A</span>
             <h3>fail closed</h3>
@@ -129,7 +135,7 @@
           <article class="card">
             <span class="card-number">01</span>
             <h3>ダウンロード</h3>
-            <p><a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>最新Release</a>からWindows x64 ZIPを取得し、任意の新規フォルダへ展開します。</p>
+            <p><a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>最新Release</a>からPCに合うWindows x64／ARM64 ZIPを取得し、任意の新規フォルダへ展開します。</p>
           </article>
           <article class="card">
             <span class="card-number">02</span>
@@ -143,11 +149,11 @@
           </article>
         </div>
 
-        <div class="two-column" style="margin-top: 1.2rem">
+        <div class="two-column two-column-spaced">
           <div class="panel">
             <h3>ハッシュを確認</h3>
             <pre><code>Get-FileHash `
-  .\iroha-zip-0.4.1-windows-x64.zip `
+  .\iroha-zip-0.5.0-windows-x64.zip `
   -Algorithm SHA256</code></pre>
           </div>
           <div class="panel">
@@ -169,7 +175,7 @@
             <tr><th scope="row">展開</th><td>ZIP / ZIPX、7z、RAR / RAR5、LHA / LZH、TAR、GZ、BZ2、XZ、Zstandard、.Z、CABほか</td></tr>
             <tr><th scope="row">作成</th><td>ZIP、7z、TAR、TAR.GZ</td></tr>
             <tr><th scope="row">文字コード</th><td>auto、UTF-8、CP932、CP437</td></tr>
-            <tr><th scope="row">対象OS</th><td>Windows 10 version 1903以降。通常利用はWindows 11 x64を想定</td></tr>
+            <tr><th scope="row">対象OS</th><td>Windows 10 version 1903以降。x64／native ARM64を配布し、ARM64自動証拠はWindows 11 ARM</td></tr>
           </tbody>
         </table>
 
@@ -246,7 +252,7 @@ iroha-zip.exe create tar-gz `
             <ul class="check-list">
               <li>Rust unit / integration testsとClippy</li>
               <li>Server 2022/2025 schema-v4 E2E</li>
-              <li>native ARM64 buildとcore isolation</li>
+              <li>native ARM64 backend／書庫／悪性corpus／日英UI</li>
               <li>5つのbounded fuzz target</li>
               <li>backend manifest / SBOM / license検証</li>
               <li>生成型の悪性書庫回帰テスト</li>
@@ -260,7 +266,7 @@ iroha-zip.exe create tar-gz `
               <li>実験的LPACの互換性とdenial測定</li>
               <li>長時間fuzzingと独立セキュリティ監査</li>
               <li>パスワード付き書庫の秘密入力</li>
-              <li>Windows ARM64 package</li>
+              <li>複数のWindows ARM市販機での実機確認</li>
               <li>将来のAuthenticode署名</li>
             </ul>
           </div>
@@ -276,7 +282,7 @@ iroha-zip.exe create tar-gz `
     <footer class="site-footer">
       <div class="footer-inner">
         <div>
-          <a class="brand" href="./" style="color: white">
+          <a class="brand" href="./">
             <span class="brand-mark" aria-hidden="true"></span><span>iroha-zip</span>
           </a>
           <p>MIT OR Apache-2.0。セキュリティ監査済み製品ではありません。未信頼ファイルにはOSと組織の通常の防御も併用してください。</p>

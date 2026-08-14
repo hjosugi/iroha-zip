@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -45,8 +45,11 @@
               iroha-zip is a Windows archive wrapper that isolates libarchive in an ephemeral AppContainer and inspects both inputs and outputs in Rust.
             </p>
             <div class="hero-actions">
-              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
-                Download for Windows x64
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="x64">
+                Windows x64
+              </a>
+              <a class="button" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="arm64">
+                Windows ARM64
               </a>
               <a class="button" href="https://github.com/hjosugi/iroha-zip">View source on GitHub</a>
             </div>
@@ -55,15 +58,18 @@
           <aside class="release-card" aria-label="Latest release">
             <div class="release-card-head">Latest stable release</div>
             <div class="release-card-body">
-              <p class="release-version" data-release-version>v0.4.1</p>
+              <p class="release-version" data-release-version>v0.5.0</p>
               <p class="release-meta">
-                Windows x64 · <span data-release-date>Aug 2026</span> · unsigned
+                Windows x64 / ARM64 · <span data-release-date>Aug 2026</span> · unsigned
               </p>
-              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url>
-                <span data-download-label>Get the complete ZIP</span>
+              <a class="button button-primary" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="x64">
+                <span data-download-label="x64">Get the x64 ZIP</span>
+              </a>
+              <a class="button" href="https://github.com/hjosugi/iroha-zip/releases/latest" data-download-url="arm64">
+                <span data-download-label="arm64">Get the ARM64 ZIP</span>
               </a>
               <ul class="release-list">
-                <li>ZIP and three standalone EXEs</li>
+                <li>Two x64/ARM64 ZIPs and six standalone EXEs</li>
                 <li>SHA-256 inventory</li>
                 <li>GitHub artifact attestation</li>
                 <li>Japanese/English guides and Settings</li>
@@ -73,13 +79,13 @@
         </div>
       </section>
 
-      <div class="section" style="padding-top: 0">
+      <div class="section section-notice">
         <div class="notice" role="note">
           <span class="notice-icon" aria-hidden="true">!</span>
           <div>
             <strong>The current official binaries are not Authenticode-signed.</strong>
             <p>Do not disable SmartScreen warnings. Verify SHA-256 and the GitHub artifact attestation. libarchive / bsdtar is not bundled.</p>
-            <p>If you use <code>v0.4.0</code>, replace it with <code>v0.4.1</code>, which prevents sandboxed children from executing before isolation verification.</p>
+            <p>If you use <code>v0.4.0</code>, replace it with <code>v0.5.0</code>, which prevents sandboxed children from executing before isolation verification.</p>
           </div>
         </div>
       </div>
@@ -92,15 +98,15 @@
           </p>
         </div>
 
-        <div class="flow" aria-label="Extraction flow">
-          <div class="flow-step"><strong>1. Pin</strong><span>Match the complete bsdtar bundle against its SHA-256 manifest</span></div>
-          <div class="flow-step"><strong>2. Isolate</strong><span>Ephemeral AppContainer with no capabilities or network access</span></div>
-          <div class="flow-step"><strong>3. Bound</strong><span>Limit time, memory, process count, entries, and expanded bytes</span></div>
-          <div class="flow-step"><strong>4. Recheck</strong><span>Audit paths, links, ADS, reserved names, identity, and content</span></div>
-          <div class="flow-step"><strong>5. Publish</strong><span>Atomically publish only inspected regular files to a new directory</span></div>
-        </div>
+        <ol class="flow" aria-label="Extraction flow">
+          <li class="flow-step"><strong>1. Pin</strong><span>Match the complete bsdtar bundle against its SHA-256 manifest</span></li>
+          <li class="flow-step"><strong>2. Isolate</strong><span>Ephemeral AppContainer with no capabilities or network access</span></li>
+          <li class="flow-step"><strong>3. Bound</strong><span>Limit time, memory, process count, entries, and expanded bytes</span></li>
+          <li class="flow-step"><strong>4. Recheck</strong><span>Audit paths, links, ADS, reserved names, identity, and content</span></li>
+          <li class="flow-step"><strong>5. Publish</strong><span>Atomically publish only inspected regular files to a new directory</span></li>
+        </ol>
 
-        <div class="card-grid" style="margin-top: 1rem">
+        <div class="card-grid card-grid-spaced">
           <article class="card">
             <span class="card-number">A</span>
             <h3>Fail closed</h3>
@@ -129,7 +135,7 @@
           <article class="card">
             <span class="card-number">01</span>
             <h3>Download</h3>
-            <p>Get the Windows x64 ZIP from the <a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>latest release</a> and extract it into a new folder.</p>
+            <p>Get the Windows x64 or ARM64 ZIP that matches your PC from the <a href="https://github.com/hjosugi/iroha-zip/releases/latest" data-release-url>latest release</a> and extract it into a new folder.</p>
           </article>
           <article class="card">
             <span class="card-number">02</span>
@@ -143,11 +149,11 @@
           </article>
         </div>
 
-        <div class="two-column" style="margin-top: 1.2rem">
+        <div class="two-column two-column-spaced">
           <div class="panel">
             <h3>Check the digest</h3>
             <pre><code>Get-FileHash `
-  .\iroha-zip-0.4.1-windows-x64.zip `
+  .\iroha-zip-0.5.0-windows-x64.zip `
   -Algorithm SHA256</code></pre>
           </div>
           <div class="panel">
@@ -169,7 +175,7 @@
             <tr><th scope="row">Extract</th><td>ZIP / ZIPX, 7z, RAR / RAR5, LHA / LZH, TAR, GZ, BZ2, XZ, Zstandard, .Z, CAB, and more</td></tr>
             <tr><th scope="row">Create</th><td>ZIP, 7z, TAR, TAR.GZ</td></tr>
             <tr><th scope="row">Filename encoding</th><td>auto, UTF-8, CP932, CP437</td></tr>
-            <tr><th scope="row">Operating system</th><td>Windows 10 version 1903 or later; normal use targets Windows 11 x64</td></tr>
+            <tr><th scope="row">Operating system</th><td>Windows 10 version 1903 or later; x64/native ARM64 packages, with automated ARM64 evidence on Windows 11 ARM</td></tr>
           </tbody>
         </table>
 
@@ -246,7 +252,7 @@ iroha-zip.exe create tar-gz `
             <ul class="check-list">
               <li>Rust unit/integration tests and Clippy</li>
               <li>Server 2022/2025 schema-v4 E2E</li>
-              <li>Native ARM64 build and core isolation</li>
+              <li>Native ARM64 backend/archive/hostile-corpus/bilingual-UI matrix</li>
               <li>Five bounded fuzz targets</li>
               <li>Backend manifest, SBOM, and license validation</li>
               <li>Generated hostile-archive regressions</li>
@@ -260,7 +266,7 @@ iroha-zip.exe create tar-gz `
               <li>Experimental LPAC compatibility and denial measurements</li>
               <li>Long fuzz campaigns and independent security audit</li>
               <li>Protected input for encrypted archives</li>
-              <li>Windows ARM64 package</li>
+              <li>Multiple retail Windows on ARM device checks</li>
               <li>Future Authenticode signing</li>
             </ul>
           </div>
@@ -276,7 +282,7 @@ iroha-zip.exe create tar-gz `
     <footer class="site-footer">
       <div class="footer-inner">
         <div>
-          <a class="brand" href="./" style="color: white">
+          <a class="brand" href="./">
             <span class="brand-mark" aria-hidden="true"></span><span>iroha-zip</span>
           </a>
           <p>MIT OR Apache-2.0. Not a security-audited product. Continue to apply normal operating-system and organizational defenses to untrusted files.</p>

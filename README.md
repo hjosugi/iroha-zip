@@ -6,11 +6,11 @@ iroha-zipは、未信頼の圧縮ファイルをWindows上でできるだけ小�
 
 目的は「Rustで全書庫形式を再実装する」ことではありません。最新版のlibarchive/`bsdtar.exe`を独立プロセスとして使い、そのプロセスを一時的なAppContainerに閉じ込め、展開前後と圧縮元をRust側で検査します。展開と作成のどちらでも、`bsdtar.exe`を通常ユーザー権限で直接実行しません。
 
-これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.4.1`です。
+これはセキュリティ監査済み製品ではありません。現段階は、設計を検証しながら実用化するための`v0.5.0`です。
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/hjosugi/iroha-zip/releases/latest) から Windows x64 ZIP、または個別のEXEをダウンロードできます。現在の公式バイナリは未署名です。`SHA256SUMS.txt`とGitHub artifact attestationで出所を確認してください。詳しい確認手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)にあります。
+[GitHub Releases](https://github.com/hjosugi/iroha-zip/releases/latest) から Windows x64／native ARM64 ZIP、または各architectureの個別EXEをダウンロードできます。現在の公式バイナリは未署名です。`SHA256SUMS.txt`とGitHub artifact attestationで出所を確認してください。詳しい確認手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)にあります。
 
 配布物にはlibarchive / `bsdtar.exe`を同梱していません。初回起動後、設定画面から自分が信頼するバックエンドを取り込む必要があります。
 
@@ -131,7 +131,7 @@ iroha-zipは次をfail-closedで拒否します。
 
 ## 動作環境
 
-- Windows 10 version 1903以降。通常利用はWindows 11 x64を想定
+- Windows 10 version 1903以降。x64とnative ARM64を配布し、ARM64自動実機証拠はWindows 11 ARMで取得
 - libarchive 3.8.9系の`bsdtar.exe`と実行に必要なDLL
 - PowerShell 5.1以降
 
@@ -143,18 +143,26 @@ iroha-zipは次をfail-closedで拒否します。
 
 ユーザー自身が信頼するlibarchiveビルドを用意し、設定画面の「bundleを取り込む」または「MSYS2から取り込む」を使います。取り込み時にEXEと全DLLのSHA-256マニフェストを生成し、取り込み後に完全検証します。付属スクリプトは自動化用にも残しています。
 
-MSYS2 UCRT64のlibarchiveを利用する場合の例です。
+Windows x64ではMSYS2 UCRT64、Windows ARM64ではMSYS2 CLANGARM64のlibarchiveを利用します。
 
 ```powershell
 # MSYS2 UCRT64シェルで実行
 pacman -S mingw-w64-ucrt-x86_64-libarchive
+
+# native ARM64のMSYS2 CLANGARM64シェルで実行
+pacman -S mingw-w64-clang-aarch64-libarchive
 ```
 
-その後、設定画面で「MSYS2から取り込む」を選び、`C:\msys64`を指定します。PowerShellで自動化する場合は次のコマンドでも同じ処理を実行できます。
+その後、設定画面で「MSYS2から取り込む」を選び、`C:\msys64`を指定します。設定画面はx64版でUCRT64、ARM64版でCLANGARM64を自動指定します。PowerShellで自動化する場合は次のコマンドでも同じ処理を実行できます。
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\export-msys2-backend.ps1 -Msys2Root C:\msys64
+
+# Windows ARM64
+.\scripts\export-msys2-backend.ps1 `
+  -Msys2Root C:\msys64 `
+  -Environment CLANGARM64
 ```
 
 すでに最小構成のbsdtarフォルダを持っている場合は、設定画面の「bundleを取り込む」から直接取り込めます。PowerShellで自動化する場合は次のとおりです。
@@ -167,7 +175,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 任意bundleは未対応の取得元であり、配布元署名を検証できないため、設定画面では専用警告への明示確認、CLIでは`-AllowUnsupportedSource`が必須です。`SourceDirectory`直下またはその配下にある全payloadファイルがバックエンドとして固定されます。不要なEXEやDLLを混ぜないでください。
 
-`backend-manifest.tsv`の形式、入力上限、パス規則、検証範囲は[backend manifest仕様](docs/BACKEND_MANIFEST.md)に記載しています。MSYS2 UCRT64の署名必須export、任意bundleの警告、machine-readable provenance、SPDX 2.3 SBOM、license inventory、private packageのfail-closed条件は[backend証跡仕様](docs/BACKEND_EVIDENCE.md)に記載しています。
+`backend-manifest.tsv`の形式、入力上限、パス規則、検証範囲は[backend manifest仕様](docs/BACKEND_MANIFEST.md)に記載しています。MSYS2 UCRT64／CLANGARM64の署名必須export、任意bundleの警告、machine-readable provenance、SPDX 2.3 SBOM、license inventory、private packageのfail-closed条件は[backend証跡仕様](docs/BACKEND_EVIDENCE.md)に記載しています。
 
 ## ビルド
 
@@ -192,10 +200,10 @@ cargo build --release
 
 ```text
 dist\iroha-zip\
-   dist\iroha-zip-0.4.1-windows-x64.zip
+   dist\iroha-zip-0.5.0-windows-x64.zip
 ```
 
-この通常実行とtag-driven workflowは未署名バイナリを作成します。公式リリースにはZIP、3つの個別EXE、SHA-256一覧を添付し、GitHub artifact attestationも発行します。未署名であること、SmartScreen警告、独立検証手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)を参照してください。将来Authenticode署名を有効にするための厳格な検証経路は[リリース検証仕様](docs/RELEASE_VERIFICATION.md)に保持しています。
+この通常実行はx64 packageを作成します。ARM64をローカルbuildする場合は`-Target aarch64-pc-windows-msvc`を指定します。tag-driven workflowはnative x64／ARM64 runnerで両packageを別々に作成します。公式リリースには2つのZIP、6つの個別EXE、2つのZIP sidecar、全体SHA-256一覧を添付し、GitHub artifact attestationも発行します。未署名であること、SmartScreen警告、独立検証手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)を参照してください。将来Authenticode署名を有効にするための厳格な検証経路は[リリース検証仕様](docs/RELEASE_VERIFICATION.md)に保持しています。
 
 初回ビルド時に`Cargo.lock`がない場合は生成されます。以後は`Cargo.lock`をバージョン管理し、`--locked`でビルドしてください。
 
@@ -306,7 +314,7 @@ iroha-zip.exe doctor
 - AppContainerやWindowsカーネル、libarchive自体の未知の脆弱性を防げる保証はありません。
 - 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。
 - 同一ユーザー権限をすでに奪取した攻撃者との競合を完全には防げません。
-- `v0.4.1`はWindows x64専用です。native ARM64のRust/AppContainer CIと、backend/archive/Releaseに残る正確な境界は[ARM64対応状況](docs/ARM64.md)で追跡します。
+- `v0.5.0`はWindows x64とnative ARM64を別assetで配布します。ARM64の実測範囲と未検証device境界は[ARM64対応状況](docs/ARM64.md)にあります。
 - Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。Server 2022/2025向けschema-v4 Windows E2Eと生成型の悪性コーパスも[Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143)で合格しました。ただし、これはWindows 10/11実機検証やセキュリティ監査の代替ではありません。再現可能な定期fuzzingは[`docs/FUZZING.md`](docs/FUZZING.md)、E2Eの正確な範囲は[`docs/WINDOWS_E2E.md`](docs/WINDOWS_E2E.md)、コーパス範囲は[`docs/MALICIOUS_CORPUS.md`](docs/MALICIOUS_CORPUS.md)、全体状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
 
 残作業は、優先度・依存関係・受け入れ条件を付けた[`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md)で追跡します。変更を提案する場合は[`CONTRIBUTING.md`](CONTRIBUTING.md)も確認してください。

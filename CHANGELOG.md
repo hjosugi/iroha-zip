@@ -4,6 +4,20 @@
 
 - Nothing yet.
 
+## 0.5.0 - 2026-08-14
+
+- Add a deterministic Windows regression that replaces an audited directory with a real NTFS
+  junction and requires the post-audit link rejection before any destination is published.
+- Add a controlled Microsoft-signed `makecab.exe` LZX fixture to the fixed Server 2022/2025 matrix;
+  preview and extraction must reproduce the source SHA-256 tree and remove the temporary root.
+- Extend the signature-verifying MSYS2 backend exporter and evidence validator to CLANGARM64, and
+  run the verified native ARM64 backend through the archive, malicious-corpus, shell, Settings, and
+  AppContainer/LPAC evidence contracts.
+- Publish architecture-separated x64 and native ARM64 packages, standalone executables, sidecars,
+  combined checksums, and attestations; reject PE machine mix-ups in direct assets and expanded ZIPs.
+- Select UCRT64 or CLANGARM64 automatically from the native Settings build when importing from MSYS2.
+- Require every supported UCRT64/CLANGARM64 backend EXE/DLL to match its exact x64/ARM64 PE machine.
+
 ## 0.4.1 - 2026-08-14
 
 - Create every sandboxed Windows child suspended, assign it to the Job Object, verify the requested

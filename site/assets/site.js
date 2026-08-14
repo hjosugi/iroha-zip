@@ -28,7 +28,7 @@
   }
 
   const locale = document.documentElement.lang === "ja" ? "ja-JP" : "en-US";
-  const fallbackVersion = "v0.4.1";
+  const fallbackVersion = "v0.5.0";
 
   const setText = (selector, value) => {
     document.querySelectorAll(selector).forEach((node) => {
@@ -43,7 +43,8 @@
   };
 
   setHref("[data-release-url]", releasePage);
-  setHref("[data-download-url]", releasePage);
+  setHref('[data-download-url="x64"]', releasePage);
+  setHref('[data-download-url="arm64"]', releasePage);
   setText("[data-release-version]", fallbackVersion);
 
   fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
@@ -57,9 +58,9 @@
     })
     .then((release) => {
       const version = release.tag_name || fallbackVersion;
-      const zip = Array.isArray(release.assets)
-        ? release.assets.find((asset) => /-windows-x64\.zip$/i.test(asset.name))
-        : null;
+      const assets = Array.isArray(release.assets) ? release.assets : [];
+      const x64Zip = assets.find((asset) => /-windows-x64\.zip$/i.test(asset.name));
+      const arm64Zip = assets.find((asset) => /-windows-arm64\.zip$/i.test(asset.name));
       const date = release.published_at
         ? new Intl.DateTimeFormat(locale, {
             year: "numeric",
@@ -71,9 +72,13 @@
       setText("[data-release-version]", version);
       setText("[data-release-date]", date);
       setHref("[data-release-url]", release.html_url || releasePage);
-      if (zip) {
-        setHref("[data-download-url]", zip.browser_download_url);
-        setText("[data-download-label]", zip.name);
+      if (x64Zip) {
+        setHref('[data-download-url="x64"]', x64Zip.browser_download_url);
+        setText('[data-download-label="x64"]', x64Zip.name);
+      }
+      if (arm64Zip) {
+        setHref('[data-download-url="arm64"]', arm64Zip.browser_download_url);
+        setText('[data-download-label="arm64"]', arm64Zip.name);
       }
     })
     .catch(() => {

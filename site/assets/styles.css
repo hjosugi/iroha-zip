@@ -281,6 +281,15 @@ h1 {
   padding: 1.5rem;
 }
 
+.release-card-body > .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.release-card-body > .button + .button {
+  margin-top: 0.65rem;
+}
+
 .release-version {
   margin: 0;
   font-size: 2.25rem;
@@ -353,6 +362,10 @@ h1 {
   border-top: 1px solid var(--line);
 }
 
+.section-notice {
+  padding-top: 0;
+}
+
 .section-heading {
   display: grid;
   grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr);
@@ -377,6 +390,14 @@ h1 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.card-grid-spaced {
+  margin-top: 1rem;
+}
+
+.two-column-spaced {
+  margin-top: 1.2rem;
 }
 
 .card {
@@ -414,7 +435,9 @@ h1 {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
-  margin-top: 2rem;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
 }
 
 .flow-step {
@@ -606,6 +629,10 @@ code {
   color: #fff;
 }
 
+.site-footer .brand {
+  color: #fff;
+}
+
 .language-gate {
   display: grid;
   min-height: 100vh;
@@ -631,6 +658,10 @@ code {
 .language-card h1 {
   max-width: none;
   font-size: clamp(2.2rem, 7vw, 4.4rem);
+}
+
+.language-card .error-code {
+  font-size: clamp(2rem, 8vw, 4rem);
 }
 
 .language-options {

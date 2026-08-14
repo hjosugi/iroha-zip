@@ -4,80 +4,127 @@ Updated: 2026-08-14
 
 ## 日本語
 
-### 現在の検証境界
+### 検証済みのnative境界
 
-CI は GitHub の native `windows-11-arm` runner 上で、Rust host が
-`aarch64-pc-windows-msvc` であることを確認してから次を実行します。
+CIはGitHubのnative `windows-11-arm` runner上で、OS／process architectureが`Arm64`、Rust hostが
+`aarch64-pc-windows-msvc`であることを必須確認してから次を実行します。
 
-- format、全 target の test、Clippy、release build
-- `iroha-zip.exe`、`iroha-zip-settings.exe`、`iroha-zip-shell.exe` の3本が PE machine
-  `0xAA64` であること
-- native ARM64 processによる通常AppContainer、capability 0、loopback denial、timeout、
-  Job memory limit、異常終了、loader failure、process temp、staging DACL、7 profile/root cleanup
-- 実行binaryのSHA-256とisolation probeのSHA-256が一致すること
+- format、全targetのtest、Clippy、release build
+- 3つのiroha-zip EXEと、検証済みbackendの全EXE/DLLがPE machine `0xAA64`であること
+- MSYS2 CLANGARM64の署名必須package database、exact package version/archive hash、payload byte、
+  provenance、SPDX 2.3、license inventoryの完全検証
+- ZIP、7z、TAR、TAR.GZの作成と別sandboxでの再展開照合
+- TAR.BZ2、TAR.XZ、TAR.Zstandard、UNIX compress、Microsoft LZX CABのpreview／展開照合
+- 18拒否例＋1 controlとnative hardlink／ADS／junctionを含む悪性コーパス
+- shell経路と、日本語／英語それぞれ26 controlのSettings UI／backend診断
+- 通常AppContainerのcapability 0、loopback、timeout、memory、異常終了、loader、temp、DACL、
+  7 profile/root cleanup
+- LPAC成功時は同じschema-v4契約、非対応時はexact failure class、exit 2、空stdout、完全cleanup
 
-この契約は commit `e81b42aaeb1a4826dfe38043e33564271889c1f8` の
-[Actions run 31768309835](https://github.com/hjosugi/iroha-zip/actions/runs/31768309835) で合格しました。
-downloadしたJSONではOS/process architectureがともに`Arm64`、PE machineが`0xAA64`、
-isolation schemaが4、cleanupが7/7成功でした。
+この全契約はcommit `c990fbcf3f3e8515564d276f0e8c5a71c356893e`の
+[Actions run 31770908971](https://github.com/hjosugi/iroha-zip/actions/runs/31770908971)で合格しました。
+downloadした5つのJSONは、全matrixが実行済みであること、全PEが`0xAA64`であること、通常
+AppContainerがcapability 0であること、全一時rootが削除されたことを記録しています。このWindows 11
+ARM環境ではLPAC queryは`ERROR_INVALID_PARAMETER`となり、通常AppContainerへ降格せずfail closedしました。
 
-このjobが保存するJSONは診断証跡です。ARM64のbinary、ZIP、checksumをReleaseへ公開しません。
+### v0.5.0の配布境界
 
-### 未完のbackend境界
+`v0.5.0`は`windows-arm64`と`windows-x64`を別名で公開します。Release workflowはnative ARM64
+runnerでbuild/packageし、次の境界で取り違えを拒否します。
 
-現在の署名検証付きexporterはMSYS2 UCRT64 x64を対象にしています。MSYS2には
-CLANGARM64版libarchiveがありますが、同じpackage/version/evidence contractと全書庫matrixをまだ
-通していません。ARM64 process内で動く専用UTF-8 listing childはx64 DLLをloadできないため、x64
-backendをそのままARM64 packageへ組み合わせません。
+1. build直後の3 EXEをPE machine `0xAA64`で検査する。
+2. ARM64名の3つの個別EXEと、ARM64 ZIP内の3 EXEを再検査する。
+3. x64側は同じ箇所で`0x8664`を要求する。
+4. 2 ZIP、2 sidecar、6個別EXE、全体`SHA256SUMS.txt`のexact 11 assetだけを許可する。
+5. 2 ZIPと6 EXEへarch別attestation、`SHA256SUMS.txt`へ集約attestationを発行する。
+6. draft時と公開後に全11 assetの大小文字を含む名前、byte長、SHA-256を照合する。
 
-ARM64 Releaseを追加する前に、次がすべて必要です。
+### ARM64での導入
 
-1. CLANGARM64 package署名、依存関係、license、SPDX、payload hashを現在のx64 exporterと同じ強さで検証する。
-2. native ARM64 backendでcreate/read、悪性コーパス、shell、settings、LPAC/fail-closed matrixを通す。
-3. `windows-arm64` を含む別名ZIP/EXE/checksumを作り、x64 assetとの取り違えを機械的に拒否する。
-4. 未署名表示、SHA-256、attestation、immutable-release検証をx64と独立に通す。
+1. `iroha-zip-0.5.0-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
+2. native ARM64版MSYS2で`mingw-w64-clang-aarch64-libarchive`を導入します。
+3. ARM64版の設定画面で「MSYS2から取り込む」を選びます。設定画面はCLANGARM64を自動指定します。
+4. CLI自動化では次を使用します。
 
-この条件を満たすまでは、公開済み`v0.4.1`はWindows x64専用であり、ARM64 native Releaseは未提供です。
+```powershell
+.\scripts\export-msys2-backend.ps1 `
+  -Msys2Root C:\msys64 `
+  -Environment CLANGARM64
+.\iroha-zip.exe doctor
+```
+
+backend binaryは公式ZIPへ同梱しません。利用者が信頼するMSYS2 installから取り込みます。
+
+### 残る範囲
+
+- 自動ARM64実機証拠はGitHubのWindows 11 ARM runnerです。Windows 10 ARM64や複数の市販機種、
+  endpoint security製品、mixed-DPI／screen readerは未検証です。
+- 実験的LPACはこのrunnerでも利用可能と確認できていません。通常AppContainerが既定で、暗黙に降格しません。
+- ARM64対応はセキュリティ監査やlibarchive自体の安全性を意味しません。
 
 ## English
 
-### Current validation boundary
+### Validated native boundary
 
-CI runs on GitHub's native `windows-11-arm` runner. After requiring the Rust host to be
-`aarch64-pc-windows-msvc`, it checks:
+CI first requires `Arm64` for both OS and process architecture and
+`aarch64-pc-windows-msvc` for the Rust host on GitHub's native `windows-11-arm` runner. It then runs:
 
 - formatting, every-target tests, Clippy, and a release build;
-- PE machine `0xAA64` on all three iroha-zip executables;
-- normal AppContainer, zero capabilities, loopback denial, timeout, Job memory limit, abnormal
-  termination, loader failure, process temp, staging DACL, and seven profile/root cleanups from a
-  native ARM64 process; and
-- equality between the executed release binary hash and the isolation-probe hash.
+- PE machine `0xAA64` checks for all three iroha-zip executables and every verified backend EXE/DLL;
+- complete MSYS2 CLANGARM64 verification of required-signature databases, exact package versions and
+  archive hashes, payload bytes, provenance, SPDX 2.3, and the license inventory;
+- ZIP, 7z, TAR, and TAR.GZ creation followed by independent-sandbox re-extraction comparison;
+- preview/extraction comparison for TAR.BZ2, TAR.XZ, TAR.Zstandard, UNIX compress, and a Microsoft LZX CAB;
+- the hostile corpus with 18 rejects, one control, and native hardlink/ADS/junction cases;
+- shell handling and both Japanese and English 26-control Settings/backend-diagnosis paths;
+- normal AppContainer with zero capabilities, loopback/timeout/memory/crash/loader/temp/DACL checks,
+  and seven profile/root cleanups; and
+- the same schema-v4 contract on LPAC success, or exact failure class, exit 2, empty stdout, and full
+  cleanup when LPAC is unsupported.
 
-The job retains diagnostic JSON only. It does not publish ARM64 binaries, a ZIP, or checksums as
-release assets.
+The complete contract passed for commit `c990fbcf3f3e8515564d276f0e8c5a71c356893e` in
+[Actions run 31770908971](https://github.com/hjosugi/iroha-zip/actions/runs/31770908971).
+The five downloaded JSON files record every matrix as executed, `0xAA64` for every PE, normal
+AppContainer with zero capabilities, and removal of every temporary root. The LPAC query returned
+`ERROR_INVALID_PARAMETER` on that Windows 11 ARM environment and failed closed without a normal-
+AppContainer fallback.
 
-This contract passed for commit `e81b42aaeb1a4826dfe38043e33564271889c1f8` in
-[Actions run 31768309835](https://github.com/hjosugi/iroha-zip/actions/runs/31768309835).
-The downloaded JSON records `Arm64` for both OS and process architecture, PE machine `0xAA64`,
-isolation schema 4, and successful cleanup for all seven probe profiles and roots.
+### v0.5.0 distribution boundary
 
-### Backend work still required
+`v0.5.0` publishes separately named `windows-arm64` and `windows-x64` assets. The Release workflow
+builds/packages on a native ARM64 runner and rejects architecture confusion at these boundaries:
 
-The supported, signature-verifying exporter currently targets MSYS2 UCRT64 x64. MSYS2 provides a
-CLANGARM64 libarchive package, but that package has not passed the same package/version/evidence
-contract and complete archive matrix. The dedicated UTF-8 listing child loads libarchive in-process;
-a native ARM64 process cannot simply load the x64 DLL bundle. iroha-zip therefore does not combine
-the x64 backend with a nominally native ARM64 package.
+1. All three direct build outputs must have PE machine `0xAA64`.
+2. The three ARM64 standalone assets and all three executables inside the ARM64 ZIP are rechecked.
+3. The corresponding x64 boundaries require `0x8664`.
+4. Only the exact 11-asset set is accepted: two ZIPs, two sidecars, six standalone EXEs, and one
+   combined `SHA256SUMS.txt`.
+5. Per-architecture attestations cover both ZIPs and six EXEs; a combined attestation covers the inventory.
+6. Draft and published readback compare exact case-sensitive names, byte lengths, and SHA-256 for all assets.
 
-Before an ARM64 release is added, all of the following must pass:
+### ARM64 setup
 
-1. CLANGARM64 package signatures, dependencies, licenses, SPDX, and payload hashes under a contract
-   as strong as the x64 exporter.
-2. Native ARM64 create/read, hostile-corpus, shell, Settings, and LPAC/fail-closed matrices.
-3. Separately named `windows-arm64` ZIP/EXE/checksum assets with mechanical x64/ARM64 mix-up rejection.
-4. Independent unsigned disclosure, SHA-256, attestation, and immutable-release verification.
+1. Download `iroha-zip-0.5.0-windows-arm64.zip` and verify its SHA-256 and attestation.
+2. Install `mingw-w64-clang-aarch64-libarchive` in native ARM64 MSYS2.
+3. Choose **Import from MSYS2** in the ARM64 Settings build. It selects CLANGARM64 automatically.
+4. For CLI automation, use:
 
-Until then, published `v0.4.1` is Windows x64 only and no native ARM64 release is offered.
+```powershell
+.\scripts\export-msys2-backend.ps1 `
+  -Msys2Root C:\msys64 `
+  -Environment CLANGARM64
+.\iroha-zip.exe doctor
+```
+
+The official ZIP does not bundle backend binaries; import them from an MSYS2 installation you trust.
+
+### Remaining scope
+
+- Automated ARM64 device evidence comes from GitHub's Windows 11 ARM runner. Windows 10 ARM64,
+  multiple retail devices, endpoint-security products, mixed DPI, and screen readers remain untested.
+- Experimental LPAC was not available on this runner. Normal AppContainer remains the default and
+  there is no silent downgrade.
+- ARM64 support is not a security audit and does not establish the safety of libarchive itself.
 
 Primary references:
 
@@ -85,4 +132,3 @@ Primary references:
 - [GitHub-hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 - [MSYS2 ARM64 support](https://www.msys2.org/docs/arm64/)
 - [MSYS2 CLANGARM64 libarchive package](https://packages.msys2.org/packages/mingw-w64-clang-aarch64-libarchive)
-- [Microsoft Windows process interoperability](https://learn.microsoft.com/en-us/windows/win32/winprog64/process-interoperability)
