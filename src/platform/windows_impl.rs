@@ -1464,15 +1464,11 @@ fn run_in_appcontainer(
         .collect();
     let mut command_line = windows_command_line::encode(&program_units, &argument_units)
         .map_err(|error| IrohaZipError::Sandbox(format!("cannot encode command line: {error}")))?;
-    // AppContainer path virtualization maps the host LocalAppData\Temp path to
-    // the profile's AC\Temp. Supplying AC\Temp itself would apply the mapping a
-    // second time and produce a non-existent nested Packages\...\AC\Temp path.
-    let host_temp_source = spec
-        .temp_dir
-        .as_ref()
-        .map(|_| appcontainer_host_temp_source(sandbox_root))
-        .transpose()?;
-    let environment = minimal_environment(&spec.program, sandbox_root, host_temp_source.as_deref());
+    // AppContainer path virtualization derives AC\Temp from the host-side
+    // LOCALAPPDATA boundary. Supplying profile-local values for LOCALAPPDATA,
+    // USERPROFILE, TEMP, or TMP applies that mapping twice and produces a
+    // non-existent nested Packages\...\AC\Temp path.
+    let environment = minimal_appcontainer_environment(&spec.program, sandbox_root)?;
     let mut process_info = PROCESS_INFORMATION::default();
 
     let create_result = unsafe {
@@ -2167,8 +2163,7 @@ fn wide_array_to_string(value: &[u16]) -> String {
     String::from_utf16_lossy(&value[..length])
 }
 
-fn minimal_environment(program: &Path, root: &Path, temp_dir: Option<&Path>) -> Vec<u16> {
-    let pairs = minimal_environment_pairs(program, root, temp_dir);
+fn encode_environment(pairs: Vec<(OsString, OsString)>) -> Vec<u16> {
     let mut result = Vec::<u16>::new();
     for (key, value) in pairs {
         let mut entry = key;
@@ -2181,7 +2176,35 @@ fn minimal_environment(program: &Path, root: &Path, temp_dir: Option<&Path>) -> 
     result
 }
 
-fn appcontainer_host_temp_source(root: &Path) -> Result<PathBuf> {
+struct AppContainerHostEnvironment {
+    local_app_data: PathBuf,
+    user_profile: PathBuf,
+    temp: PathBuf,
+}
+
+fn minimal_appcontainer_environment(program: &Path, root: &Path) -> Result<Vec<u16>> {
+    Ok(encode_environment(minimal_appcontainer_environment_pairs(
+        program, root,
+    )?))
+}
+
+fn minimal_appcontainer_environment_pairs(
+    program: &Path,
+    root: &Path,
+) -> Result<Vec<(OsString, OsString)>> {
+    let host = appcontainer_host_environment(root)?;
+    let mut pairs = minimal_environment_pairs(program, root, Some(&host.temp));
+    for (key, value) in &mut pairs {
+        if key == "LOCALAPPDATA" {
+            host.local_app_data.as_os_str().clone_into(value);
+        } else if key == "USERPROFILE" {
+            host.user_profile.as_os_str().clone_into(value);
+        }
+    }
+    Ok(pairs)
+}
+
+fn appcontainer_host_environment(root: &Path) -> Result<AppContainerHostEnvironment> {
     let profile_root = root.parent().ok_or_else(|| {
         IrohaZipError::Sandbox(format!(
             "AppContainer root has no package profile parent: {}",
@@ -2212,9 +2235,27 @@ fn appcontainer_host_temp_source(root: &Path) -> Result<PathBuf> {
             packages.display()
         ))
     })?;
-    let source = local_app_data.join("Temp");
-    validate_directory_security(&source)?;
-    Ok(source)
+    let app_data = local_app_data.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox(format!(
+            "LocalAppData directory has no AppData parent: {}",
+            local_app_data.display()
+        ))
+    })?;
+    let user_profile = app_data.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox(format!(
+            "AppData directory has no user-profile parent: {}",
+            app_data.display()
+        ))
+    })?;
+    let temp = local_app_data.join("Temp");
+    validate_directory_security(local_app_data)?;
+    validate_directory_security(user_profile)?;
+    validate_directory_security(&temp)?;
+    Ok(AppContainerHostEnvironment {
+        local_app_data: local_app_data.to_path_buf(),
+        user_profile: user_profile.to_path_buf(),
+        temp,
+    })
 }
 
 fn minimal_environment_pairs(
@@ -2315,9 +2356,10 @@ mod tests {
     }
 
     #[test]
-    fn appcontainer_temp_source_uses_the_host_local_app_data_boundary() {
+    fn appcontainer_environment_uses_host_profile_boundaries() {
         let directory = TestDirectory::new();
-        let local_app_data = directory.0.join("Local");
+        let user_profile = directory.0.join("User");
+        let local_app_data = user_profile.join("AppData").join("Local");
         let host_temp = local_app_data.join("Temp");
         let root = local_app_data
             .join("Packages")
@@ -2326,7 +2368,21 @@ mod tests {
         fs::create_dir_all(&host_temp).unwrap();
         fs::create_dir_all(&root).unwrap();
 
-        assert_eq!(appcontainer_host_temp_source(&root).unwrap(), host_temp);
+        let pairs =
+            minimal_appcontainer_environment_pairs(Path::new(r"C:\backend\bsdtar.exe"), &root)
+                .unwrap();
+        for (key, expected) in [
+            ("LOCALAPPDATA", local_app_data.as_os_str()),
+            ("USERPROFILE", user_profile.as_os_str()),
+            ("TEMP", host_temp.as_os_str()),
+            ("TMP", host_temp.as_os_str()),
+        ] {
+            let actual = pairs
+                .iter()
+                .find_map(|(candidate, value)| (candidate == key).then_some(value))
+                .unwrap();
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]

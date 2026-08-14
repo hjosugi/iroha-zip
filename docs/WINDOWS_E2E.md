@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 
-This document defines the automated SAFE-001 evidence contract. The workflow and harness have run on both fixed-label GitHub runners. An exact in-container `GetTempPathW`, CNG random-number, and delete-on-close file probe traced the reproducible libarchive 7z error to applying AppContainer temporary-path virtualization twice. The next run supplies the host LocalAppData temporary path and requires Windows to resolve it to the one dedicated `AC\Temp` scratch. A failing diagnostic artifact is not a passing Windows result.
+This document defines the automated SAFE-001 evidence contract. The workflow and harness have run on both fixed-label GitHub runners. An exact in-container `GetTempPathW`, CNG random-number, and delete-on-close file probe traced the reproducible libarchive 7z error to applying AppContainer temporary-path virtualization twice. The next run supplies host-side `LOCALAPPDATA`, `USERPROFILE`, `TEMP`, and `TMP` values and requires Windows to resolve them to the one dedicated `AC\Temp` scratch. A failing diagnostic artifact is not a passing Windows result.
 
 ## Automated matrix
 
