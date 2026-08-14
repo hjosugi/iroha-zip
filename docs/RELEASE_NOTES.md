@@ -22,6 +22,7 @@ iroha-zip 0.4.0 は、Windows x64 向けの最初の安定版扱いリリース�
 
 - 生成書庫を別のsandboxで再展開し、監査済み圧縮元と完全一致するまで公開しない作成経路。
 - 監査済み通常objectだけの外部staging treeを全entry単位でread-only封印し、信頼側で作った有界PAX streamだけをbackendに変換させる作成経路と、handleを保持したTOCTOU対策。
+- 7z writerの一時fileだけを専用の監視対象scratchへ限定し、process終了後の残留objectを公開前に拒否するAppContainer権限境界。
 - sandboxへcopyしたbackend tree全体のread／execute専用封印。listing passから展開passへの自己改変を防止。
 - sandbox内の入力書庫をhandleとDACLで固定し、listing検証後にだけ展開先を新規作成するpass間state汚染対策。
 - 検証済みDLL候補だけをzero-capability AppContainer子でloadし、公式UTF-8 pathname APIから有界一覧を取得するWindows版libarchive 3.8.6以降の日本語名回帰対策。作成時のUTF-8 header指定と、sandbox EXEの固定UTF-8 process manifest再照合も併用。
@@ -58,6 +59,7 @@ iroha-zip 0.4.0 is the first release presented as a stable Windows x64 download.
 
 - Creation re-extracts every generated archive in a second sandbox and refuses publication unless it exactly reproduces the audited source.
 - A creation path that copies only audited regular objects into external staging, seals every entry read-only to the Package SID, lets the backend convert only a trusted bounded PAX stream, and retains handles across TOCTOU-sensitive boundaries.
+- A dedicated, monitored AppContainer scratch boundary for the 7z writer's temporary file, with fail-closed residue detection before publication.
 - Recursive read/execute-only sealing of every sandbox backend tree, preventing persistent self-modification between listing and extraction passes.
 - Handle/DACL pinning of sandbox archive copies and create-new extraction directories only after preflight acceptance, preventing cross-pass archive replacement or output pre-seeding.
 - A bounded listing child that loads only manifest-pinned DLL candidates inside a rechecked zero-capability AppContainer and reads names through libarchive's official UTF-8 API, plus explicit UTF-8 creation headers and a byte-verified UTF-8 process manifest on each disposable backend copy.

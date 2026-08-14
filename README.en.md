@@ -51,6 +51,8 @@ Serialize the sealed tree into a bounded PAX stream and pin its identity, length
     ↓
 Let SHA-256-pinned bsdtar convert only fixed sandbox-local `@source.pax.tar`
     ↓
+For the 7z writer only, use dedicated scratch and require it to be empty on exit
+    ↓
 Monitor the output archive size
     ↓
 Recheck the sealed staging-tree fingerprint
@@ -60,7 +62,7 @@ List and re-extract the result in a second AppContainer and compare the complete
 Copy from the same verified handle into a new output file
 ```
 
-Creation needs additional temporary disk space of roughly three times the source tree plus the output archive: the audited copy, bounded PAX stream, and verification extraction remain separate. This deliberate cost separates normal source files from a compromised backend, avoids a volume-root query denied to the AppContainer, and detects damaged output before publication.
+Conservatively, creation needs additional temporary disk space of roughly three times the source tree plus twice the output archive: the audited copy, bounded PAX stream, verification extraction, and the 7z writer's isolated temporary output remain separate where their lifetimes overlap. The 7z scratch is resource-monitored and causes a fail-closed result if anything remains after the backend exits. This deliberate cost separates normal source files from a compromised backend, avoids a volume-root query denied to the AppContainer, and detects damaged output or residue before publication.
 
 ## Supported formats
 
@@ -122,7 +124,7 @@ iroha-zip fails closed on:
 - unexpected, missing, or linked files in the backend bundle; and
 - overwriting an existing extraction destination or output archive.
 
-A Job Object restricts the backend to one process, enforces a memory limit, and terminates timeouts. Extracted files are never used directly from temporary storage: only inspected regular files are copied into a new partial folder, which is then renamed atomically. Windows tree audits enumerate names through parent directory handles opened without rename/delete sharing and compare directory identity during audit and copy. Every sandbox backend tree and input-archive copy is recursively sealed read/execute-only; a retained handle also pins the archive. The parent creates the extraction directory only after the listing process has exited, the list has passed policy, and the archive has been rechecked. A compromised listing process therefore cannot carry an archive replacement, backend self-modification, or pre-seeded output into extraction. For creation, the trusted parent audits and copies the source into a unique external staging tree, protects every object from inherited DACL changes, and grants the Package SID only read/execute access. It serializes that tree into a bounded PAX stream; the backend receives neither the normal source path nor a tree operand, only fixed sandbox-local `@source.pax.tar`. Retained handles and fingerprints recheck the PAX and staging tree, and a full re-extraction in a second sandbox must match before publication. The explicit unsandboxed diagnostic path keeps before/after fingerprint detection but cannot apply the Windows DACL seal.
+A Job Object restricts the backend to one process, enforces a memory limit, and terminates timeouts. Extracted files are never used directly from temporary storage: only inspected regular files are copied into a new partial folder, which is then renamed atomically. Windows tree audits enumerate names through parent directory handles opened without rename/delete sharing and compare directory identity during audit and copy. Every sandbox backend tree and input-archive copy is recursively sealed read/execute-only; a retained handle also pins the archive. The parent creates the extraction directory only after the listing process has exited, the list has passed policy, and the archive has been rechecked. A compromised listing process therefore cannot carry an archive replacement, backend self-modification, or pre-seeded output into extraction. For creation, the trusted parent audits and copies the source into a unique external staging tree, protects every object from inherited DACL changes, and grants the Package SID only read/execute access. It serializes that tree into a bounded PAX stream; the backend receives neither the normal source path nor a tree operand, only fixed sandbox-local `@source.pax.tar`. Only a dedicated in-sandbox scratch grants the read/write/delete rights required by libarchive's 7z temporary file; its bytes remain monitored, and the parent requires it to be empty and removes it after process exit. Retained handles and fingerprints recheck the PAX and staging tree, and a full re-extraction in a second sandbox must match before publication. The explicit unsandboxed diagnostic path keeps before/after fingerprint detection but cannot apply the Windows DACL seal.
 
 See the [threat model](docs/THREAT_MODEL.md). The differences between AppContainer and experimental LPAC, fail-closed rules, and unfinished validation are tracked in the [LPAC evaluation](docs/LPAC_EVALUATION.md). Automated Windows evidence and its limits are specified in [Windows E2E](docs/WINDOWS_E2E.md), and generated hostile fixtures are described in the [malicious corpus](docs/MALICIOUS_CORPUS.md).
 

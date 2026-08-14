@@ -52,6 +52,8 @@ Mark-of-the-Webを各ファイルへ伝播
     ↓
 SHA-256固定済みbsdtarがsandbox内の固定`@source.pax.tar`だけを書庫形式へ変換
     ↓
+7z writerだけは専用scratchを使用し、終了時に空であることを検証して削除
+    ↓
 生成中の書庫サイズを監視
     ↓
 封印したstaging treeが変わっていないことをfingerprintで再確認
@@ -61,7 +63,7 @@ SHA-256固定済みbsdtarがsandbox内の固定`@source.pax.tar`だけを書庫�
 検証時と同じidentity・時刻・長さ・SHA-256のhandleから新規出力へコピー
 ```
 
-圧縮元の監査済みcopy、有界PAX stream、生成書庫の再展開treeを別々の一時領域に置くため、作成時の追加ディスク容量は最大で圧縮元のおよそ3倍と生成書庫分が必要です。これは、侵害されたバックエンドから通常の圧縮元ツリーを切り離し、AppContainerから拒否されるドライブ直下の照会を不要にし、壊れた生成物を公開前に検出するための意図的なコストです。
+圧縮元の監査済みcopy、有界PAX stream、生成書庫の再展開treeを別々の一時領域に置き、7z writerの一時出力も専用領域に限定するため、作成時の追加ディスク容量は保守的に見て圧縮元のおよそ3倍と生成書庫のおよそ2倍が必要です。7z scratchはresource monitorの対象で、backend終了時に空でなければ公開前にfail closedします。これは、侵害されたバックエンドから通常の圧縮元ツリーを切り離し、AppContainerから拒否されるドライブ直下の照会を不要にし、壊れた生成物や残留物を公開前に検出するための意図的なコストです。
 
 ## 対応形式
 
@@ -123,7 +125,7 @@ iroha-zipは次をfail-closedで拒否します。
 - バックエンドフォルダ内の余分なファイル、欠落ファイル、リンク
 - 既存の展開先や既存の出力書庫の上書き
 
-さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。sandboxへコピーしたbackend treeと入力書庫copyは再帰的にread／execute専用へ封印し、入力書庫は保持handleでも固定します。展開先directoryはlisting process終了・一覧検証・入力再照合の後に親が新規作成するため、侵害されたlisting processは書庫差替え、backend自己改変、展開先への置き土産を次のpassへ残せません。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。信頼する親プロセスがこのtreeを有界PAX streamへ変換し、backendには通常の圧縮元pathやtree operandを渡さず、sandbox内の固定`@source.pax.tar`だけを渡します。PAXとstaging treeは保持中のhandleとfingerprintで再照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
+さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。sandboxへコピーしたbackend treeと入力書庫copyは再帰的にread／execute専用へ封印し、入力書庫は保持handleでも固定します。展開先directoryはlisting process終了・一覧検証・入力再照合の後に親が新規作成するため、侵害されたlisting processは書庫差替え、backend自己改変、展開先への置き土産を次のpassへ残せません。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。信頼する親プロセスがこのtreeを有界PAX streamへ変換し、backendには通常の圧縮元pathやtree operandを渡さず、sandbox内の固定`@source.pax.tar`だけを渡します。7z writerが必要とする削除時close付き一時fileには、sandbox内の専用scratchだけをread／write／delete可能にし、全使用量を監視し、process終了後に空であることを必須検証して削除します。PAXとstaging treeは保持中のhandleとfingerprintで再照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
 
 詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。通常AppContainerと実験的LPACの差、fail-closed条件、未完の検証matrixは[LPAC評価](docs/LPAC_EVALUATION.md)、Windows自動E2Eの証跡項目と限界は[Windows E2E](docs/WINDOWS_E2E.md)、生成型の攻撃書庫と非公開方針は[悪性コーパス](docs/MALICIOUS_CORPUS.md)に分離しています。
 

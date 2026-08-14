@@ -79,6 +79,9 @@ case "$mode" in
         if [ "{behavior}" = "mutate-source" ]; then
             printf 'bravo' > "$directory/alpha.txt"
         fi
+        if [ "{behavior}" = "leave-temp" ]; then
+            printf 'left behind' > "$TMPDIR/left-behind.tmp"
+        fi
         printf 'archive-{behavior}' > "$archive"
         ;;
     list)
@@ -324,4 +327,29 @@ fn unsafe_created_member_listing_cannot_reach_extraction_or_publication() {
     assert!(error.contains("invalid filename component"), "{error}");
     assert!(!output.exists());
     assert!(!directory.path().join("escape.txt").exists());
+}
+
+#[test]
+fn backend_scratch_residue_cannot_reach_verification_or_publication() {
+    let directory = TestDirectory::new();
+    let source = source_tree(directory.path());
+    let backend = fake_backend(directory.path(), "leave-temp");
+    let output = directory.path().join("rejected.zip");
+
+    let error = create::create_archive(
+        &backend,
+        &Config::default(),
+        CreateFormat::Zip,
+        &source,
+        &output,
+        true,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(
+        error.contains("unexpected process scratch entry"),
+        "{error}"
+    );
+    assert!(!output.exists());
 }

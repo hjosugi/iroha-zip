@@ -384,6 +384,7 @@ fn probe_backend_in_sandbox(
             program: sandbox_backend,
             args: vec![OsString::from("--version")],
             current_dir: sandbox.root().to_path_buf(),
+            temp_dir: None,
             stdin_file: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),

@@ -167,11 +167,61 @@ impl Sandbox {
         self.root.join("source")
     }
 
+    pub fn create_process_scratch(&self) -> Result<PathBuf> {
+        let path = self.root.join("process-temp");
+        fs::create_dir(&path).map_err(|error| {
+            IrohaZipError::io_path("cannot create process scratch directory", &path, error)
+        })?;
+        validate_directory_security(&path)?;
+        Ok(path)
+    }
+
+    pub fn finish_process_scratch(&self, path: &Path) -> Result<()> {
+        validate_directory_security(path)?;
+        if path != self.root.join("process-temp") {
+            return Err(IrohaZipError::Sandbox(format!(
+                "refusing to inspect an unexpected process scratch directory: {}",
+                path.display()
+            )));
+        }
+        let mut entries = fs::read_dir(path).map_err(|error| {
+            IrohaZipError::io_path("cannot inspect process scratch directory", path, error)
+        })?;
+        if entries
+            .next()
+            .transpose()
+            .map_err(|error| {
+                IrohaZipError::io_path("cannot read process scratch directory", path, error)
+            })?
+            .is_some()
+        {
+            return Err(IrohaZipError::Policy(
+                "archive backend left an unexpected process scratch entry".to_owned(),
+            ));
+        }
+        fs::remove_dir(path).map_err(|error| {
+            IrohaZipError::io_path("cannot remove empty process scratch directory", path, error)
+        })
+    }
+
     pub fn profile_name(&self) -> Option<&str> {
         None
     }
 
-    pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult> {
+    pub fn run(&self, mut spec: ProcessSpec) -> Result<ProcessResult> {
+        if let Some(temp_dir) = spec.temp_dir.as_deref() {
+            validate_directory_security(temp_dir)?;
+            let resolved = fs::canonicalize(temp_dir).map_err(|error| {
+                IrohaZipError::io_path("cannot resolve process scratch directory", temp_dir, error)
+            })?;
+            if resolved == self.root || !resolved.starts_with(&self.root) {
+                return Err(IrohaZipError::Sandbox(format!(
+                    "process scratch directory is outside its sandbox child: {}",
+                    resolved.display()
+                )));
+            }
+            spec.temp_dir = Some(resolved);
+        }
         let stdout = File::create(&spec.stdout_log).map_err(|error| {
             IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
         })?;
@@ -191,7 +241,14 @@ impl Sandbox {
         environment.insert(OsString::from("LC_ALL"), OsString::from("C.UTF-8"));
         environment.insert(OsString::from("LANG"), OsString::from("C.UTF-8"));
         environment.insert(OsString::from("HOME"), self.root.as_os_str().to_owned());
-        environment.insert(OsString::from("TMPDIR"), self.root.as_os_str().to_owned());
+        environment.insert(
+            OsString::from("TMPDIR"),
+            spec.temp_dir
+                .as_deref()
+                .unwrap_or(&self.root)
+                .as_os_str()
+                .to_owned(),
+        );
         if let Some(parent) = spec.program.parent() {
             environment.insert(OsString::from("PATH"), parent.as_os_str().to_owned());
         }
@@ -498,6 +555,14 @@ mod tests {
         fs::create_dir(&internal).unwrap();
         assert!(!sandbox.seal_sandbox_tree(&internal, 0).unwrap());
         assert!(sandbox.seal_sandbox_tree(sandbox.root(), 0).is_err());
+    }
+
+    #[test]
+    fn process_scratch_must_be_empty_before_removal() {
+        let sandbox = Sandbox::new(64, true, IsolationMode::AppContainer).unwrap();
+        let scratch = sandbox.create_process_scratch().unwrap();
+        fs::write(scratch.join("left-behind.tmp"), b"unexpected").unwrap();
+        assert!(sandbox.finish_process_scratch(&scratch).is_err());
     }
 
     #[test]

@@ -97,11 +97,13 @@ pub fn create_archive(
         // intentionally inaccessible from a capability-free AppContainer.
         args.push(OsString::from(SOURCE_ARCHIVE_ARGUMENT));
 
+        let process_temp = sandbox.create_process_scratch()?;
         let baseline = policy::measure_tree(sandbox.root())?;
         let transient_bytes = config
             .limits
             .max_archive_bytes
-            .checked_add(2 * 1024 * 1024)
+            .checked_mul(2)
+            .and_then(|value| value.checked_add(2 * 1024 * 1024))
             .ok_or_else(|| {
                 IrohaZipError::Config("creation monitor byte budget overflow".to_owned())
             })?;
@@ -121,6 +123,7 @@ pub fn create_archive(
             program: sandbox_backend,
             args,
             current_dir: sandbox.root().to_path_buf(),
+            temp_dir: Some(process_temp.clone()),
             stdin_file: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
@@ -137,6 +140,7 @@ pub fn create_archive(
                 format.expected_extension()
             )));
         }
+        sandbox.finish_process_scratch(&process_temp)?;
 
         require_tree_fingerprint(
             &source_dir,

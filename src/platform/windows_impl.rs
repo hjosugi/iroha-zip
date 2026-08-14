@@ -34,13 +34,13 @@ use windows::Win32::Security::{
     TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
 };
 use windows::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
+    BY_HANDLE_FILE_INFORMATION, CreateFileW, DELETE, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_FLAG_SEQUENTIAL_SCAN, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_ID_BOTH_DIR_INFO,
-    FILE_LIST_DIRECTORY, FILE_SHARE_READ, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
-    FindClose, FindFirstStreamW, FindNextStreamW, FindStreamInfoStandard,
-    GetFileInformationByHandle, GetFileInformationByHandleEx, OPEN_EXISTING,
-    WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
+    FILE_FLAG_SEQUENTIAL_SCAN, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+    FILE_ID_BOTH_DIR_INFO, FILE_LIST_DIRECTORY, FILE_SHARE_READ, FileIdBothDirectoryInfo,
+    FileIdBothDirectoryRestartInfo, FindClose, FindFirstStreamW, FindNextStreamW,
+    FindStreamInfoStandard, GetFileInformationByHandle, GetFileInformationByHandleEx,
+    OPEN_EXISTING, WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
 };
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -602,6 +602,58 @@ impl Sandbox {
             .join("source")
     }
 
+    pub fn create_process_scratch(&self) -> Result<PathBuf> {
+        let path = self.root.join("process-temp");
+        fs::create_dir(&path).map_err(|error| {
+            IrohaZipError::io_path("cannot create process scratch directory", &path, error)
+        })?;
+        validate_directory_security(&path)?;
+        let mode = self.mode.as_ref().ok_or_else(|| {
+            IrohaZipError::Sandbox(
+                "cannot create a process scratch directory after sandbox cleanup".to_owned(),
+            )
+        })?;
+        if let Mode::AppContainer { sid, .. } = mode {
+            set_appcontainer_access(
+                &path,
+                *sid,
+                FILE_GENERIC_READ.0 | FILE_GENERIC_WRITE.0 | FILE_GENERIC_EXECUTE.0 | DELETE.0,
+                SUB_CONTAINERS_AND_OBJECTS_INHERIT,
+                true,
+                "process scratch directory",
+            )?;
+        }
+        Ok(path)
+    }
+
+    pub fn finish_process_scratch(&self, path: &Path) -> Result<()> {
+        validate_directory_security(path)?;
+        if path != self.root.join("process-temp") {
+            return Err(IrohaZipError::Sandbox(format!(
+                "refusing to inspect an unexpected process scratch directory: {}",
+                path.display()
+            )));
+        }
+        let mut entries = fs::read_dir(path).map_err(|error| {
+            IrohaZipError::io_path("cannot inspect process scratch directory", path, error)
+        })?;
+        if entries
+            .next()
+            .transpose()
+            .map_err(|error| {
+                IrohaZipError::io_path("cannot read process scratch directory", path, error)
+            })?
+            .is_some()
+        {
+            return Err(IrohaZipError::Policy(
+                "archive backend left an unexpected process scratch entry".to_owned(),
+            ));
+        }
+        fs::remove_dir(path).map_err(|error| {
+            IrohaZipError::io_path("cannot remove empty process scratch directory", path, error)
+        })
+    }
+
     pub fn profile_name(&self) -> Option<&str> {
         match self.mode.as_ref()? {
             Mode::AppContainer { profile_name, .. } => Some(profile_name),
@@ -609,7 +661,20 @@ impl Sandbox {
         }
     }
 
-    pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult> {
+    pub fn run(&self, mut spec: ProcessSpec) -> Result<ProcessResult> {
+        if let Some(temp_dir) = spec.temp_dir.as_deref() {
+            validate_directory_security(temp_dir)?;
+            let resolved = fs::canonicalize(temp_dir).map_err(|error| {
+                IrohaZipError::io_path("cannot resolve process scratch directory", temp_dir, error)
+            })?;
+            if resolved == self.root || !resolved.starts_with(&self.root) {
+                return Err(IrohaZipError::Sandbox(format!(
+                    "process scratch directory is outside its sandbox child: {}",
+                    resolved.display()
+                )));
+            }
+            spec.temp_dir = Some(resolved);
+        }
         let mode = self.mode.as_ref().ok_or_else(|| {
             IrohaZipError::Sandbox("cannot run a process after sandbox cleanup".to_owned())
         })?;
@@ -1202,7 +1267,8 @@ fn run_in_appcontainer(
         .collect();
     let mut command_line = windows_command_line::encode(&program_units, &argument_units)
         .map_err(|error| IrohaZipError::Sandbox(format!("cannot encode command line: {error}")))?;
-    let environment = minimal_environment(&spec.program, &spec.current_dir);
+    let environment =
+        minimal_environment(&spec.program, &spec.current_dir, spec.temp_dir.as_deref());
     let mut process_info = PROCESS_INFORMATION::default();
 
     let create_result = unsafe {
@@ -1387,7 +1453,11 @@ fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
         .args(&spec.args)
         .current_dir(&spec.current_dir)
         .env_clear()
-        .envs(minimal_environment_pairs(&spec.program, &spec.current_dir))
+        .envs(minimal_environment_pairs(
+            &spec.program,
+            &spec.current_dir,
+            spec.temp_dir.as_deref(),
+        ))
         .stdin(Stdio::from(stdin))
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr))
@@ -1893,8 +1963,8 @@ fn wide_array_to_string(value: &[u16]) -> String {
     String::from_utf16_lossy(&value[..length])
 }
 
-fn minimal_environment(program: &Path, root: &Path) -> Vec<u16> {
-    let pairs = minimal_environment_pairs(program, root);
+fn minimal_environment(program: &Path, root: &Path, temp_dir: Option<&Path>) -> Vec<u16> {
+    let pairs = minimal_environment_pairs(program, root, temp_dir);
     let mut result = Vec::<u16>::new();
     for (key, value) in pairs {
         let mut entry = key;
@@ -1907,12 +1977,17 @@ fn minimal_environment(program: &Path, root: &Path) -> Vec<u16> {
     result
 }
 
-fn minimal_environment_pairs(program: &Path, root: &Path) -> Vec<(OsString, OsString)> {
+fn minimal_environment_pairs(
+    program: &Path,
+    root: &Path,
+    temp_dir: Option<&Path>,
+) -> Vec<(OsString, OsString)> {
     let system_root = std::env::var_os("SystemRoot")
         .or_else(|| std::env::var_os("WINDIR"))
         .unwrap_or_else(|| OsString::from(r"C:\Windows"));
     let backend_dir = program.parent().unwrap_or(root).as_os_str().to_owned();
     let root_os = root.as_os_str().to_owned();
+    let temp_os = temp_dir.unwrap_or(root).as_os_str().to_owned();
     vec![
         // Keep explicit UTF-8 locale hints for CRT/backend builds that honor
         // the environment. The prepared executable's activeCodePage manifest
@@ -1922,8 +1997,8 @@ fn minimal_environment_pairs(program: &Path, root: &Path) -> Vec<(OsString, OsSt
         (OsString::from("LOCALAPPDATA"), root_os.clone()),
         (OsString::from("PATH"), backend_dir),
         (OsString::from("SystemRoot"), system_root.clone()),
-        (OsString::from("TEMP"), root_os.clone()),
-        (OsString::from("TMP"), root_os.clone()),
+        (OsString::from("TEMP"), temp_os.clone()),
+        (OsString::from("TMP"), temp_os),
         (OsString::from("USERPROFILE"), root_os),
         (OsString::from("WINDIR"), system_root),
     ]
@@ -1977,9 +2052,11 @@ mod tests {
 
     #[test]
     fn backend_environment_keeps_explicit_utf8_locale_hints() {
+        let scratch = Path::new(r"C:\sandbox\process-temp");
         let pairs = minimal_environment_pairs(
             Path::new(r"C:\backend\bsdtar.exe"),
             Path::new(r"C:\sandbox"),
+            Some(scratch),
         );
         for key in ["LANG", "LC_ALL"] {
             let value = pairs
@@ -1987,6 +2064,13 @@ mod tests {
                 .find_map(|(candidate, value)| (candidate == key).then_some(value))
                 .expect("UTF-8 locale variable must be present");
             assert_eq!(value, ".utf8");
+        }
+        for key in ["TEMP", "TMP"] {
+            let value = pairs
+                .iter()
+                .find_map(|(candidate, value)| (candidate == key).then_some(value))
+                .expect("explicit process scratch variable must be present");
+            assert_eq!(value, scratch.as_os_str());
         }
     }
 

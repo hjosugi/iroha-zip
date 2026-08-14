@@ -15,6 +15,7 @@ pub struct ProcessSpec {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub current_dir: PathBuf,
+    pub temp_dir: Option<PathBuf>,
     pub stdin_file: Option<PathBuf>,
     pub stdout_log: PathBuf,
     pub stderr_log: PathBuf,

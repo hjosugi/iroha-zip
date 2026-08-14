@@ -9,6 +9,7 @@
 - Updated the SHA-1/SHA-256 implementation dependencies to the compatible
   `sha1`/`sha2` 0.11.0 generation.
 - Replaced AppContainer filesystem-tree conversion with a bounded path that copies only audited regular objects into a unique external staging tree, seals every object read/execute-only to the Package SID, serializes a handle-pinned PAX stream in the trusted parent, and gives the backend only fixed `@source.pax.tar`.
+- Give libarchive's 7z writer a dedicated resource-monitored AppContainer scratch directory with only the required temporary read/write/delete boundary, and reject any residue after process exit.
 - Work around libarchive's Windows 3.8.6+ UTF-8 filename regression with a bounded UTF-8 pathname listing child that loads manifest-pinned DLL candidates only after rechecking zero-capability AppContainer isolation; explicitly request UTF-8 ZIP/PAX header names and retain the byte-verified UTF-8 process manifest on disposable backend copies.
 - Localize the complete native Settings surface in Japanese and English, follow the Windows UI language, provide an explicit process-local override, and exercise both languages through UI Automation.
 
