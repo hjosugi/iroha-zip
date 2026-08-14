@@ -110,6 +110,26 @@ struct ProvenanceSource {
     verification: Verification,
 }
 
+#[derive(Clone, Copy)]
+struct SupportedSourceContract {
+    repository: &'static str,
+    package_prefix: &'static str,
+}
+
+fn supported_source_contract(source: &ProvenanceSource) -> Option<SupportedSourceContract> {
+    match (source.kind.as_str(), source.repository.as_str()) {
+        ("msys2-ucrt64-pacman", "ucrt64") => Some(SupportedSourceContract {
+            repository: "ucrt64",
+            package_prefix: "mingw-w64-ucrt-x86_64-",
+        }),
+        ("msys2-clangarm64-pacman", "clangarm64") => Some(SupportedSourceContract {
+            repository: "clangarm64",
+            package_prefix: "mingw-w64-clang-aarch64-",
+        }),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Verification {
@@ -329,10 +349,11 @@ fn validate_provenance(
         ));
     }
     let source = &document.source;
-    if source.supported {
-        if source.kind != "msys2-ucrt64-pacman"
-            || source.repository != "ucrt64"
-            || source.verification.status != "verified"
+    let supported_contract = if source.supported {
+        let contract = supported_source_contract(source).ok_or_else(|| {
+            evidence_error("supported provenance identifies an unknown MSYS2 environment")
+        })?;
+        if source.verification.status != "verified"
             || source.verification.method != "pacman-required-trusted-only"
             || source.verification.keyring_package.as_deref() != Some("msys2-keyring")
             || source
@@ -342,9 +363,10 @@ fn validate_provenance(
                 .is_none_or(|version| !is_bounded_text(version, 256))
         {
             return Err(evidence_error(
-                "supported provenance must be verified MSYS2 UCRT64 pacman evidence",
+                "supported provenance must be verified MSYS2 pacman evidence",
             ));
         }
+        Some(contract)
     } else if source.kind != "unverified-local-bundle"
         || source.repository != "unverified-local"
         || source.verification.status != "unverified"
@@ -355,7 +377,9 @@ fn validate_provenance(
         return Err(evidence_error(
             "unsupported provenance does not carry the required explicit warning state",
         ));
-    }
+    } else {
+        None
+    };
 
     if document.manifest.path != MANIFEST_FILE || !is_sha256(&document.manifest.sha256) {
         return Err(evidence_error("manifest evidence record is invalid"));
@@ -371,7 +395,7 @@ fn validate_provenance(
     let mut packages = BTreeMap::new();
     let mut previous_id: Option<&str> = None;
     for package in &document.packages {
-        validate_package(package, source.supported)?;
+        validate_package(package, supported_contract)?;
         if previous_id.is_some_and(|previous| previous >= package.id.as_str()) {
             return Err(evidence_error(
                 "provenance packages must be uniquely sorted by id",
@@ -428,7 +452,10 @@ fn validate_provenance(
     })
 }
 
-fn validate_package(package: &ProvenancePackage, supported: bool) -> Result<()> {
+fn validate_package(
+    package: &ProvenancePackage,
+    supported: Option<SupportedSourceContract>,
+) -> Result<()> {
     if package.id.is_empty()
         || package.id.len() > 256
         || !package
@@ -451,10 +478,11 @@ fn validate_package(package: &ProvenancePackage, supported: bool) -> Result<()> 
             package.id
         )));
     }
-    if supported {
-        if package.repository != "ucrt64"
+    if let Some(contract) = supported {
+        if package.repository != contract.repository
             || package.name != package.id
-            || !package.id.starts_with("mingw-w64-ucrt-x86_64-")
+            || !package.id.starts_with(contract.package_prefix)
+            || package.id.len() == contract.package_prefix.len()
             || package
                 .download_url
                 .as_deref()
@@ -942,7 +970,32 @@ mod tests {
         fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
     }
 
-    fn fixture(supported: bool) -> (TestDirectory, BackendBundle) {
+    #[derive(Clone, Copy)]
+    enum FixtureSource {
+        Ucrt64,
+        ClangArm64,
+        Unsupported,
+    }
+
+    fn fixture(source_kind: FixtureSource) -> (TestDirectory, BackendBundle) {
+        let supported = !matches!(source_kind, FixtureSource::Unsupported);
+        let (package_name, repository, source_name) = match source_kind {
+            FixtureSource::Ucrt64 => (
+                "mingw-w64-ucrt-x86_64-libarchive",
+                "ucrt64",
+                "msys2-ucrt64-pacman",
+            ),
+            FixtureSource::ClangArm64 => (
+                "mingw-w64-clang-aarch64-libarchive",
+                "clangarm64",
+                "msys2-clangarm64-pacman",
+            ),
+            FixtureSource::Unsupported => (
+                "unverified-local-bundle",
+                "unverified-local",
+                "unverified-local-bundle",
+            ),
+        };
         let directory = TestDirectory::new();
         let payload = directory.0.join("bsdtar.exe");
         fs::write(&payload, b"test backend").unwrap();
@@ -959,11 +1012,11 @@ mod tests {
         let notice_hash = sha256_file(&evidence.join(NOTICES_FILE)).unwrap();
         let package = if supported {
             json!({
-                "id": "mingw-w64-ucrt-x86_64-libarchive",
-                "name": "mingw-w64-ucrt-x86_64-libarchive",
+                "id": package_name,
+                "name": package_name,
                 "version": "3.8.9-1",
                 "architecture": "any",
-                "repository": "ucrt64",
+                "repository": repository,
                 "downloadUrl": "https://repo.msys2.org/test.pkg.tar.zst",
                 "archiveSha256": "a".repeat(64),
                 "signature": "A".repeat(32),
@@ -990,9 +1043,9 @@ mod tests {
         let license_hash = sha256_file(&license_path).unwrap();
         let source = if supported {
             json!({
-                "kind": "msys2-ucrt64-pacman",
+                "kind": source_name,
                 "supported": true,
-                "repository": "ucrt64",
+                "repository": repository,
                 "verification": {
                     "status": "verified",
                     "method": "pacman-required-trusted-only",
@@ -1099,8 +1152,12 @@ mod tests {
 
     #[test]
     fn verifies_supported_and_explicitly_unsupported_evidence() {
-        for supported in [true, false] {
-            let (_directory, backend) = fixture(supported);
+        for (source, supported) in [
+            (FixtureSource::Ucrt64, true),
+            (FixtureSource::ClangArm64, true),
+            (FixtureSource::Unsupported, false),
+        ] {
+            let (_directory, backend) = fixture(source);
             let evidence = BackendEvidence::verify(&backend).unwrap();
             assert_eq!(evidence.is_supported(), supported);
             assert_eq!(evidence.package_count(), 1);
@@ -1110,7 +1167,7 @@ mod tests {
 
     #[test]
     fn rejects_payload_sbom_inventory_and_evidence_tree_drift() {
-        let (directory, backend) = fixture(true);
+        let (directory, backend) = fixture(FixtureSource::Ucrt64);
         let evidence = directory.0.join(EVIDENCE_DIRECTORY);
 
         fs::write(evidence.join("unexpected.txt"), b"unexpected").unwrap();
@@ -1133,7 +1190,7 @@ mod tests {
 
     #[test]
     fn rejects_tampered_notice_and_missing_provenance() {
-        let (directory, backend) = fixture(false);
+        let (directory, backend) = fixture(FixtureSource::Unsupported);
         let evidence = directory.0.join(EVIDENCE_DIRECTORY);
         fs::write(evidence.join(NOTICES_FILE), b"tampered").unwrap();
         let error = BackendEvidence::verify(&backend).unwrap_err().to_string();
@@ -1141,7 +1198,7 @@ mod tests {
         let error = BackendBundle::verify(&directory.0).unwrap_err().to_string();
         assert!(error.contains("notice SHA-256 does not match"));
 
-        let (directory, backend) = fixture(false);
+        let (directory, backend) = fixture(FixtureSource::Unsupported);
         let license = directory
             .0
             .join(EVIDENCE_DIRECTORY)
@@ -1150,7 +1207,7 @@ mod tests {
         let error = BackendEvidence::verify(&backend).unwrap_err().to_string();
         assert!(error.contains("license evidence does not match inventory"));
 
-        let (directory, backend) = fixture(false);
+        let (directory, backend) = fixture(FixtureSource::Unsupported);
         fs::remove_file(directory.0.join(EVIDENCE_DIRECTORY).join(PROVENANCE_FILE)).unwrap();
         let error = BackendEvidence::verify(&backend).unwrap_err().to_string();
         assert!(error.contains("cannot inspect backend evidence document"));

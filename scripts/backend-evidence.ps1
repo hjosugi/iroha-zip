@@ -152,12 +152,25 @@ function New-IrohaZipBackendEvidence {
     Assert-EvidenceText ([string]$source.verification.status) 32 "verification status"
     Assert-EvidenceText ([string]$source.verification.method) 128 "verification method"
     $supported = [bool]$source.supported
+    $supportedRepository = $null
+    $supportedPackagePrefix = $null
     if ($supported) {
-        if ([string]$source.kind -ne "msys2-ucrt64-pacman" -or
-            [string]$source.repository -ne "ucrt64" -or
-            [string]$source.verification.status -ne "verified" -or
+        if ([string]$source.kind -eq "msys2-ucrt64-pacman" -and
+            [string]$source.repository -eq "ucrt64") {
+            $supportedRepository = "ucrt64"
+            $supportedPackagePrefix = "mingw-w64-ucrt-x86_64-"
+        }
+        elseif ([string]$source.kind -eq "msys2-clangarm64-pacman" -and
+            [string]$source.repository -eq "clangarm64") {
+            $supportedRepository = "clangarm64"
+            $supportedPackagePrefix = "mingw-w64-clang-aarch64-"
+        }
+        else {
+            throw "Supported metadata identifies an unknown MSYS2 environment."
+        }
+        if ([string]$source.verification.status -ne "verified" -or
             [string]$source.verification.method -ne "pacman-required-trusted-only") {
-            throw "Only verified MSYS2 UCRT64 pacman metadata is a supported backend source."
+            throw "Only verified MSYS2 pacman metadata is a supported backend source."
         }
         Assert-EvidenceText ([string]$source.verification.keyringPackage) 128 "keyring package"
         Assert-EvidenceText ([string]$source.verification.keyringVersion) 256 "keyring version"
@@ -197,8 +210,9 @@ function New-IrohaZipBackendEvidence {
         }
         if ($supported) {
             if ([string]$package.name -ne $packageId -or
-                -not $packageId.StartsWith("mingw-w64-ucrt-x86_64-", [System.StringComparison]::Ordinal) -or
-                [string]$package.repository -ne "ucrt64" -or
+                -not $packageId.StartsWith($supportedPackagePrefix, [System.StringComparison]::Ordinal) -or
+                $packageId.Length -eq $supportedPackagePrefix.Length -or
+                [string]$package.repository -ne $supportedRepository -or
                 [string]$package.downloadUrl -notmatch '^https://' -or
                 [string]$package.archiveSha256 -notmatch '^[0-9a-f]{64}$' -or
                 [string]$package.signature -notmatch '^[A-Za-z0-9+/=]{32,32768}$') {

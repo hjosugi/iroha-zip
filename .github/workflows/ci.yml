@@ -88,11 +88,20 @@ jobs:
   windows-arm64-native:
     name: Test Windows ARM64 natively
     runs-on: windows-11-arm
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install a current MSYS2 CLANGARM64 libarchive source
+        id: arm_msys2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: CLANGARM64
+          update: true
+          cache: true
+          install: mingw-w64-clang-aarch64-libarchive
 
       - name: Install pinned native Rust toolchain
         shell: pwsh
@@ -130,6 +139,66 @@ jobs:
       - name: Build native release executables
         run: cargo build --release --bins --locked
 
+      - name: Export a verified native ARM64 backend
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.arm_msys2.outputs.msys2-location }}
+        run: >-
+          ./scripts/export-msys2-backend.ps1
+          -Msys2Root $env:MSYS2_ROOT
+          -Environment CLANGARM64
+          -DestinationDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-arm64-backend')
+
+      - name: Exercise native ARM64 archive and isolation matrix
+        shell: pwsh
+        run: >-
+          ./scripts/test-windows-e2e.ps1
+          -Executable ./target/release/iroha-zip.exe
+          -ShellExecutable ./target/release/iroha-zip-shell.exe
+          -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-arm64-backend')
+          -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'windows-arm64-e2e.json')
+
+      - name: Exercise native ARM64 malicious archive corpus
+        shell: pwsh
+        env:
+          IROHA_ZIP_CORPUS_BACKEND: ${{ runner.temp }}/iroha-zip-arm64-backend
+          IROHA_ZIP_CORPUS_EVIDENCE: ${{ runner.temp }}/windows-arm64-malicious-corpus.json
+        run: |
+          $builtExecutable = Join-Path $env:GITHUB_WORKSPACE 'target/release/iroha-zip.exe'
+          $runtimeRoot = Join-Path $env:RUNNER_TEMP `
+            ("iroha-zip-arm64-corpus-" + [Guid]::NewGuid().ToString('N'))
+          $runtimeExecutable = Join-Path $runtimeRoot 'iroha-zip.exe'
+          New-Item -ItemType Directory -Path $runtimeRoot | Out-Null
+          try {
+            Copy-Item -LiteralPath $builtExecutable -Destination $runtimeExecutable
+            if ((Get-FileHash -LiteralPath $builtExecutable -Algorithm SHA256).Hash -cne
+                (Get-FileHash -LiteralPath $runtimeExecutable -Algorithm SHA256).Hash) {
+              throw 'Independent ARM64 corpus executable differs from the Cargo build.'
+            }
+            $env:IROHA_ZIP_CORPUS_EXECUTABLE = $runtimeExecutable
+            cargo test --test malicious_archive_corpus --locked -- --ignored --nocapture
+            if ($LASTEXITCODE -ne 0) {
+              throw "Native ARM64 malicious corpus failed with exit code $LASTEXITCODE."
+            }
+          }
+          finally {
+            Remove-Item -LiteralPath $runtimeRoot -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Exercise native ARM64 settings setup and diagnosis
+        shell: pwsh
+        run: |
+          ./scripts/test-settings-ui.ps1 `
+            -Executable ./target/release/iroha-zip-settings.exe `
+            -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-arm64-backend') `
+            -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'windows-arm64-settings-ja.json') `
+            -Language ja
+          ./scripts/test-settings-ui.ps1 `
+            -Executable ./target/release/iroha-zip-settings.exe `
+            -BackendDirectory (Join-Path $env:RUNNER_TEMP 'iroha-zip-arm64-backend') `
+            -EvidenceOutput (Join-Path $env:RUNNER_TEMP 'windows-arm64-settings-en.json') `
+            -Language en
+
       - name: Verify ARM64 PE inventory and AppContainer evidence
         shell: pwsh
         run: |
@@ -160,6 +229,40 @@ jobs:
                 $name, $machine)
             }
           }
+
+          $backendRoot = Join-Path $env:RUNNER_TEMP 'iroha-zip-arm64-backend'
+          $backendFiles = @(
+            Get-ChildItem -LiteralPath $backendRoot -File |
+              Where-Object { $_.Extension -in @('.exe', '.dll') } |
+              Sort-Object -Property Name
+          )
+          if ($backendFiles.Count -lt 2 -or
+              @($backendFiles | Where-Object { $_.Name -ceq 'bsdtar.exe' }).Count -ne 1) {
+            throw 'Native ARM64 backend PE inventory is incomplete.'
+          }
+          $backendInventory = @(
+            foreach ($file in $backendFiles) {
+              $bytes = [IO.File]::ReadAllBytes($file.FullName)
+              if ($bytes.Length -lt 68 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+                throw "Backend payload has no valid DOS header: $($file.Name)"
+              }
+              $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+              if ($peOffset -lt 64 -or $peOffset + 6 -gt $bytes.Length -or
+                  $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
+                  $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) {
+                throw "Backend payload has no valid PE signature: $($file.Name)"
+              }
+              $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+              if ($machine -ne 0xaa64) {
+                throw ("Expected ARM64 backend PE 0xAA64 for {0}; found 0x{1:X4}" -f `
+                  $file.Name, $machine)
+              }
+              [ordered]@{
+                name = $file.Name
+                sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              }
+            }
+          )
 
           $builtExecutable = Join-Path $root 'iroha-zip.exe'
           # rust-cache may restore target artifacts as hard links. Production
@@ -207,8 +310,105 @@ jobs:
           if ($isolation.probeSha256 -cne $binaryHash) {
             throw 'ARM64 isolation probe did not execute the release binary bytes.'
           }
+
+          $configText = [IO.File]::ReadAllText($config)
+          $isolationMarker = 'isolation = "appcontainer"'
+          if ([regex]::Matches(
+              $configText,
+              [regex]::Escape($isolationMarker)
+            ).Count -ne 1) {
+            throw 'ARM64 configuration did not contain exactly one isolation marker.'
+          }
+          $lpacConfig = Join-Path $env:RUNNER_TEMP "iroha-zip-arm64-lpac-$probeId.toml"
+          [IO.File]::WriteAllText(
+            $lpacConfig,
+            $configText.Replace($isolationMarker, 'isolation = "lpac"'),
+            [Text.UTF8Encoding]::new($false)
+          )
+          $lpacStart = [Diagnostics.ProcessStartInfo]::new()
+          $lpacStart.FileName = $executable
+          $lpacStart.UseShellExecute = $false
+          $lpacStart.CreateNoWindow = $true
+          $lpacStart.RedirectStandardOutput = $true
+          $lpacStart.RedirectStandardError = $true
+          foreach ($argument in @('--config', $lpacConfig, 'isolation-report')) {
+            $lpacStart.ArgumentList.Add($argument)
+          }
+          $lpacProcess = [Diagnostics.Process]::new()
+          $lpacProcess.StartInfo = $lpacStart
+          try {
+            if (-not $lpacProcess.Start()) {
+              throw 'Native ARM64 LPAC probe did not start.'
+            }
+            $lpacStdoutTask = $lpacProcess.StandardOutput.ReadToEndAsync()
+            $lpacStderrTask = $lpacProcess.StandardError.ReadToEndAsync()
+            if (-not $lpacProcess.WaitForExit(120000)) {
+              $lpacProcess.Kill($true)
+              $lpacProcess.WaitForExit()
+              throw 'Native ARM64 LPAC probe exceeded 120 seconds.'
+            }
+            $lpacExitCode = $lpacProcess.ExitCode
+            $lpacStdout = $lpacStdoutTask.GetAwaiter().GetResult()
+            $lpacStderr = $lpacStderrTask.GetAwaiter().GetResult()
+          }
+          finally {
+            $lpacProcess.Dispose()
+          }
+          if ($lpacExitCode -eq 0) {
+            $lpacIsolation = $lpacStdout | ConvertFrom-Json -Depth 20
+            $lpacCleanup = @($lpacIsolation.cleanup)
+            if ($lpacIsolation.schemaVersion -ne 4 -or
+                $lpacIsolation.requestedMode -cne 'lpac' -or
+                -not $lpacIsolation.token.isAppContainer -or
+                -not $lpacIsolation.token.isLessPrivilegedAppContainer -or
+                $lpacIsolation.token.capabilityCount -ne 0 -or
+                -not $lpacIsolation.network.denied -or
+                -not $lpacIsolation.timeout.rejected -or
+                -not $lpacIsolation.memory.rejected -or
+                -not $lpacIsolation.crash.terminatedWithoutSuccess -or
+                $lpacIsolation.crash.exitCode -eq 0 -or
+                -not $lpacIsolation.loaderFailure.createProcessRejected -or
+                -not $lpacIsolation.processTemp.rngSucceeded -or
+                -not $lpacIsolation.processTemp.deleteOnCloseSucceeded -or
+                -not $lpacIsolation.stagingWriteSeal.aclApplied -or
+                $lpacCleanup.Count -ne 7 -or
+                @($lpacCleanup | Where-Object {
+                  -not $_.profileDeleteSucceeded -or -not $_.temporaryRootRemoved
+                }).Count -ne 0 -or
+                $lpacIsolation.probeSha256 -cne $binaryHash) {
+              throw 'Native ARM64 LPAC evidence did not satisfy the complete contract.'
+            }
+            $lpacEvidence = [ordered]@{
+              supported = $true
+              failureClass = $null
+              failClosed = $true
+              isolation = $lpacIsolation
+            }
+          }
+          elseif ($lpacExitCode -eq 2 -and
+              [string]::IsNullOrWhiteSpace($lpacStdout) -and
+              $lpacStderr -match `
+                'GetTokenInformation\(TokenIsLessPrivilegedAppContainer\) failed: The parameter is incorrect\.') {
+            $lpacEvidence = [ordered]@{
+              supported = $false
+              failureClass = 'token-query-invalid-parameter'
+              failClosed = $true
+              isolation = [ordered]@{
+                exitCode = $lpacExitCode
+                stdoutEmpty = $true
+                stderrSha256 = [Convert]::ToHexString(
+                  [Security.Cryptography.SHA256]::HashData(
+                    [Text.Encoding]::UTF8.GetBytes($lpacStderr)
+                  )
+                ).ToLowerInvariant()
+              }
+            }
+          }
+          else {
+            throw "Native ARM64 LPAC probe failed unexpectedly: exit=$lpacExitCode stderr=$($lpacStderr.Trim())"
+          }
           $evidence = [ordered]@{
-            schemaVersion = 1
+            schemaVersion = 2
             runner = [ordered]@{
               osDescription = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
               osArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
@@ -219,8 +419,13 @@ jobs:
             rustHost = (rustc -vV | Where-Object { $_ -like 'host:*' })
             binarySha256 = $binaryHash
             peMachine = '0xAA64'
+            backendPeMachine = '0xAA64'
+            backendPayloads = $backendInventory
             isolation = $isolation
-            backendArchiveMatrixExecuted = $false
+            lpac = $lpacEvidence
+            backendArchiveMatrixExecuted = $true
+            maliciousCorpusExecuted = $true
+            settingsMatrixExecuted = $true
             releaseAssetPublished = $false
           }
           $evidencePath = Join-Path $env:RUNNER_TEMP 'windows-arm64-native.json'
@@ -229,14 +434,19 @@ jobs:
             (ConvertTo-Json -InputObject $evidence -Depth 30),
             [Text.UTF8Encoding]::new($false)
           )
-          Write-Host 'Verified three native ARM64 PEs and AppContainer evidence; no binary artifact was published.'
+          Write-Host 'Verified three native ARM64 PEs and AppContainer/LPAC evidence; no binary artifact was published.'
 
       - name: Upload native ARM64 evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-arm64-native
-          path: ${{ runner.temp }}/windows-arm64-native.json
+          path: |
+            ${{ runner.temp }}/windows-arm64-native.json
+            ${{ runner.temp }}/windows-arm64-e2e.json
+            ${{ runner.temp }}/windows-arm64-malicious-corpus.json
+            ${{ runner.temp }}/windows-arm64-settings-ja.json
+            ${{ runner.temp }}/windows-arm64-settings-en.json
           if-no-files-found: warn
           retention-days: 14
 

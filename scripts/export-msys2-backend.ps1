@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [string]$Msys2Root = "C:\msys64",
-    [string]$DestinationDirectory
+    [string]$DestinationDirectory,
+
+    [ValidateSet("UCRT64", "CLANGARM64")]
+    [string]$Environment = "UCRT64"
 )
 
 Set-StrictMode -Version Latest
@@ -13,17 +16,44 @@ if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
 }
 
 $Msys2Root = [System.IO.Path]::GetFullPath($Msys2Root)
+$environmentContract = switch ($Environment) {
+    "UCRT64" {
+        [pscustomobject][ordered]@{
+            displayName = "UCRT64"
+            directory = "ucrt64"
+            packagePrefix = "mingw-w64-ucrt-x86_64-"
+            sourceKind = "msys2-ucrt64-pacman"
+        }
+    }
+    "CLANGARM64" {
+        [pscustomobject][ordered]@{
+            displayName = "CLANGARM64"
+            directory = "clangarm64"
+            packagePrefix = "mingw-w64-clang-aarch64-"
+            sourceKind = "msys2-clangarm64-pacman"
+        }
+    }
+}
+$environmentDirectory = [string]$environmentContract.directory
+$environmentUnix = "/$environmentDirectory"
+$environmentBinUnix = "$environmentUnix/bin/"
+$packagePrefix = [string]$environmentContract.packagePrefix
+$packagePattern = '^' + [regex]::Escape($packagePrefix) + '[A-Za-z0-9@._+-]+$'
+$licenseEntryPrefix = "$environmentDirectory/share/licenses/"
+$licenseEntryPattern = '^' + [regex]::Escape($licenseEntryPrefix) + `
+    '[A-Za-z0-9@._+-]+/.+'
 $bash = Join-Path $Msys2Root "usr\bin\bash.exe"
-$bsdtar = Join-Path $Msys2Root "ucrt64\bin\bsdtar.exe"
+$bsdtar = Join-Path $Msys2Root "$environmentDirectory\bin\bsdtar.exe"
 $pacman = Join-Path $Msys2Root "usr\bin\pacman.exe"
 if (-not (Test-Path -LiteralPath $bash -PathType Leaf)) {
     throw "MSYS2 bash.exe was not found: $bash"
 }
 if (-not (Test-Path -LiteralPath $bsdtar -PathType Leaf)) {
+    $libarchivePackage = $packagePrefix + "libarchive"
     throw @"
-MSYS2 UCRT64 bsdtar.exe was not found: $bsdtar
-Install it from an MSYS2 UCRT64 shell:
-  pacman -S mingw-w64-ucrt-x86_64-libarchive
+MSYS2 $([string]$environmentContract.displayName) bsdtar.exe was not found: $bsdtar
+Install it from an MSYS2 $([string]$environmentContract.displayName) shell:
+  pacman -S $libarchivePackage
 "@
 }
 if (-not (Test-Path -LiteralPath $pacman -PathType Leaf)) {
@@ -63,8 +93,8 @@ function Export-ArchiveEntry([string]$Archive, [string]$Entry, [string]$Destinat
     $archiveUnix = Convert-ToMsysPath $Archive
     $destinationUnix = Convert-ToMsysPath $Destination
     Invoke-Msys2 `
-        'PATH=/ucrt64/bin:/usr/bin /ucrt64/bin/bsdtar.exe -xOf "$1" -- "$2" > "$3"' `
-        @($archiveUnix, $Entry, $destinationUnix) | Out-Null
+        'environment="$1"; PATH="$environment/bin:/usr/bin" "$environment/bin/bsdtar.exe" -xOf "$2" -- "$3" > "$4"' `
+        @($environmentUnix, $archiveUnix, $Entry, $destinationUnix) | Out-Null
     if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
         throw "Archive entry extraction did not create a regular file: $Entry"
     }
@@ -73,8 +103,9 @@ function Export-ArchiveEntry([string]$Archive, [string]$Entry, [string]$Destinat
 function Invoke-Ldd([string]$UnixPath) {
     # Pass the path as bash $1 instead of interpolating it into shell syntax.
     $output = @(
-        & $bash --noprofile --norc -lc 'PATH=/ucrt64/bin:/usr/bin ldd "$1"' `
-            iroha-zip-ldd $UnixPath 2>&1
+        & $bash --noprofile --norc -lc `
+            'environment="$1"; PATH="$environment/bin:/usr/bin" ldd "$2"' `
+            iroha-zip-ldd $environmentUnix $UnixPath 2>&1
     )
     if ($LASTEXITCODE -ne 0) {
         throw "ldd failed for $UnixPath`n$($output -join "`n")"
@@ -82,17 +113,17 @@ function Invoke-Ldd([string]$UnixPath) {
     return $output
 }
 
-function Convert-UcrtPath([string]$UnixPath) {
-    if (-not $UnixPath.StartsWith("/ucrt64/bin/", [System.StringComparison]::Ordinal)) {
-        throw "Not a UCRT64 binary path: $UnixPath"
+function Convert-EnvironmentPath([string]$UnixPath) {
+    if (-not $UnixPath.StartsWith($environmentBinUnix, [System.StringComparison]::Ordinal)) {
+        throw "Not a $([string]$environmentContract.displayName) binary path: $UnixPath"
     }
-    $name = $UnixPath.Substring("/ucrt64/bin/".Length).Replace('/', '\')
-    return Join-Path (Join-Path $Msys2Root "ucrt64\bin") $name
+    $name = $UnixPath.Substring($environmentBinUnix.Length).Replace('/', '\')
+    return Join-Path (Join-Path $Msys2Root "$environmentDirectory\bin") $name
 }
 
 $pending = [System.Collections.Generic.Queue[string]]::new()
 $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-$pending.Enqueue("/ucrt64/bin/bsdtar.exe")
+$pending.Enqueue("${environmentBinUnix}bsdtar.exe")
 
 while ($pending.Count -gt 0) {
     $current = $pending.Dequeue()
@@ -103,11 +134,13 @@ while ($pending.Count -gt 0) {
     foreach ($lineObject in (Invoke-Ldd $current)) {
         $line = [string]$lineObject
         $dependency = $null
-        if ($line -match '=>\s+(/ucrt64/bin/[^\s]+)') {
-            $dependency = $Matches[1]
+        if ($line -match '=>\s+(/[^\s]+)' -and
+            $Matches[1].StartsWith($environmentBinUnix, [System.StringComparison]::Ordinal)) {
+            $dependency = [string]$Matches[1]
         }
-        elseif ($line -match '^\s*(/ucrt64/bin/[^\s]+)\s+\(') {
-            $dependency = $Matches[1]
+        elseif ($line -match '^\s*(/[^\s]+)\s+\(' -and
+            $Matches[1].StartsWith($environmentBinUnix, [System.StringComparison]::Ordinal)) {
+            $dependency = [string]$Matches[1]
         }
         if ($null -ne $dependency -and -not $seen.Contains($dependency)) {
             $pending.Enqueue($dependency)
@@ -148,7 +181,7 @@ RemoteFileSigLevel = Required TrustedOnly
 [msys]
 Include = /etc/pacman.d/mirrorlist.msys
 
-[ucrt64]
+[$environmentDirectory]
 Include = /etc/pacman.d/mirrorlist.mingw
 "@
     [System.IO.File]::WriteAllText(
@@ -183,8 +216,8 @@ Include = /etc/pacman.d/mirrorlist.mingw
     for ($index = 0; $index -lt $runtimePaths.Count; $index++) {
         $unixPath = [string]$runtimePaths[$index]
         $owner = [string]$owners[$index]
-        if ($owner -notmatch '^mingw-w64-ucrt-x86_64-[A-Za-z0-9@._+-]+$') {
-            throw "Runtime file is not owned by a supported UCRT64 package: $unixPath -> $owner"
+        if ($owner -notmatch $packagePattern) {
+            throw "Runtime file is not owned by a supported $([string]$environmentContract.displayName) package: $unixPath -> $owner"
         }
         $ownerByUnixPath[$unixPath] = $owner
     }
@@ -198,7 +231,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
     )) {
         $installedParts = ([string]$installed) -split '\s+', 2
         if ($installedParts.Count -ne 2 -or
-            $installedParts[0] -notmatch '^mingw-w64-ucrt-x86_64-[A-Za-z0-9@._+-]+$' -or
+            $installedParts[0] -notmatch $packagePattern -or
             $installedVersions.ContainsKey($installedParts[0])) {
             throw "Cannot parse installed package version: $installed"
         }
@@ -218,7 +251,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
     )) {
         $parts = ([string]$metadataLine) -split "`t", 7
         if ($parts.Count -ne 7 -or
-            $parts[0] -notmatch '^mingw-w64-ucrt-x86_64-[A-Za-z0-9@._+-]+$' -or
+            $parts[0] -notmatch $packagePattern -or
             $repositoryMetadata.ContainsKey($parts[0])) {
             throw "Cannot parse signed repository package metadata: $metadataLine"
         }
@@ -252,7 +285,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
         if ([string]$installedVersions[$packageName] -ne $version) {
             throw "Installed package is not the current signed repository version: $packageName installed=$($installedVersions[$packageName]) repository=$version. Update MSYS2 first."
         }
-        if ($repository -ne "ucrt64" -or
+        if ($repository -ne $environmentDirectory -or
             $downloadUrl -notmatch '^https://' -or
             $archiveSha256 -notmatch '^[0-9a-f]{64}$') {
             throw "Incomplete or unsupported signed repository metadata for package: $packageName"
@@ -323,7 +356,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
             & $bsdtar -tf $archive 2>&1 |
                 ForEach-Object { [string]$_ } |
                 Where-Object {
-                    $_ -match '^ucrt64/share/licenses/[A-Za-z0-9@._+-]+/.+' -and
+                    $_ -match $licenseEntryPattern -and
                     -not $_.EndsWith('/') -and
                     -not $_.Contains('..') -and
                     -not $_.Contains('\')
@@ -334,7 +367,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
             throw "Cannot list verified package archive: $archive"
         }
         foreach ($entry in $licenseEntries) {
-            $licenseRelative = $entry.Substring("ucrt64/share/licenses/".Length)
+            $licenseRelative = $entry.Substring($licenseEntryPrefix.Length)
             $licenseDestination = Join-Path (Join-Path $licenseRoot ([string]$package.id)) $licenseRelative.Replace('/', '\')
             Export-ArchiveEntry $archive $entry $licenseDestination
         }
@@ -342,7 +375,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
 
     $fileMappings = @()
     foreach ($unixPath in @($seen | Sort-Object)) {
-        $source = Convert-UcrtPath $unixPath
+        $source = Convert-EnvironmentPath $unixPath
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "A dependency reported by ldd is missing: $source"
         }
@@ -371,9 +404,9 @@ Include = /etc/pacman.d/mirrorlist.mingw
 
     $metadata = [ordered]@{
         source = [ordered]@{
-            kind = "msys2-ucrt64-pacman"
+            kind = [string]$environmentContract.sourceKind
             supported = $true
-            repository = "ucrt64"
+            repository = $environmentDirectory
             verification = [ordered]@{
                 status = "verified"
                 method = "pacman-required-trusted-only"
@@ -400,7 +433,7 @@ Include = /etc/pacman.d/mirrorlist.mingw
         throw "Backend installation failed after verified MSYS2 export."
     }
 
-    Write-Host "Collected UCRT64 runtime files: $($seen.Count)"
+    Write-Host "Collected $([string]$environmentContract.displayName) runtime files: $($seen.Count)"
     Write-Host "Verified signed packages: $($packageMetadata.Count)"
     Write-Host "Backend source: MSYS2 $Msys2Root"
 }
