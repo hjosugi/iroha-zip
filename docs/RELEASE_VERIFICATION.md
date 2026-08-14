@@ -98,7 +98,11 @@ digests for the later Release. An independent comparison of the v0.5.2 dry-run a
 executables found the same byte length for all six EXEs and 23–24 differing byte positions per file.
 Those positions resolved to COFF/debug timestamps and CodeView PDB GUIDs; no other file-header,
 section, or debug-directory metadata differed. This project does not currently claim bit-reproducible
-PE/PDB output. Verify each published asset against its own `SHA256SUMS.txt` and tag-ref attestation.
+PE/PDB output. Dependency panic locations also retain the generic GitHub-hosted runner Cargo-registry
+source prefix (`C:\Users\runneradmin\.cargo\registry\src\...`). An ASCII/UTF-16 string scan of all
+six EXEs found no repository-workspace path, runner temporary-directory path, or obvious secret-value
+marker, but build-path-independent output is not claimed. Verify each published asset against its
+own `SHA256SUMS.txt` and tag-ref attestation.
 
 ## Verify a download on Windows
 

@@ -20,7 +20,11 @@ Get-FileHash .\iroha-zip-0.5.2-windows-arm64.zip -Algorithm SHA256
 dry runで得たSHA-256を、後から作る正式Releaseの期待値として使わないでください。dry runとtag公開は
 別々のnative buildです。v0.5.2の両buildを比較すると、6 EXEはすべて同じbyte長でしたが、各23–24
 byteのCOFF／debug timestampとCodeView PDB GUIDが異なりました。現状はbit-reproducibleなPE／PDB
-buildを主張しません。必ず公開Release自身の`SHA256SUMS.txt`とtag-ref attestationを確認してください。
+buildを主張しません。依存crateのpanic位置には、一般的なGitHub-hosted runnerのCargo registry
+source prefix（`C:\Users\runneradmin\.cargo\registry\src\...`）も残ります。6 EXEのASCII／UTF-16
+文字列検査では、repository workspace path、runner temporary-directory path、明白なsecret-value
+markerは検出されませんでしたが、build-path-independentとも主張しません。必ず公開Release自身の
+`SHA256SUMS.txt`とtag-ref attestationを確認してください。
 
 未署名であることは、ファイルが安全であることも危険であることも単独では証明しません。リポジトリ、ハッシュ、GitHub artifact attestation、公開ソースを組み合わせて出所を確認してください。
 
@@ -44,7 +48,10 @@ Get-FileHash .\iroha-zip-0.5.2-windows-arm64.zip -Algorithm SHA256
 Do not use a dry-run SHA-256 value as the expected digest for a later published Release. Dry runs
 and tag publication are separate native builds. Comparing both v0.5.2 builds found equal byte
 lengths for all six EXEs, but 23–24 differing bytes per file in COFF/debug timestamps and CodeView
-PDB GUIDs. Bit-reproducible PE/PDB output is not currently claimed. Always verify the published
-Release's own `SHA256SUMS.txt` and tag-ref attestation.
+PDB GUIDs. Dependency panic locations also retain the generic GitHub-hosted runner Cargo-registry
+source prefix (`C:\Users\runneradmin\.cargo\registry\src\...`). An ASCII/UTF-16 string scan of all
+six EXEs found no repository-workspace path, runner temporary-directory path, or obvious
+secret-value marker. Bit-reproducible or build-path-independent PE/PDB output is not currently
+claimed. Always verify the published Release's own `SHA256SUMS.txt` and tag-ref attestation.
 
 The absence of an Authenticode signature does not, by itself, prove that a file is safe or unsafe. Establish provenance by combining the repository URL, SHA-256 digest, GitHub artifact attestation, and published source.
