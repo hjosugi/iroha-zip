@@ -329,7 +329,11 @@ fn validate_archive_member_name(member: &str, limits: &Limits) -> Result<()> {
         )));
     }
     for component in components {
-        validate_component(OsStr::new(component))?;
+        if let Err(error) = validate_component(OsStr::new(component)) {
+            return Err(IrohaZipError::Policy(format!(
+                "archive member {member:?} is rejected: {error}"
+            )));
+        }
     }
     Ok(())
 }
