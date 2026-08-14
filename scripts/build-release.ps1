@@ -220,6 +220,25 @@ try {
             -Destination (Join-Path $appRoot "docs\$document")
     }
 
+    foreach ($guide in @("README.md", "README.en.md")) {
+        $guidePath = Join-Path $ProjectRoot $guide
+        $guideText = [IO.File]::ReadAllText($guidePath)
+        $documentLinks = [regex]::Matches(
+            $guideText,
+            '\]\((docs/[A-Za-z0-9_.-]+\.md)(?:#[^)]+)?\)'
+        )
+        foreach ($documentLink in $documentLinks) {
+            $relative = $documentLink.Groups[1].Value.Replace(
+                '/',
+                [IO.Path]::DirectorySeparatorChar
+            )
+            $packagedDocument = Join-Path $appRoot $relative
+            if (-not (Test-Path -LiteralPath $packagedDocument -PathType Leaf)) {
+                throw "Packaged $guide links to a missing document: $relative"
+            }
+        }
+    }
+
     Compress-Archive -LiteralPath $appRoot -DestinationPath $zip -CompressionLevel Optimal
     if ($IncludeBackend -or $RequireAuthenticode) {
         $expandedPackage = Join-Path $distRoot (".iroha-zip-package-check-" + [Guid]::NewGuid().ToString("N"))

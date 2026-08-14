@@ -38,7 +38,7 @@ Before creating a tag, maintainers can manually dispatch the Release workflow on
 9. Before publication, the workflow reads the draft back and verifies all six assets by exact case-sensitive name, byte length, upload state, and SHA-256 digest.
 10. Only that verified draft is published and marked latest. The workflow then requires a stable, immutable release and repeats the complete asset verification.
 
-The repository immutable-release policy was enabled on 2026-08-14 and applies only to releases published after it was enabled. The already-published unsigned `v0.4.0` release therefore remains mutable according to GitHub's API; its six public assets, tag commit, checksums, and attestations were independently read back and verified after publication. Once a verified draft is published under the policy, GitHub locks its assets and associated tag and creates a release attestation. A failed draft remains unpublished for investigation rather than being silently deleted or overwritten.
+The repository immutable-release policy was enabled on 2026-08-14 and applies only to releases published after it was enabled. The already-published unsigned `v0.4.0` release therefore remains mutable according to GitHub's API; its six public assets, tag commit, checksums, and attestations were independently read back and verified after publication. `v0.4.1` and later publication must pass immutable readback. Once a verified draft is published under the policy, GitHub locks its assets and associated tag and creates a release attestation. A failed draft remains unpublished for investigation rather than being silently deleted or overwritten.
 
 GitHub's policy-status endpoint requires repository `Administration: read`, which the standard Actions `GITHUB_TOKEN` cannot request. Do not add a long-lived administrator token to work around that boundary. Immediately before creating a release tag, an administrator must confirm **Settings → General → Releases → Enable release immutability**, or independently call `GET /repos/hjosugi/iroha-zip/immutable-releases`. The workflow requires immutable readback after publication. If that check ever fails, treat the mutable publication as an incident; do not repair it by replacing assets under the same version.
 
@@ -49,7 +49,7 @@ The workflow uses fixed action commit SHAs, a fixed Windows runner generation, t
 Download the release assets only from `https://github.com/hjosugi/iroha-zip/releases`. First compare the selected file with `SHA256SUMS.txt`:
 
 ```powershell
-$asset = Get-Item .\iroha-zip-0.4.0-windows-x64.zip
+$asset = Get-Item .\iroha-zip-0.4.1-windows-x64.zip
 $expected = Get-Content .\SHA256SUMS.txt |
   Where-Object { $_ -match ([regex]::Escape($asset.Name) + '$') }
 if (@($expected).Count -ne 1) { throw 'Missing or duplicate checksum entry' }
@@ -61,10 +61,10 @@ if ($actual -cne $expectedHash) { throw 'SHA-256 mismatch' }
 Then verify the GitHub artifact attestation:
 
 ```powershell
-gh attestation verify .\iroha-zip-0.4.0-windows-x64.zip `
+gh attestation verify .\iroha-zip-0.4.1-windows-x64.zip `
   --repo hjosugi/iroha-zip `
   --signer-workflow hjosugi/iroha-zip/.github/workflows/release.yml `
-  --source-ref refs/tags/v0.4.0 `
+  --source-ref refs/tags/v0.4.1 `
   --deny-self-hosted-runners
 ```
 

@@ -1,73 +1,98 @@
-# iroha-zip 0.4.0
+# iroha-zip 0.4.1
 
 ## 日本語
 
-iroha-zip 0.4.0 は、Windows x64 向けの最初の安定版扱いリリースです。ZIPに加えて、3つの実行ファイルを個別にダウンロードできます。
+iroha-zip 0.4.1 は、Windows x64 向け安定版のセキュリティ境界・回帰証跡を更新する
+maintenance releaseです。`v0.4.0`を利用している場合は、この版へ置き換えてください。
 
 ### ダウンロードの選び方
 
-- **通常は `iroha-zip-0.4.0-windows-x64.zip`**: 実行ファイル、設定・関連付けスクリプト、日英README、ライセンス、設計文書をまとめて含みます。
-- **`iroha-zip-0.4.0-windows-x64.exe`**: CLI本体だけが必要な場合。
-- **`iroha-zip-settings-0.4.0-windows-x64.exe`**: ネイティブ設定画面。
-- **`iroha-zip-shell-0.4.0-windows-x64.exe`**: Windowsのファイル関連付け用ランチャー。
+- **通常は `iroha-zip-0.4.1-windows-x64.zip`**: 3つの実行ファイル、設定・関連付け
+  スクリプト、日英README、ライセンス、設計文書を含む完全版です。
+- **`iroha-zip-0.4.1-windows-x64.exe`**: CLI本体だけが必要な場合。
+- **`iroha-zip-settings-0.4.1-windows-x64.exe`**: ネイティブ設定画面。
+- **`iroha-zip-shell-0.4.1-windows-x64.exe`**: Windowsのファイル関連付け用ランチャー。
 - **`SHA256SUMS.txt`**: ZIPと3つのEXEのSHA-256一覧。
 
 ### 重要
 
-- バイナリは **Authenticode未署名** です。SmartScreenが警告する場合があります。警告を無効化せず、`SHA256SUMS.txt`とGitHub artifact attestationで出所を確認してください。
-- libarchive / `bsdtar.exe` は同梱していません。設定画面から自分が信頼するバックエンドを取り込み、`iroha-zip.exe doctor`が成功することを確認してください。
-- セキュリティ監査済み製品ではありません。未信頼ファイルの実行前には、OS・Defender・組織のセキュリティ手順も併用してください。
+- 3つのEXEは **Authenticode未署名** です。SmartScreenの警告を無効化せず、
+  `SHA256SUMS.txt`とGitHub artifact attestationで出所を確認してください。
+- libarchive / `bsdtar.exe` は同梱していません。設定画面から自分が信頼するbackendを
+  取り込み、`iroha-zip.exe doctor`が成功することを確認してください。
+- このReleaseはWindows x64専用です。native ARM64 CIはありますが、ARM64 backend・書庫matrix・
+  Release assetは未完成です。
+- セキュリティ監査済み製品ではありません。Windows 10/11 desktop実機matrixや未完の形式・
+  race試験は、同梱のBuild Statusに正確に記録しています。
 
-### 主な変更
+### v0.4.0からの主な変更
 
-- 生成書庫を別のsandboxで再展開し、監査済み圧縮元と完全一致するまで公開しない作成経路。
-- 監査済み通常objectだけの外部staging treeを全entry単位でread-only封印し、信頼側で作った有界PAX streamだけをbackendに変換させる作成経路と、handleを保持したTOCTOU対策。
-- 7z writerの一時fileだけを専用の監視対象scratchへ限定し、process終了後の残留objectを公開前に拒否するAppContainer権限境界。
-- sandboxへcopyしたbackend tree全体のread／execute専用封印。listing passから展開passへの自己改変を防止。
-- sandbox内の入力書庫をhandleとDACLで固定し、listing検証後にだけ展開先を新規作成するpass間state汚染対策。
-- 検証済みDLL候補だけをzero-capability AppContainer子でloadし、公式UTF-8 pathname APIから有界一覧を取得するWindows版libarchive 3.8.6以降の日本語名回帰対策。作成時のUTF-8 header指定と、sandbox EXEの固定UTF-8 process manifest再照合も併用。
-- raw member名を検査するbounded preflight、悪性書庫回帰コーパス、5つのbounded fuzz target。
-- policy-safe previewと、全書庫監査後に行う選択展開。
-- backend provenance、SPDX SBOM、license evidenceの厳格な検証。
-- Windows Attachment Servicesへの明示的なbest-effort／required handoff。
-- 日本語／英語、高DPI、キーボード操作、rollback-safe保存に対応した設定画面。
-- 日本語／英語のGitHub Pagesと完全な日英利用ガイド。
+- Windowsの全sandbox子processを`CREATE_SUSPENDED`で生成し、Job Objectへ割り当て、要求した
+  AppContainer/LPAC tokenとcapability 0を確認した後だけ1回resumeします。検証失敗時はbackend codeを
+  実行する前にJobを終了します。2秒間の強制検証失敗でも子stdoutが空である回帰試験を追加しました。
+- 正常なtoken検証後の異常終了と、破損PEのloader拒否をisolation reportへ追加し、network、timeout、
+  memory、temp、DACLと合わせた7つのprofile/root cleanupを必須化しました。
+- 固定Windows Server 2022/2025で通常AppContainerの完全matrixを再実行しました。LPACは両環境で
+  `TokenIsLessPrivilegedAppContainer` queryが`ERROR_INVALID_PARAMETER`となり、exact failure class、
+  exit code 2、空stdout、backend未実行、完全cleanupを要求してfail closedにしました。
+- ファイル関連付け登録が共有`OpenWithProgids`／`RegisteredApplications` keyの既存値を消さないよう修正し、
+  18拡張子のunrelated値と保護された`UserChoice` stateを登録2回・解除後も完全保持するWindows試験を追加しました。
+- native `windows-11-arm`上で3つのARM64 PE、Rust tests/Clippy、通常AppContainer isolationを検証します。
+  ARM64 binaryはこのReleaseへ混在させません。
+- 将来Release向けimmutable policy、draft-first upload、公開前後のexact 6-asset name/length/digest検証を
+  強化しました。既存Releaseを上書きしません。
 
-既知の制約と検証状況は、同梱の `README.md` / `README.en.md` と `docs/BUILD_STATUS.md` を確認してください。
+実測範囲は [Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.4.1/docs/WINDOWS_E2E.md)、
+[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.4.1/docs/ARM64.md)、
+[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.4.1/docs/BUILD_STATUS.md)を確認してください。
 
 ---
 
 ## English
 
-iroha-zip 0.4.0 is the first release presented as a stable Windows x64 download. In addition to the complete ZIP, all three executables are available separately.
+iroha-zip 0.4.1 is a maintenance release that updates the security boundary and regression evidence
+for the stable Windows x64 build. Replace `v0.4.0` with this version if you are currently using it.
 
 ### Which download to choose
 
-- **Normally choose `iroha-zip-0.4.0-windows-x64.zip`**: includes the executables, setup and association scripts, Japanese and English guides, licenses, and design documents.
-- **`iroha-zip-0.4.0-windows-x64.exe`**: the CLI only.
-- **`iroha-zip-settings-0.4.0-windows-x64.exe`**: the native Settings application.
-- **`iroha-zip-shell-0.4.0-windows-x64.exe`**: the Windows file-association launcher.
+- **Normally choose `iroha-zip-0.4.1-windows-x64.zip`**: the complete package with all three
+  executables, setup and association scripts, Japanese and English guides, licenses, and design docs.
+- **`iroha-zip-0.4.1-windows-x64.exe`**: the CLI only.
+- **`iroha-zip-settings-0.4.1-windows-x64.exe`**: the native Settings application.
+- **`iroha-zip-shell-0.4.1-windows-x64.exe`**: the Windows file-association launcher.
 - **`SHA256SUMS.txt`**: SHA-256 digests for the ZIP and all three executables.
 
 ### Important
 
-- The binaries are **not Authenticode-signed**. SmartScreen may display a warning. Do not disable the warning; establish provenance with `SHA256SUMS.txt` and the GitHub artifact attestation.
-- libarchive / `bsdtar.exe` is not bundled. Import a backend you trust in Settings and require `iroha-zip.exe doctor` to pass.
-- This is not a security-audited product. Continue to use Windows, Defender, and your organization's normal security controls before running extracted files.
+- The three executables are **not Authenticode-signed**. Do not disable SmartScreen warnings;
+  establish provenance with `SHA256SUMS.txt` and the GitHub artifact attestation.
+- libarchive / `bsdtar.exe` is not bundled. Import a backend you trust in Settings and require
+  `iroha-zip.exe doctor` to pass.
+- This release is Windows x64 only. Native ARM64 CI exists, but its backend, archive matrix, and
+  release assets are incomplete.
+- This is not a security-audited product. The packaged Build Status precisely records the missing
+  Windows 10/11 desktop, format, and race validation.
 
-### Highlights
+### Main changes from v0.4.0
 
-- Creation re-extracts every generated archive in a second sandbox and refuses publication unless it exactly reproduces the audited source.
-- A creation path that copies only audited regular objects into external staging, seals every entry read-only to the Package SID, lets the backend convert only a trusted bounded PAX stream, and retains handles across TOCTOU-sensitive boundaries.
-- A dedicated, monitored AppContainer scratch boundary for the 7z writer's temporary file, with fail-closed residue detection before publication.
-- Recursive read/execute-only sealing of every sandbox backend tree, preventing persistent self-modification between listing and extraction passes.
-- Handle/DACL pinning of sandbox archive copies and create-new extraction directories only after preflight acceptance, preventing cross-pass archive replacement or output pre-seeding.
-- A bounded listing child that loads only manifest-pinned DLL candidates inside a rechecked zero-capability AppContainer and reads names through libarchive's official UTF-8 API, plus explicit UTF-8 creation headers and a byte-verified UTF-8 process manifest on each disposable backend copy.
-- Bounded raw-member preflight, a generated hostile-archive regression corpus, and five bounded fuzz targets.
-- Policy-safe preview and selective extraction only after auditing the complete archive.
-- Strict backend provenance, SPDX SBOM, and license-evidence verification.
-- Explicit best-effort or required Windows Attachment Services handoff.
-- A Japanese/English, high-DPI, keyboard-accessible Settings application with rollback-safe saves.
-- Japanese and English GitHub Pages plus complete bilingual usage guidance.
+- Every sandboxed Windows child is created with `CREATE_SUSPENDED`, assigned to its Job Object, and
+  resumed exactly once only after the requested AppContainer/LPAC token and zero capabilities are
+  verified. A verification failure terminates the Job before backend code can run. A regression test
+  forces a two-second verification failure and requires empty child stdout.
+- The isolation report now covers abnormal termination after positive token verification and loader
+  rejection of a corrupt PE. Seven network/timeout/memory/crash/loader/temp/DACL profiles and roots
+  must all be explicitly removed.
+- The complete normal-AppContainer matrix was rerun on fixed Windows Server 2022/2025. LPAC token
+  queries returned `ERROR_INVALID_PARAMETER` on both; the harness requires that exact failure class,
+  exit code 2, empty stdout, no reported backend execution, and complete cleanup.
+- Association registration no longer clears existing values from shared `OpenWithProgids` or
+  `RegisteredApplications` keys. A Windows test registers all 18 extensions twice and unregisters,
+  while preserving unrelated values and the exact protected `UserChoice` state.
+- Native `windows-11-arm` CI validates all three ARM64 PEs, Rust tests/Clippy, and normal-AppContainer
+  isolation. No ARM64 binary is mixed into this release.
+- Future releases use the repository immutable policy, draft-first upload, and exact six-asset
+  name/length/digest verification before and after publication. Existing releases are never overwritten.
 
-See the packaged `README.md` / `README.en.md` and `docs/BUILD_STATUS.md` for known limitations and current validation evidence.
+See [Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.4.1/docs/WINDOWS_E2E.md),
+[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.4.1/docs/ARM64.md), and
+[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.4.1/docs/BUILD_STATUS.md) for the measured boundary.

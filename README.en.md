@@ -6,7 +6,7 @@ iroha-zip is a Rust wrapper for extracting untrusted archives on Windows with mi
 
 It does not attempt to reimplement every archive format in Rust. It runs a current libarchive / `bsdtar.exe` backend as a separate process inside an ephemeral AppContainer, then inspects inputs and outputs in Rust. Neither extraction nor creation runs `bsdtar.exe` directly with the user's normal privileges.
 
-This is not a security-audited product. Version `v0.4.0` is a practical preview whose design and real-world behavior are still being validated.
+This is not a security-audited product. Version `v0.4.1` is a practical preview whose design and real-world behavior are still being validated.
 
 ## Download
 
@@ -191,7 +191,7 @@ Successful output is written to:
 
 ```text
 dist\iroha-zip\
-dist\iroha-zip-0.4.0-windows-x64.zip
+dist\iroha-zip-0.4.1-windows-x64.zip
 ```
 
 Both the normal build and tag-driven release workflow produce unsigned binaries. Official releases attach a ZIP, three individual EXEs, and SHA-256 checksums, and publish a GitHub artifact attestation. See [About unsigned releases](docs/UNSIGNED_RELEASE.md) for SmartScreen and independent verification guidance. The strict verification path required for future Authenticode-signed releases remains documented in the [release verification specification](docs/RELEASE_VERIFICATION.md).
@@ -305,7 +305,7 @@ This validates configuration, every backend hash, `bsdtar --version`, and AppCon
 - It cannot guarantee protection from unknown vulnerabilities in AppContainer, the Windows kernel, or libarchive.
 - Normal AppContainer is the default. Experimental LPAC must be selected explicitly and used only after `doctor` succeeds with the chosen backend. There is no silent compatibility downgrade.
 - It cannot fully eliminate races against an attacker who already controls the same user account.
-- Published `v0.4.0` is Windows x64 only. [ARM64 status](docs/ARM64.md) records the native Rust/AppContainer CI boundary and the backend/archive/release work that remains.
+- `v0.4.1` is Windows x64 only. [ARM64 status](docs/ARM64.md) records the native Rust/AppContainer CI boundary and the backend/archive/release work that remains.
 - The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. The schema-v4 Server 2022/2025 E2E and generated malicious corpus passed in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143). This is not a substitute for Windows 10/11 device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
 
 Remaining work and acceptance criteria are tracked in [`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md). Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing a change.

@@ -6,7 +6,7 @@ Updated: 2026-08-14
 
 ### 現在の状態
 
-iroha-zipはupdaterを出荷しておらず、backgroundでnetworkへ接続しません。公開済み`v0.4.0`は
+iroha-zipはupdaterを出荷しておらず、backgroundでnetworkへ接続しません。`v0.4.1`は
 未署名なので、digestやGitHub artifact attestationだけを根拠に自己更新を有効化しません。
 Authenticode publisher identityとcustodyが独立に確立され、署名付きimmutable Releaseが成功するまで
 OPS-001は実装開始不可です。
@@ -49,7 +49,7 @@ identity、長さ、SHA-256、Authenticodeを検証します。
 
 ### Current state
 
-iroha-zip ships no updater and makes no background network connection. Published `v0.4.0` is
+iroha-zip ships no updater and makes no background network connection. `v0.4.1` is
 unsigned, so a digest or GitHub artifact attestation alone cannot authorize self-update. OPS-001
 must remain disabled until an Authenticode publisher identity and custody process are independently
 established and a signed immutable release succeeds.

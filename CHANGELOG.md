@@ -4,6 +4,25 @@
 
 - Nothing yet.
 
+## 0.4.1 - 2026-08-14
+
+- Create every sandboxed Windows child suspended, assign it to the Job Object, verify the requested
+  AppContainer/LPAC token and zero-capability state, and resume it exactly once only after positive
+  verification. Terminate the still-suspended Job on verification failure.
+- Add a Windows regression that forces a two-second token-verification failure and requires the
+  rejected child to produce no stdout.
+- Extend schema-v4 isolation evidence with abnormal child termination and corrupt-PE loader rejection,
+  requiring explicit cleanup of all seven AppContainer profiles and temporary roots.
+- Record exact fail-closed LPAC results on fixed Server 2022/2025 images without treating an unsupported
+  token query as a passing LPAC launch or falling back to normal AppContainer.
+- Preserve unrelated values in shared file-association registry keys and verify idempotent registration,
+  removal, and byte-for-byte `UserChoice` state preservation across all 18 archive extensions.
+- Add native Windows ARM64 tests, Clippy, three-PE inventory validation, and normal-AppContainer isolation
+  evidence while explicitly withholding ARM64 release assets until the backend/archive matrix exists.
+- Harden future immutable release publication with draft-first upload and exact pre/post-publication
+  asset state, name, length, and digest verification.
+- Document the disabled-until-signed updater trust, downgrade, rollback, and backend-separation contract.
+
 ## 0.4.0 - 2026-08-14
 
 - Updated the SHA-1/SHA-256 implementation dependencies to the compatible
