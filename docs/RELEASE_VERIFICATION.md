@@ -91,6 +91,15 @@ The workflow uses action commit SHAs, fixed runner labels, a pinned Rust toolcha
 workspaces. A pre-publication failure exposes no stable release. A post-publication failure remains
 visible and requires a new version.
 
+## Reproducibility boundary
+
+The dry run and tag publication are separate native builds. Do not use dry-run digests as expected
+digests for the later Release. An independent comparison of the v0.5.2 dry-run and published
+executables found the same byte length for all six EXEs and 23–24 differing byte positions per file.
+Those positions resolved to COFF/debug timestamps and CodeView PDB GUIDs; no other file-header,
+section, or debug-directory metadata differed. This project does not currently claim bit-reproducible
+PE/PDB output. Verify each published asset against its own `SHA256SUMS.txt` and tag-ref attestation.
+
 ## Verify a download on Windows
 
 Download only from `https://github.com/hjosugi/iroha-zip/releases`. Select `x64` for Intel/AMD or
