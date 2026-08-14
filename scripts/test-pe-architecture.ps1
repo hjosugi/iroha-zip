@@ -49,6 +49,13 @@ try {
     & (Join-Path $PSScriptRoot "verify-pe-architecture.ps1") `
         -Files @($arm64) -Architecture arm64
 
+    # Cargo's top-level release binary is normally a hardlink to the matching
+    # artifact under release/deps. It is a regular file, not a reparse point.
+    $cargoStyleHardlink = Join-Path $testRoot "x64-hardlink.exe"
+    New-Item -ItemType HardLink -Path $cargoStyleHardlink -Target $x64 | Out-Null
+    & (Join-Path $PSScriptRoot "verify-pe-architecture.ps1") `
+        -Files @($x64, $cargoStyleHardlink) -Architecture x64
+
     Assert-Rejected {
         & (Join-Path $PSScriptRoot "verify-pe-architecture.ps1") `
             -Files @($arm64) -Architecture x64

@@ -20,8 +20,11 @@ $expectedMachine = switch ($Architecture) {
 $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($file in $Files) {
     $item = Get-Item -LiteralPath $file -Force
-    if ($item.PSIsContainer -or $item.LinkType) {
-        throw "PE input must be a regular, non-link file: $file"
+    $isReparsePoint = (
+        $item.Attributes -band [IO.FileAttributes]::ReparsePoint
+    ) -ne 0
+    if ($item.PSIsContainer -or $isReparsePoint) {
+        throw "PE input must be a regular, non-reparse file: $file"
     }
     if (-not $seen.Add($item.FullName)) {
         throw "Duplicate PE input: $($item.FullName)"
