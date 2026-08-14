@@ -305,7 +305,7 @@ iroha-zip.exe doctor
 - AppContainerやWindowsカーネル、libarchive自体の未知の脆弱性を防げる保証はありません。
 - 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。
 - 同一ユーザー権限をすでに奪取した攻撃者との競合を完全には防げません。
-- Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。Server 2022/2025向けWindows E2Eと生成型の悪性コーパスworkflowも実装済みですが、現在のローカルbranchについてのActions成功結果ではなく、Windows 10/11実機検証の代替でもありません。再現可能な定期fuzzingは[`docs/FUZZING.md`](docs/FUZZING.md)、E2Eの正確な範囲は[`docs/WINDOWS_E2E.md`](docs/WINDOWS_E2E.md)、コーパス範囲は[`docs/MALICIOUS_CORPUS.md`](docs/MALICIOUS_CORPUS.md)、全体状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
+- Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。Server 2022/2025向けWindows E2Eと生成型の悪性コーパスも[Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176)で合格しました。ただし、これはWindows 10/11実機検証やセキュリティ監査の代替ではありません。再現可能な定期fuzzingは[`docs/FUZZING.md`](docs/FUZZING.md)、E2Eの正確な範囲は[`docs/WINDOWS_E2E.md`](docs/WINDOWS_E2E.md)、コーパス範囲は[`docs/MALICIOUS_CORPUS.md`](docs/MALICIOUS_CORPUS.md)、全体状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
 
 残作業は、優先度・依存関係・受け入れ条件を付けた[`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md)で追跡します。変更を提案する場合は[`CONTRIBUTING.md`](CONTRIBUTING.md)も確認してください。
 

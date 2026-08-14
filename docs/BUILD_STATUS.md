@@ -31,7 +31,7 @@ Updated: 2026-08-14
 - Windows named-mutex timeout, post-release recovery, and abandoned-owner recovery unit tests
 - Deterministic configuration replacement/restore failure injection with preserved recovery evidence
 - Normal-AppContainer/LPAC configuration round trips and Windows LPAC process/token API type-check
-- Machine-readable AppContainer token/capability, loopback-denial, timeout, memory-limit, staging-source read/write ACL, and explicit four-profile/root-cleanup probe type-check
+- Machine-readable AppContainer token/capability, loopback-denial, timeout, memory-limit, process-temp, staging-source read/write ACL, and explicit five-profile/root-cleanup probe type-check
 - Fixed-label Windows Server 2022/2025 archive, shell, settings-setup, and isolation E2E workflow parsing
 - Windows Attachment Services COM boundary type-check, three-policy configuration/settings round trips, fail-closed post-handoff fingerprint tests, and partial cleanup tests
 - TOML and GitHub Actions workflow parsing
@@ -49,22 +49,21 @@ The current Linux suite contains 95 passing default-feature tests plus one expli
 
 The fast CI matrix runs formatting, tests, and Clippy on both `ubuntu-latest` and `windows-latest`, then builds the Windows settings binary in the debug profile for its 26-control UI Automation contract. Production-profile compilation and signed-MSYS2 backend work are intentionally kept out of that duplicate matrix path.
 
-A separate fixed-label `windows-2022` / `windows-2025` x64 matrix builds the production release binaries once per supported Server image, exports the verified backend once per image, and produces machine-readable archive/isolation, malicious-corpus, and settings artifacts. The Server 2025 path reuses that already-exported backend to validate supported evidence, the explicit unsupported-bundle path, `--require-supported`, rollback, and evidence-tamper failures. This removes a redundant release build and signed-package export from the fast matrix without dropping a gate. The Server matrix exercises token/capability inspection, loopback denial, timeout, memory limit, explicit cleanup, four create/read formats, Japanese and long paths, generated hostile ZIP/TAR inputs, native hardlink/ADS/junction fixtures, invalid input, shell invocation, and settings save/diagnosis in English. Both fixed-label jobs have run; the most recent result exposed the upstream libarchive 3.8.6+ Windows UTF-8-name regression after an earlier `@archive` AppContainer crash. The current sandbox-manifest and sealed-staging fixes are locally tested/type-checked and await the next Actions result, so no passing archive artifact is yet claimed. The Server matrix is not Windows 10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md) and [corpus contract](MALICIOUS_CORPUS.md).
+A separate fixed-label `windows-2022` / `windows-2025` x64 matrix builds the production release binaries once per supported Server image, exports the verified backend once per image, and produces machine-readable archive/isolation, malicious-corpus, and settings artifacts. The Server 2025 path reuses that already-exported backend to validate supported evidence, the explicit unsupported-bundle path, `--require-supported`, rollback, and evidence-tamper failures. This removes a redundant release build and signed-package export from the fast matrix without dropping a gate. The complete matrix passed on both images in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176) at commit `2d410f5f3eac3166b54808af83bcdc385470819b`. The downloaded reports were checked for AppContainer/zero-capability identity, loopback denial, timeout and memory rejection, one effective process-temp path, five explicit profile/root cleanups, four created formats, four additional read filters, Japanese and long paths, invalid-input non-publication, shell extraction, one benign plus 18 rejected generated archives, native hardlink/ADS/junction rejection, and the 26-control English settings save/diagnosis path. The Server matrix is not Windows 10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md) and [corpus contract](MALICIOUS_CORPUS.md).
 
 A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to the current `main` commit builds an unsigned Windows x64 package and three standalone executables, produces SHA-256 inventories and GitHub artifact attestations, publishes a stable release without overwriting an existing version, and reads back the six-asset inventory. The future Authenticode verification path remains available locally but is not active until the owner configures and independently reviews a signing identity. See [release verification](RELEASE_VERIFICATION.md).
 
 ## Still requires a real Windows validation machine
 
-- First passing AppContainer/profile/isolated-`bsdtar` evidence artifacts from the new Server 2022/2025 matrix, followed by disposable Windows 10/11 x64 runs
+- Disposable Windows 10/11 x64 runs of the now-passing fixed-Server evidence contract
 - LPAC `bsdtar --version`, archive-format, registry/file/COM denial, and network-denial measurements
 - Settings-screen visual fit at 100–300% and mixed DPI, screen readers, folder pickers, Default Apps, external-state action rollback, and independent-process save contention
 - Native archive-preview tree/search/selection UI, progress/cancellation accessibility, and real-format selected-publication matrix
 - RAR/RAR5, LHA/LZH, CAB, ZIPX, and raw compressed-stream read fixtures with a pinned libarchive bundle
-- First passing ZIP, 7z, TAR, and TAR.GZ creation/re-extraction tree-hash result from both fixed-label Server jobs
-- First passing and reviewed malicious-corpus JSON from both Server jobs, then broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures
+- Broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures beyond the passing generated corpus
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring
-- Real-Windows reparse point race stress tests, native child open relative to a parent handle, and first Windows evidence for handle enumeration, the staging-tree DACL seal, and internal created-archive re-extraction
+- Real-Windows reparse point race stress tests and native child open relative to a parent handle
 - Attachment Services with Defender enabled/disabled/unavailable, third-party providers, quarantine/deletion, ADS inventory, and MotW preservation across publication
 - First successful reviewed Authenticode release after owner-managed signing identity validation, plus independent security review
 

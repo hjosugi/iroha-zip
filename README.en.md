@@ -304,7 +304,7 @@ This validates configuration, every backend hash, `bsdtar --version`, and AppCon
 - It cannot guarantee protection from unknown vulnerabilities in AppContainer, the Windows kernel, or libarchive.
 - Normal AppContainer is the default. Experimental LPAC must be selected explicitly and used only after `doctor` succeeds with the chosen backend. There is no silent compatibility downgrade.
 - It cannot fully eliminate races against an attacker who already controls the same user account.
-- The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. Server 2022/2025 E2E and generated malicious-corpus workflows exist, but they are not a substitute for Windows 10/11 device validation. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
+- The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. The Server 2022/2025 E2E and generated malicious corpus passed in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176). This is not a substitute for Windows 10/11 device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
 
 Remaining work and acceptance criteria are tracked in [`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md). Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing a change.
 

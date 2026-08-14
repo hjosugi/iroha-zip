@@ -168,6 +168,6 @@ child file／directoryを開く操作自体はWin32 path APIを使うため、�
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - パスワードを保護された匿名パイプで渡す仕組み
-- 親handleをrootにしたnative child open、Windows staging DACL probe／handle列挙の初回実機証跡、Windows reparse競合stress test
-- first passing review of the generated malicious corpus plus its remaining format/control-byte/CPU-bomb/crash/race matrix described in [`MALICIOUS_CORPUS.md`](MALICIOUS_CORPUS.md), and the Windows 10/11, LPAC, read-format, denial, crash, and race matrix in [`WINDOWS_E2E.md`](WINDOWS_E2E.md)
+- 親handleをrootにしたnative child openとWindows reparse競合stress test
+- passing generated corpusの範囲外にあるformat／control-byte／CPU-bomb／crash／race拡張（[`MALICIOUS_CORPUS.md`](MALICIOUS_CORPUS.md)）と、Windows 10/11、LPAC、legacy read-format、追加denial、crash／race matrix（[`WINDOWS_E2E.md`](WINDOWS_E2E.md)）
 - MSYS2 package key rotation、過去archive availability、生成済みbackend SBOM/license証跡の独立レビュー

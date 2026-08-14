@@ -1,8 +1,8 @@
 # Malicious archive regression corpus
 
-Updated: 2026-08-10
+Updated: 2026-08-14
 
-This document defines the SAFE-002 regression corpus and its evidence contract. The generator and Windows workflow are implemented on the current local branch, but that branch has not yet produced a passing GitHub Actions artifact. Source inspection and cross-compilation are not substitutes for a real Windows result.
+This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs produced reviewed passing evidence in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176) from commit `2d410f5f3eac3166b54808af83bcdc385470819b`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed.
 
 ## Distribution and retention policy
 
@@ -84,9 +84,9 @@ They then run the ignored Windows test. The configuration uses a 4 MiB input cap
 
 The artifact upload runs even after a failing test, but a panic before report initialization may leave no report. Artifact retention is 14 days. The JSON is diagnostic evidence, not a signature, malware verdict, or release attestation.
 
-## Remaining SAFE-002 work
+## Verified scope and further work
 
-The implemented corpus does not close SAFE-002 until both fixed-label Windows jobs produce reviewed passing evidence. Further work remains for:
+The implemented scope meets SAFE-002's acceptance criteria. The passing Server evidence does not cover these useful extensions:
 
 1. Windows 10 and Windows 11 x64 runs outside the Server-only hosted matrix;
 2. format-specific hostile RAR/RAR5, LHA/LZH, CAB, ZIPX, cpio, ISO, and raw-stream samples that are independently redistributable;

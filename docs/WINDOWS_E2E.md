@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 
-This document defines the automated SAFE-001 evidence contract. The workflow and harness have run on both fixed-label GitHub runners. An exact in-container `GetTempPathW`, CNG random-number, and delete-on-close file probe traced the reproducible libarchive 7z error to applying AppContainer temporary-path virtualization twice. The next run supplies host-side `LOCALAPPDATA`, `USERPROFILE`, `TEMP`, and `TMP` values and requires Windows to resolve them to the one dedicated `AC\Temp` scratch. A failing diagnostic artifact is not a passing Windows result.
+This document defines the automated SAFE-001 evidence contract. The complete contract passed on both fixed-label GitHub runners in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176) from commit `2d410f5f3eac3166b54808af83bcdc385470819b`. The reviewed JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, five explicitly removed AppContainer profiles/roots, all archive assertions below, the generated malicious corpus, and the English settings setup/diagnosis path. These results are evidence for the named disposable Server images, not Windows 10/11 desktop certification or a security audit.
 
 ## Automated matrix
 

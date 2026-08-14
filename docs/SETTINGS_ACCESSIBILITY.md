@@ -74,8 +74,8 @@ Windows-only integration test starts two independent copies of the test executab
 through one file barrier against the same non-ASCII configuration path, and requires one complete
 configuration plus zero temporary/backup artifacts. Windows unit tests use isolated mutex names to
 require a bounded wait to fail closed, verify a normal acquisition after release, and accept
-`WAIT_ABANDONED` after an owning thread exits without release. These Windows-only tests still need
-their first passing CI evidence.
+`WAIT_ABANDONED` after an owning thread exits without release. The Windows tests and both fixed
+Server settings save/diagnosis paths passed in [Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176).
 
 The replacement transaction writes and flushes a unique temporary file, renames the prior file to
 a unique backup, and only then moves the new file into place. A deterministic injected-failure test
