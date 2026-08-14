@@ -12,6 +12,12 @@ if (-not (Test-Path -LiteralPath $BashPath -PathType Leaf)) {
     throw "Test bash executable was not found: $BashPath"
 }
 
+$existingTemporaryRoots = @(
+    Get-ChildItem -LiteralPath ([System.IO.Path]::GetTempPath()) -Directory -Force |
+        Where-Object { $_.Name -like "iroha-zip-msys2-command-*" } |
+        ForEach-Object { $_.Name }
+)
+
 $exporterSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot "export-msys2-backend.ps1") -Raw
 if ($exporterSource -notmatch '\. \(Join-Path \$PSScriptRoot "msys2-command\.ps1"\)' -or
     $exporterSource -notmatch 'Invoke-IrohaZipMsys2Command') {
@@ -80,4 +86,16 @@ if ($stopwatch.Elapsed.TotalSeconds -gt 8) {
     throw "The bounded child was not terminated promptly: $($stopwatch.Elapsed.TotalSeconds)s"
 }
 
+$temporaryResidue = @(
+    Get-ChildItem -LiteralPath ([System.IO.Path]::GetTempPath()) -Directory -Force |
+        Where-Object {
+            $_.Name -like "iroha-zip-msys2-command-*" -and
+            $existingTemporaryRoots -notcontains $_.Name
+        }
+)
+if ($temporaryResidue.Count -ne 0) {
+    throw "Bounded launcher temporary residue remains: $($temporaryResidue.Name -join ', ')"
+}
+
 Write-Host "MSYS2 command timeout and argument-preservation tests passed."
+$global:LASTEXITCODE = 0
