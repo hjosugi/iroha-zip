@@ -297,7 +297,7 @@ impl Write for ArchiveWriter {
 }
 
 fn archive_path(relative: &Path, kind: EntryKind, limits: &Limits) -> Result<String> {
-    let mut value = String::from("./");
+    let mut value = String::new();
     policy::validate_relative_path(relative, limits)?;
     let mut first = true;
     for component in relative.components() {
@@ -404,11 +404,11 @@ mod tests {
         let limits = Limits::default();
         assert_eq!(
             archive_path(Path::new("nested/file.txt"), EntryKind::File, &limits).unwrap(),
-            "./nested/file.txt"
+            "nested/file.txt"
         );
         assert_eq!(
             archive_path(Path::new("nested"), EntryKind::Directory, &limits).unwrap(),
-            "./nested/"
+            "nested/"
         );
     }
 }
