@@ -37,7 +37,7 @@ ARM64 Releaseを追加する前に、次がすべて必要です。
 3. `windows-arm64` を含む別名ZIP/EXE/checksumを作り、x64 assetとの取り違えを機械的に拒否する。
 4. 未署名表示、SHA-256、attestation、immutable-release検証をx64と独立に通す。
 
-この条件を満たすまでは、`v0.4.1`はWindows x64専用であり、ARM64 native Releaseは未提供です。
+この条件を満たすまでは、公開済み`v0.4.1`はWindows x64専用であり、ARM64 native Releaseは未提供です。
 
 ## English
 
@@ -77,7 +77,7 @@ Before an ARM64 release is added, all of the following must pass:
 3. Separately named `windows-arm64` ZIP/EXE/checksum assets with mechanical x64/ARM64 mix-up rejection.
 4. Independent unsigned disclosure, SHA-256, attestation, and immutable-release verification.
 
-Until then, `v0.4.1` is Windows x64 only and no native ARM64 release is offered.
+Until then, published `v0.4.1` is Windows x64 only and no native ARM64 release is offered.
 
 Primary references:
 

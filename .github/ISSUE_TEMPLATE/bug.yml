@@ -1,5 +1,5 @@
-name: Bug report
-description: Report a reproducible iroha-zip defect without publishing sensitive exploit material.
+name: Bug report / バグ報告
+description: Report a reproducible defect safely. / 再現可能な不具合を安全に報告します。
 title: "[Bug] "
 labels: ["bug", "needs-triage"]
 body:
@@ -7,44 +7,46 @@ body:
     attributes:
       value: |
         Do not attach weaponized archives or disclose an unpatched vulnerability here. Use GitHub Security Advisories as described in SECURITY.md.
+
+        悪用可能な書庫や未修正脆弱性の詳細をここへ添付しないでください。SECURITY.mdに従いGitHub Security Advisoriesから非公開で報告してください。
   - type: input
     id: version
     attributes:
-      label: iroha-zip version
-      placeholder: v0.4.0
+      label: iroha-zip version / バージョン
+      placeholder: v0.4.1
     validations:
       required: true
   - type: input
     id: windows
     attributes:
-      label: Windows version and architecture
+      label: Windows version and architecture / Windows版とarchitecture
       placeholder: Windows 11 24H2 x64
     validations:
       required: true
   - type: textarea
     id: summary
     attributes:
-      label: What happened?
-      description: Include the expected result and the actual result.
+      label: What happened? / 何が起きましたか？
+      description: Include expected and actual results. / 期待した結果と実際の結果を書いてください。
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Reproduction steps
-      description: Use a harmless sample or describe the structure without sensitive payloads.
+      label: Reproduction steps / 再現手順
+      description: Use a harmless sample or describe the structure without sensitive payloads. / 無害なsampleを使うか、危険なpayloadを含めず構造だけを説明してください。
     validations:
       required: true
   - type: textarea
     id: diagnostics
     attributes:
-      label: Diagnostics
-      description: Paste redacted output from the settings-screen diagnosis or `iroha-zip doctor`.
+      label: Diagnostics / 診断結果
+      description: Paste redacted Settings diagnosis or `iroha-zip doctor` output. / 秘密を除いた設定画面の診断または`iroha-zip doctor`出力を貼ってください。
       render: text
   - type: checkboxes
     id: safety
     attributes:
-      label: Safety confirmation
+      label: Safety confirmation / 安全確認
       options:
-        - label: This report does not disclose an unpatched vulnerability or attach a malicious archive.
+        - label: This report contains no unpatched vulnerability details or malicious archive. / 未修正脆弱性の詳細や悪性書庫を含めていません。
           required: true

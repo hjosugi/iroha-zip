@@ -79,6 +79,7 @@
           <div>
             <strong>The current official binaries are not Authenticode-signed.</strong>
             <p>Do not disable SmartScreen warnings. Verify SHA-256 and the GitHub artifact attestation. libarchive / bsdtar is not bundled.</p>
+            <p>If you use <code>v0.4.0</code>, replace it with <code>v0.4.1</code>, which prevents sandboxed children from executing before isolation verification.</p>
           </div>
         </div>
       </div>
@@ -244,11 +245,12 @@ iroha-zip.exe create tar-gz `
             <h3>Automated</h3>
             <ul class="check-list">
               <li>Rust unit/integration tests and Clippy</li>
-              <li>Windows MSVC build and native UI automation</li>
+              <li>Server 2022/2025 schema-v4 E2E</li>
+              <li>Native ARM64 build and core isolation</li>
               <li>Five bounded fuzz targets</li>
               <li>Backend manifest, SBOM, and license validation</li>
               <li>Generated hostile-archive regressions</li>
-              <li>Release digests and artifact attestations</li>
+              <li>Immutable Release, digests, and attestations</li>
             </ul>
           </div>
           <div class="status-card open">

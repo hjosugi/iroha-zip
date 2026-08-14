@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Private vulnerability report
+  - name: Private vulnerability report / 脆弱性の非公開報告
     url: https://github.com/hjosugi/iroha-zip/security/advisories/new
-    about: Report exploitable or sensitive security problems privately.
+    about: Report sensitive security problems privately. / 悪用可能・機微な問題を非公開で報告します。
