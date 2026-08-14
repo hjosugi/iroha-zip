@@ -435,7 +435,8 @@ try {
         $generateRun = Invoke-TestProcess -FilePath $backendExecutable -Arguments @(
             "-c", "--format=pax", $fixture.filter,
             "--no-xattrs", "--no-acls", "--no-fflags",
-            "-f", $generatedArchive, "-C", $filterSourceRoot, "."
+            "-f", $generatedArchive, "-C", $filterSourceRoot,
+            "fixture.txt", "nested", "empty"
         )
         Copy-Item -LiteralPath $generatedArchive -Destination $archive
         $previewRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
