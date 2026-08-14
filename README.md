@@ -318,6 +318,7 @@ iroha-zip.exe doctor
 - 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。
 - 同一ユーザー権限をすでに奪取した攻撃者との競合を完全には防げません。
 - `v0.5.2`はWindows x64とnative ARM64を別assetで配布します。ARM64の実測範囲と未検証device境界は[ARM64対応状況](docs/ARM64.md)にあります。
+- Rust／GitHub Actions／JavaScriptのCodeQL `extended`解析を有効化しています。local pathを扱うdesktop CLIとしての初回233件のsink/source確認と分類境界は[CodeQL baseline](docs/CODEQL.md)に記録しています。
 - Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。Server 2022/2025とnative Windows 11 ARM向けschema-v4 Windows E2E、14追加読取形式、生成型の悪性コーパスも[Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604)で合格しました。ただし、これはWindows 10/11 x64 desktop実機検証やセキュリティ監査の代替ではありません。再現可能な定期fuzzingは[`docs/FUZZING.md`](docs/FUZZING.md)、E2Eの正確な範囲は[`docs/WINDOWS_E2E.md`](docs/WINDOWS_E2E.md)、コーパス範囲は[`docs/MALICIOUS_CORPUS.md`](docs/MALICIOUS_CORPUS.md)、全体状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
 
 残作業は、優先度・依存関係・受け入れ条件を付けた[`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md)で追跡します。変更を提案する場合は[`CONTRIBUTING.md`](CONTRIBUTING.md)も確認してください。

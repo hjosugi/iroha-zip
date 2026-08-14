@@ -10,6 +10,8 @@
   permissions only to the dependent deployment job.
 - Correct dark-mode contrast for primary actions, the warning icon, and footer content, and lock the
   foreground/background theme tokens into the Pages regression contract.
+- Enable hosted CodeQL extended analysis for Rust, Actions, and JavaScript; record the reviewed
+  same-user/local-path baseline without disabling future path-flow alerts.
 - Document the measured Windows PE/PDB reproducibility boundary so dry-run digests are never reused
   as expected published-asset digests.
 
