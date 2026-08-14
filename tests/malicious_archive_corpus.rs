@@ -674,17 +674,12 @@ mod windows_e2e {
         require_policy_rejection("ntfs-alternate-data-stream", &ads_root, &limits, report)?;
 
         let junction_root = root.join("policy-junction");
-        let junction_target = root.join("junction-target");
         fs::create_dir(&junction_root).map_err(|error| error.to_string())?;
+        let junction_target = junction_root.join("target");
         fs::create_dir(&junction_target).map_err(|error| error.to_string())?;
-        let junction = junction_root.join("mounted");
-        let command = format!(
-            "mklink /J \"{}\" \"{}\"",
-            junction.display(),
-            junction_target.display()
-        );
         let status = Command::new("cmd.exe")
-            .args(["/d", "/s", "/c", &command])
+            .current_dir(&junction_root)
+            .args(["/d", "/s", "/c", "mklink /J mounted target"])
             .status()
             .map_err(|error| format!("cannot create junction fixture: {error}"))?;
         if !status.success() {
