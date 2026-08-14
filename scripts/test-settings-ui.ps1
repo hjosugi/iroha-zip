@@ -156,12 +156,19 @@ function Dismiss-Message {
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
         [System.Windows.Automation.ControlType]::Button
     )
-    $buttons = @($Dialog.FindAll(
+    $allButtons = $Dialog.FindAll(
         [System.Windows.Automation.TreeScope]::Descendants,
         $buttonCondition
-    ))
+    )
+    $buttons = @($allButtons | Where-Object {
+        $_.Current.NativeWindowHandle -ne 0 -and
+        $_.Current.IsKeyboardFocusable
+    })
     if ($buttons.Count -ne 1) {
-        throw "The message dialog exposed $($buttons.Count) buttons instead of one accessible OK button."
+        $details = @($allButtons | ForEach-Object {
+            "id='$($_.Current.AutomationId)' name='$($_.Current.Name)' handle=$($_.Current.NativeWindowHandle) focusable=$($_.Current.IsKeyboardFocusable)"
+        }) -join "; "
+        throw "The message dialog exposed $($buttons.Count) content-button candidates instead of one accessible OK button: $details"
     }
     $button = $buttons[0]
     if (-not $button.Current.IsEnabled -or
