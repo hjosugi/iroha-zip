@@ -8,6 +8,47 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+function Get-RegistryKeySnapshot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LiteralPath
+    )
+
+    if (-not (Test-Path -LiteralPath $LiteralPath)) {
+        return '{"exists":false}'
+    }
+
+    $key = Get-Item -LiteralPath $LiteralPath
+    $values = @(
+        foreach ($name in @($key.GetValueNames() | Sort-Object)) {
+            $value = $key.GetValue(
+                $name,
+                $null,
+                [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+            )
+            $normalized = if ($value -is [byte[]]) {
+                [BitConverter]::ToString($value).Replace("-", "")
+            }
+            elseif ($value -is [string[]]) {
+                @($value)
+            }
+            else {
+                [string]$value
+            }
+            [ordered]@{
+                name = $name
+                kind = $key.GetValueKind($name).ToString()
+                value = $normalized
+            }
+        }
+    )
+    return (ConvertTo-Json -InputObject ([ordered]@{
+        exists = $true
+        subkeys = @($key.GetSubKeyNames() | Sort-Object)
+        values = $values
+    }) -Depth 5 -Compress)
+}
+
 $extensions = @(
     ".zip", ".zipx", ".7z", ".rar", ".lzh", ".lha", ".tar", ".gz", ".tgz",
     ".bz2", ".tbz", ".tbz2", ".xz", ".txz", ".zst", ".tzst", ".z", ".cab"
@@ -18,6 +59,12 @@ $applicationKey = "HKCU:\Software\Classes\Applications\iroha-zip-shell.exe"
 $capabilitiesKey = "HKCU:\Software\iroha-zip\Capabilities"
 $registeredApps = "HKCU:\Software\RegisteredApplications"
 $ownedKeys = @($progKey, $applicationKey, "HKCU:\Software\iroha-zip")
+$userChoiceBefore = @{}
+
+foreach ($extension in $extensions) {
+    $userChoice = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$extension\UserChoice"
+    $userChoiceBefore[$extension] = Get-RegistryKeySnapshot $userChoice
+}
 
 foreach ($ownedKey in $ownedKeys) {
     if (Test-Path -LiteralPath $ownedKey) {
@@ -122,6 +169,12 @@ try {
         (Get-ItemPropertyValue -LiteralPath $registeredApps -Name $sentinelName) `
             -cne $sentinelValue) {
         throw "Association removal damaged RegisteredApplications state."
+    }
+    foreach ($extension in $extensions) {
+        $userChoice = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$extension\UserChoice"
+        if ((Get-RegistryKeySnapshot $userChoice) -cne $userChoiceBefore[$extension]) {
+            throw "Association registration changed the protected UserChoice state for $extension."
+        }
     }
 
     Write-Host "Association registration/removal passed for 18 extensions without changing UserChoice."
