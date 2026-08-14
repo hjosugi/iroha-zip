@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 
-This document defines the automated SAFE-001 evidence contract. The schema-v4 contract passed on both fixed-label GitHub runners in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143) from commit `e81b42aaeb1a4826dfe38043e33564271889c1f8`. The controlled CAB extension then passed on both images in [Actions run 31770399421](https://github.com/hjosugi/iroha-zip/actions/runs/31770399421) from commit `c03372d09414c6b1456ecfedf03087351539bc77`. The reviewed JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven explicitly removed AppContainer profiles/roots, all archive assertions below, the generated malicious corpus, and the English settings setup/diagnosis path. These results are evidence for the named disposable Server images, not Windows 10/11 desktop certification or a security audit.
+This document defines the automated SAFE-001 evidence contract. The expanded schema-v4 contract passed on both fixed-label GitHub runners and the native `windows-11-arm` runner in [Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604) from commit `27610e69f21bf85709f70a68695acc1113d22dca`; the native ARM64 path also passed independently on push in [Actions run 31778405711](https://github.com/hjosugi/iroha-zip/actions/runs/31778405711). Independently downloaded JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven explicitly removed AppContainer profiles/roots per environment, all 14 named additional read formats and three raw-stream negative cases below, the generated malicious corpus, x64 English Settings, and native ARM64 Japanese/English Settings. These results are evidence for the named disposable Server and hosted Windows 11 ARM images, not Windows 10/11 x64 desktop certification or a security audit.
 
 ## Automated matrix
 
@@ -79,7 +79,7 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 The automated Server matrix does not close SAFE-001. Still required:
 
 1. run the same contract on disposable Windows 10 and Windows 11 x64 machines;
-2. obtain a passing fixed-label and native-ARM64 report for the schema-v4 14-format matrix, then add further independently redistributable legacy fixtures through SAFE-002;
+2. add further independently redistributable legacy and malformed-format fixtures through SAFE-002;
 3. record LPAC format and broader filesystem/registry/COM/LAN/Internet denial results;
 4. add concurrent reparse-race stress beyond the deterministic real-junction replacement regression, plus broader backend-specific crash/cancellation cases;
 5. preserve reviewed evidence outside the 14-day CI artifact window;

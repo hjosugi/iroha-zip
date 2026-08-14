@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-- Nothing yet.
+- Add two-pass AppContainer handling for standalone GZ, BZ2, XZ, Zstandard, and UNIX compress
+  streams. A manifest-pinned libarchive raw reader drains the complete preflight, fixes the expected
+  filter and safe output name from the outer extension, repeats extraction in a fresh sandbox, and
+  fails closed on filter mismatch, decode failure, byte limits, or existing output.
+- Add byte-exact, bounded-decoder fixtures from the official libarchive 3.8.9 tag for RAR, RAR5,
+  LHA level 3, and BZIP2-compressed ZIPX, with upstream license and provenance records.
+- Expand native ARM64 and fixed Server E2E to 14 additional read formats, three raw-stream negative
+  cases, and standalone-stream double-click shell extraction with complete tree/hash comparison.
 
 ## 0.5.0 - 2026-08-14
 

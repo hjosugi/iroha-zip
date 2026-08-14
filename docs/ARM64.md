@@ -14,18 +14,25 @@ CIはGitHubのnative `windows-11-arm` runner上で、OS／process architecture�
 - MSYS2 CLANGARM64の署名必須package database、exact package version/archive hash、payload byte、
   provenance、SPDX 2.3、license inventoryの完全検証
 - ZIP、7z、TAR、TAR.GZの作成と別sandboxでの再展開照合
-- TAR.BZ2、TAR.XZ、TAR.Zstandard、UNIX compress、Microsoft LZX CABのpreview／展開照合
+- TAR.BZ2、TAR.XZ、TAR.Zstandard、UNIX compress、単体GZ／BZ2／XZ／Zstandard／`.Z`、
+  Microsoft LZX CAB、libarchive 3.8.9由来のRAR／RAR5／LHA level 3／ZIPXのpreview／展開照合
+- 単体streamのfilter不一致、展開容量超過、圧縮payload破損を非公開で拒否
 - 18拒否例＋1 controlとnative hardlink／ADS／junctionを含む悪性コーパス
-- shell経路と、日本語／英語それぞれ26 controlのSettings UI／backend診断
+- 通常ZIPと単体gzipのshell経路、日本語／英語それぞれ26 controlのSettings UI／backend診断
 - 通常AppContainerのcapability 0、loopback、timeout、memory、異常終了、loader、temp、DACL、
   7 profile/root cleanup
 - LPAC成功時は同じschema-v4契約、非対応時はexact failure class、exit 2、空stdout、完全cleanup
 
-この全契約は`v0.5.0`のcommit `947b693b96857992bf32a73366c57f537daf0aa5`である
+`v0.5.0`の基準契約はcommit `947b693b96857992bf32a73366c57f537daf0aa5`の
 [Actions run 31774280671](https://github.com/hjosugi/iroha-zip/actions/runs/31774280671)で合格しました。
+その後、上記14追加読取形式と3拒否ケースを含む拡張契約がcommit
+`27610e69f21bf85709f70a68695acc1113d22dca`の
+[Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604)でServer 2環境と同時に合格し、
+[push run 31778405711](https://github.com/hjosugi/iroha-zip/actions/runs/31778405711)でも独立に再実行されました。
 downloadした5つのJSONは、全matrixが実行済みであること、全PEが`0xAA64`であること、通常
-AppContainerがcapability 0であること、全一時rootが削除されたことを記録しています。このWindows 11
-ARM環境ではLPAC queryは`ERROR_INVALID_PARAMETER`となり、通常AppContainerへ降格せずfail closedしました。
+AppContainerがcapability 0であること、7 profile/rootと全一時rootが削除されたことを記録しています。
+このWindows 11 ARM環境ではLPAC queryは`ERROR_INVALID_PARAMETER`となり、通常AppContainerへ降格せず
+fail closedしました。
 
 ### v0.5.0の配布境界
 
@@ -80,21 +87,28 @@ CI first requires `Arm64` for both OS and process architecture and
 - complete MSYS2 CLANGARM64 verification of required-signature databases, exact package versions and
   archive hashes, payload bytes, provenance, SPDX 2.3, and the license inventory;
 - ZIP, 7z, TAR, and TAR.GZ creation followed by independent-sandbox re-extraction comparison;
-- preview/extraction comparison for TAR.BZ2, TAR.XZ, TAR.Zstandard, UNIX compress, and a Microsoft LZX CAB;
+- preview/extraction comparison for TAR.BZ2, TAR.XZ, TAR.Zstandard, UNIX compress, standalone
+  GZ/BZ2/XZ/Zstandard/`.Z`, a Microsoft LZX CAB, and libarchive 3.8.9 RAR/RAR5/LHA-level-3/ZIPX fixtures;
+- non-publication for standalone-stream filter mismatch, expanded-byte-limit overflow, and compressed-payload corruption;
 - the hostile corpus with 18 rejects, one control, and native hardlink/ADS/junction cases;
-- shell handling and both Japanese and English 26-control Settings/backend-diagnosis paths;
+- normal-ZIP and standalone-gzip shell handling, plus both Japanese and English 26-control
+  Settings/backend-diagnosis paths;
 - normal AppContainer with zero capabilities, loopback/timeout/memory/crash/loader/temp/DACL checks,
   and seven profile/root cleanups; and
 - the same schema-v4 contract on LPAC success, or exact failure class, exit 2, empty stdout, and full
   cleanup when LPAC is unsupported.
 
-The complete contract passed for the `v0.5.0` commit
+The baseline contract passed for the `v0.5.0` commit
 `947b693b96857992bf32a73366c57f537daf0aa5` in
 [Actions run 31774280671](https://github.com/hjosugi/iroha-zip/actions/runs/31774280671).
+The expanded contract above, including all 14 additional reads and three negative cases, then passed
+for commit `27610e69f21bf85709f70a68695acc1113d22dca` alongside both Server environments in
+[Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604) and independently
+repeated in [push run 31778405711](https://github.com/hjosugi/iroha-zip/actions/runs/31778405711).
 The five downloaded JSON files record every matrix as executed, `0xAA64` for every PE, normal
-AppContainer with zero capabilities, and removal of every temporary root. The LPAC query returned
-`ERROR_INVALID_PARAMETER` on that Windows 11 ARM environment and failed closed without a normal-
-AppContainer fallback.
+AppContainer with zero capabilities, and removal of all seven profiles/roots and every temporary root.
+The LPAC query returned `ERROR_INVALID_PARAMETER` on that Windows 11 ARM environment and failed closed
+without a normal-AppContainer fallback.
 
 ### v0.5.0 distribution boundary
 
