@@ -161,8 +161,14 @@ jobs:
             }
           }
 
-          $executable = Join-Path $root 'iroha-zip.exe'
-          $config = Join-Path $env:RUNNER_TEMP 'iroha-zip-arm64-config.toml'
+          $builtExecutable = Join-Path $root 'iroha-zip.exe'
+          # rust-cache may restore target artifacts as hard links. Production
+          # correctly rejects those as probe inputs, so exercise an ordinary
+          # byte-for-byte copy like the packaged executable instead.
+          $probeId = [Guid]::NewGuid().ToString('N')
+          $executable = Join-Path $env:RUNNER_TEMP "iroha-zip-arm64-probe-$probeId.exe"
+          [IO.File]::Copy($builtExecutable, $executable, $false)
+          $config = Join-Path $env:RUNNER_TEMP "iroha-zip-arm64-config-$probeId.toml"
           & $executable --config $config init-config
           if ($LASTEXITCODE -ne 0) {
             throw "ARM64 default configuration failed with exit code $LASTEXITCODE."
@@ -194,6 +200,10 @@ jobs:
             throw 'Native ARM64 isolation evidence did not satisfy the complete contract.'
           }
           $binaryHash = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
+          $builtHash = (Get-FileHash -LiteralPath $builtExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($binaryHash -cne $builtHash) {
+            throw 'ARM64 isolation probe copy differs from the release build.'
+          }
           if ($isolation.probeSha256 -cne $binaryHash) {
             throw 'ARM64 isolation probe did not execute the release binary bytes.'
           }
