@@ -143,7 +143,35 @@ function Find-SecondaryWindow {
 
 function Dismiss-Message {
     param([System.Windows.Automation.AutomationElement]$Dialog)
-    Invoke-DialogButton -Dialog $Dialog -Id 1
+    $button = Find-ByAutomationId -Root $Dialog -Id 1
+    if ($null -ne $button) {
+        Invoke-DialogButton -Dialog $Dialog -Id 1
+        return
+    }
+
+    # The Win32 UI Automation provider on Server images does not always expose
+    # IDOK as AutomationId "1". An MB_OK dialog must still expose exactly one
+    # named, enabled button with the accessible Invoke pattern.
+    $buttonCondition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Button
+    )
+    $buttons = @($Dialog.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        $buttonCondition
+    ))
+    if ($buttons.Count -ne 1) {
+        throw "The message dialog exposed $($buttons.Count) buttons instead of one accessible OK button."
+    }
+    $button = $buttons[0]
+    if (-not $button.Current.IsEnabled -or
+        [string]::IsNullOrWhiteSpace($button.Current.Name)) {
+        throw "The message dialog's only button is disabled or unnamed."
+    }
+    $invoke = [System.Windows.Automation.InvokePattern]$button.GetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern
+    )
+    $invoke.Invoke()
 }
 
 function Invoke-DialogButton {
