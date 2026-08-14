@@ -61,7 +61,7 @@ A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` bui
 
 - Disposable Windows 10/11 x64 runs of the now-passing fixed-Server evidence contract
 - LPAC `bsdtar --version`, archive-format, registry/file/COM denial, and network-denial measurements beyond the fixed-Server fail-closed token-query result
-- Settings-screen visual fit at 100–300% and mixed DPI, screen readers, completed folder-picker actions, Default Apps, backend-import rollback, and other external-state rollback paths
+- Settings-screen visual fit at 100–300% and mixed DPI, screen readers, completed folder-picker actions, Default Apps, UI-driven backend replacement, and other external-state rollback paths beyond the passing post-backup import rollback
 - Native archive-preview tree/search/selection UI, progress/cancellation accessibility, and real-format selected-publication matrix
 - Broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures beyond the passing pinned and generated corpora
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule

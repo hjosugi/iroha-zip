@@ -71,6 +71,12 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets --locked
 
+      - name: Exercise backend install rollback transaction
+        shell: pwsh
+        run: |
+          cargo build --bin iroha-zip --locked
+          ./scripts/test-backend-install-rollback.ps1
+
       - name: Build Windows UI binary
         if: runner.os == 'Windows'
         run: cargo build --bins --locked
@@ -556,6 +562,7 @@ jobs:
               (Join-Path $localBackend 'preserve.marker') -PathType Leaf)) {
             throw 'Rejected import did not preserve the existing backend.'
           }
+
           ./scripts/install-backend.ps1 `
             -SourceDirectory $localSource `
             -DestinationDirectory $localBackend `

@@ -225,7 +225,10 @@ try {
     $validatorCandidates = @(
         (Join-Path $ProjectRoot "iroha-zip.exe"),
         (Join-Path $ProjectRoot "target\x86_64-pc-windows-msvc\release\iroha-zip.exe"),
-        (Join-Path $ProjectRoot "target\release\iroha-zip.exe")
+        (Join-Path $ProjectRoot "target\release\iroha-zip.exe"),
+        (Join-Path $ProjectRoot "target\debug\iroha-zip.exe"),
+        (Join-Path $ProjectRoot "target/release/iroha-zip"),
+        (Join-Path $ProjectRoot "target/debug/iroha-zip")
     )
     $validator = $validatorCandidates |
         Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
@@ -247,6 +250,14 @@ try {
     }
 
     try {
+        # CI uses this fail-closed hook to prove that a failure after the existing
+        # tree has been renamed still restores that exact tree. The variable can
+        # only force an import to fail; it cannot bypass validation or commit data.
+        if ($null -ne $backup -and
+            $env:CI -eq "true" -and
+            $env:IROHA_ZIP_TEST_INSTALL_FAILURE -eq "after-backup") {
+            throw "Injected backend replacement failure after backup creation."
+        }
         Move-Item -LiteralPath $stage -Destination $DestinationDirectory
         if ($null -ne $backup) {
             Remove-Item -LiteralPath $backup -Recurse -Force

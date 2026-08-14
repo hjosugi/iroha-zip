@@ -10,6 +10,8 @@
   LHA level 3, and BZIP2-compressed ZIPX, with upstream license and provenance records.
 - Expand native ARM64 and fixed Server E2E to 14 additional read formats, three raw-stream negative
   cases, and standalone-stream double-click shell extraction with complete tree/hash comparison.
+- Inject a disposable-Windows backend replacement failure after backup creation and require exact
+  restoration, zero transaction residue, and a subsequent successful import.
 
 ## 0.5.0 - 2026-08-14
 

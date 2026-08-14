@@ -94,6 +94,13 @@ artifacts. A second test forces both replacement and restoration to fail; the re
 includes the exact recovery-backup path, and that backup must retain the prior bytes instead of
 being silently deleted.
 
+Backend replacement has an independent disposable-Windows transaction check. After constructing and
+validating a complete staged bundle, CI injects failure immediately after the existing backend is
+renamed to its unique backup. The script must restore the byte-identical prior tree, remove every
+backend stage/backup artifact, and then complete a normal import successfully in the same job. The
+test-only environment hook is honored only when `CI=true` and can only force failure; it cannot skip
+source, manifest, evidence, or destination validation.
+
 ## Real-Windows evidence still required
 
 UX-001 stays open until disposable Windows 10 and 11 systems record:
