@@ -33,6 +33,22 @@ fn packaged_release_documents_match_the_crate_version() {
     assert!(readme_en.contains(&tag), "README.en.md is missing {tag}");
     assert!(readme_ja.contains(&x64_zip));
     assert!(readme_en.contains(&x64_zip));
+    for marker in [
+        "\n## ",
+        "\n### ",
+        "\n- ",
+        "\n|",
+        "```",
+        "](",
+        "```powershell",
+        "```text",
+    ] {
+        assert_eq!(
+            readme_ja.matches(marker).count(),
+            readme_en.matches(marker).count(),
+            "bilingual README structure differs for marker {marker:?}"
+        );
+    }
 
     let release_notes = include_str!("../docs/RELEASE_NOTES.md");
     assert!(release_notes.starts_with(&format!("# iroha-zip {version}\n")));
@@ -98,6 +114,24 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
                 "{language} page must contain section #{section} exactly once"
             );
         }
+    }
+
+    for marker in [
+        "<section ",
+        "<h2>",
+        "<h3>",
+        "<article ",
+        "<a ",
+        "<li>",
+        "<code>",
+        "data-download-url=",
+        "data-release-url",
+    ] {
+        assert_eq!(
+            japanese_page.matches(marker).count(),
+            english_page.matches(marker).count(),
+            "bilingual Pages structure differs for marker {marker:?}"
+        );
     }
 
     assert!(root.contains("data-page=\"language-gate\""));
