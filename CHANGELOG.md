@@ -6,6 +6,8 @@
   language topology, release hooks, skip links, and section structure.
 - Add a restrictive static-site CSP, referrer policy, SVG favicon, language-aware sitemap, crawler
   policy, and project-root-safe 404 links.
+- Gate Pages deployment on a read-only pinned-toolchain validation job; grant Pages and OIDC write
+  permissions only to the dependent deployment job.
 - Document the measured Windows PE/PDB reproducibility boundary so dry-run digests are never reused
   as expected published-asset digests.
 
