@@ -108,6 +108,9 @@ pub enum Command {
     InternalMemoryProbe { bytes: u64 },
 
     #[command(hide = true)]
+    InternalProcessTempProbe,
+
+    #[command(hide = true)]
     InternalStagingWriteProbe { root: PathBuf },
 
     #[command(hide = true)]

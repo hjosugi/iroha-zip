@@ -16,13 +16,19 @@ use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_HANDLE_EOF, ERROR_INVALID_PARAMETER,
-    ERROR_NO_MORE_FILES, ERROR_SUCCESS, FreeLibrary, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS,
-    HLOCAL, LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    ERROR_NO_MORE_FILES, ERROR_SUCCESS, FreeLibrary, GetLastError, HANDLE, HANDLE_FLAG_INHERIT,
+    HANDLE_FLAGS, HLOCAL, LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0,
+    WAIT_TIMEOUT,
 };
 use windows::Win32::Security::Authorization::{
     ConvertSidToStringSidW, EXPLICIT_ACCESS_W, GetNamedSecurityInfoW, NO_MULTIPLE_TRUSTEE,
     SE_FILE_OBJECT, SET_ACCESS, SetEntriesInAclW, SetNamedSecurityInfoW, TRUSTEE_IS_SID,
     TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+};
+use windows::Win32::Security::Cryptography::{
+    BCRYPT_ALG_HANDLE, BCRYPT_OPEN_ALGORITHM_PROVIDER_FLAGS, BCRYPT_RNG_ALGORITHM,
+    BCRYPTGENRANDOM_FLAGS, BCryptCloseAlgorithmProvider, BCryptGenRandom,
+    BCryptOpenAlgorithmProvider,
 };
 use windows::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeleteAppContainerProfile, GetAppContainerFolderPath,
@@ -34,12 +40,13 @@ use windows::Win32::Security::{
     TokenIsAppContainer, TokenIsLessPrivilegedAppContainer,
 };
 use windows::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, CreateFileW, DELETE, FILE_ATTRIBUTE_DIRECTORY,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_FLAG_SEQUENTIAL_SCAN, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
-    FILE_ID_BOTH_DIR_INFO, FILE_LIST_DIRECTORY, FILE_SHARE_READ, FileIdBothDirectoryInfo,
+    BY_HANDLE_FILE_INFORMATION, CREATE_NEW, CreateFileW, DELETE, FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TEMPORARY, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN,
+    FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_ID_BOTH_DIR_INFO,
+    FILE_LIST_DIRECTORY, FILE_SHARE_MODE, FILE_SHARE_READ, FileIdBothDirectoryInfo,
     FileIdBothDirectoryRestartInfo, FindClose, FindFirstStreamW, FindNextStreamW,
-    FindStreamInfoStandard, GetFileInformationByHandle, GetFileInformationByHandleEx,
+    FindStreamInfoStandard, GetFileInformationByHandle, GetFileInformationByHandleEx, GetTempPathW,
     OPEN_EXISTING, WIN32_FIND_STREAM_DATA, WRITE_DAC, WRITE_OWNER,
 };
 use windows::Win32::System::Com::{
@@ -73,7 +80,9 @@ use windows::core::{Error as WindowsError, GUID, HRESULT, PCWSTR, PWSTR};
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
-use crate::platform::{FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec};
+use crate::platform::{
+    FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec, ProcessTempObservation,
+};
 use crate::util;
 use crate::windows_command_line;
 
@@ -1051,6 +1060,164 @@ pub fn probe_staging_security_write_denials(path: &Path) -> Result<(bool, bool)>
     Ok((
         access_mask_is_denied(path, WRITE_DAC.0)?,
         access_mask_is_denied(path, WRITE_OWNER.0)?,
+    ))
+}
+
+pub fn probe_process_temp() -> Result<ProcessTempObservation> {
+    let environment_primary = std::env::var_os("TEMP").unwrap_or_default();
+    let environment_legacy = std::env::var_os("TMP").unwrap_or_default();
+    let mut buffer = [0_u16; 512];
+    let length = unsafe { GetTempPathW(Some(&mut buffer)) };
+    if length == 0 {
+        let code = unsafe { GetLastError() };
+        return Err(process_temp_error(
+            "GetTempPathW",
+            &environment_primary,
+            &environment_legacy,
+            None,
+            &format!("Win32 error {}", code.0),
+        ));
+    }
+    let length = usize::try_from(length).map_err(|_| {
+        process_temp_error(
+            "GetTempPathW length conversion",
+            &environment_primary,
+            &environment_legacy,
+            None,
+            "returned length does not fit usize",
+        )
+    })?;
+    if length >= buffer.len() {
+        return Err(process_temp_error(
+            "GetTempPathW buffer bound",
+            &environment_primary,
+            &environment_legacy,
+            None,
+            &format!("required {length} UTF-16 code units"),
+        ));
+    }
+    let resolved_path = PathBuf::from(OsString::from_wide(&buffer[..length]));
+    let metadata = fs::metadata(&resolved_path).map_err(|error| {
+        process_temp_error(
+            "temp directory metadata",
+            &environment_primary,
+            &environment_legacy,
+            Some(&resolved_path),
+            &format!("{error}; raw_os_error={:?}", error.raw_os_error()),
+        )
+    })?;
+    if !metadata.is_dir() {
+        return Err(process_temp_error(
+            "temp directory type",
+            &environment_primary,
+            &environment_legacy,
+            Some(&resolved_path),
+            "resolved path is not a directory",
+        ));
+    }
+    validate_directory_security(&resolved_path)?;
+
+    let mut provider = BCRYPT_ALG_HANDLE::default();
+    let open_status = unsafe {
+        BCryptOpenAlgorithmProvider(
+            &raw mut provider,
+            BCRYPT_RNG_ALGORITHM,
+            PCWSTR::null(),
+            BCRYPT_OPEN_ALGORITHM_PROVIDER_FLAGS(0),
+        )
+    };
+    if open_status.is_err() {
+        return Err(process_temp_error(
+            "BCryptOpenAlgorithmProvider",
+            &environment_primary,
+            &environment_legacy,
+            Some(&resolved_path),
+            &format!("NTSTATUS 0x{:08X}", open_status.0.cast_unsigned()),
+        ));
+    }
+    let mut random = [0_u8; 20];
+    let random_status =
+        unsafe { BCryptGenRandom(Some(provider), &mut random, BCRYPTGENRANDOM_FLAGS(0)) };
+    let close_status = unsafe { BCryptCloseAlgorithmProvider(provider, 0) };
+    if random_status.is_err() {
+        return Err(process_temp_error(
+            "BCryptGenRandom",
+            &environment_primary,
+            &environment_legacy,
+            Some(&resolved_path),
+            &format!("NTSTATUS 0x{:08X}", random_status.0.cast_unsigned()),
+        ));
+    }
+    if close_status.is_err() {
+        return Err(process_temp_error(
+            "BCryptCloseAlgorithmProvider",
+            &environment_primary,
+            &environment_legacy,
+            Some(&resolved_path),
+            &format!("NTSTATUS 0x{:08X}", close_status.0.cast_unsigned()),
+        ));
+    }
+
+    let filename = format!(
+        "iroha-zip-temp-probe-{}-{:02x}{:02x}{:02x}{:02x}.tmp",
+        std::process::id(),
+        random[0],
+        random[1],
+        random[2],
+        random[3]
+    );
+    let probe_path = resolved_path.join(filename);
+    let wide_path = wide_null(probe_path.as_os_str());
+    let handle = unsafe {
+        CreateFileW(
+            PCWSTR(wide_path.as_ptr()),
+            FILE_GENERIC_READ.0 | FILE_GENERIC_WRITE.0 | DELETE.0,
+            FILE_SHARE_MODE(0),
+            None,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
+            None,
+        )
+    }
+    .map_err(|error| {
+        process_temp_error(
+            "CreateFileW temporary read/write/delete-on-close",
+            &environment_primary,
+            &environment_legacy,
+            Some(&resolved_path),
+            &format!("HRESULT 0x{:08X}: {error}", error.code().0.cast_unsigned()),
+        )
+    })?;
+    drop(OwnedHandle::new(handle));
+    if probe_path.exists() {
+        return Err(process_temp_error(
+            "FILE_FLAG_DELETE_ON_CLOSE",
+            &environment_primary,
+            &environment_legacy,
+            Some(&resolved_path),
+            "probe file remained after closing its only handle",
+        ));
+    }
+
+    Ok(ProcessTempObservation {
+        temp_environment: environment_primary,
+        tmp_environment: environment_legacy,
+        resolved_path,
+    })
+}
+
+fn process_temp_error(
+    step: &str,
+    environment_primary: &OsStr,
+    environment_legacy: &OsStr,
+    resolved_path: Option<&Path>,
+    detail: &str,
+) -> IrohaZipError {
+    IrohaZipError::Sandbox(format!(
+        "process temp probe failed at {step}: {detail}; TEMP={}; TMP={}; GetTempPathW={:?}",
+        environment_primary.display(),
+        environment_legacy.display(),
+        resolved_path.map(|path| path.display().to_string())
     ))
 }
 

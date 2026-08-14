@@ -287,13 +287,18 @@ try {
         "--config", $configPath, "isolation-report"
     )
     $isolation = $isolationRun.stdout | ConvertFrom-Json -Depth 20
-    if ($isolation.schemaVersion -ne 2 -or
+    if ($isolation.schemaVersion -ne 3 -or
         -not $isolation.token.isAppContainer -or
         $isolation.token.isLessPrivilegedAppContainer -or
         $isolation.token.capabilityCount -ne 0 -or
         -not $isolation.network.denied -or
         -not $isolation.timeout.rejected -or
         -not $isolation.memory.rejected -or
+        [string]::IsNullOrWhiteSpace($isolation.processTemp.tempEnvironment) -or
+        [string]::IsNullOrWhiteSpace($isolation.processTemp.tmpEnvironment) -or
+        [string]::IsNullOrWhiteSpace($isolation.processTemp.resolvedPath) -or
+        -not $isolation.processTemp.rngSucceeded -or
+        -not $isolation.processTemp.deleteOnCloseSucceeded -or
         -not $isolation.stagingWriteSeal.aclApplied) {
         throw "Isolation evidence did not satisfy the zero-capability AppContainer contract."
     }
@@ -328,7 +333,7 @@ try {
         throw "Staging-source ACL evidence did not match the exact read/write contract."
     }
     $cleanupRecords = @($isolation.cleanup)
-    if ($cleanupRecords.Count -ne 4 -or
+    if ($cleanupRecords.Count -ne 5 -or
         @($cleanupRecords | Where-Object {
             -not $_.profileDeleteSucceeded -or -not $_.temporaryRootRemoved
         }).Count -ne 0) {

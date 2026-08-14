@@ -46,6 +46,14 @@ pub struct ProcessResult {
 }
 
 #[cfg(windows)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessTempObservation {
+    pub temp_environment: OsString,
+    pub tmp_environment: OsString,
+    pub resolved_path: PathBuf,
+}
+
+#[cfg(windows)]
 mod libarchive_windows;
 #[cfg(windows)]
 mod windows_impl;
@@ -55,10 +63,10 @@ pub use libarchive_windows::write_utf8_archive_listing;
 pub use windows_impl::{
     AttachmentHandoffSession, ConfigSaveGuard, DirectorySnapshot, Sandbox, create_snapshot_target,
     file_identity, file_identity_from_handle, lock_config_save, open_folder, open_snapshot_source,
-    prepare_backend_executable, probe_staging_security_write_denials, read_mark_of_the_web,
-    validate_directory_security, validate_extracted_entry_security, validate_open_snapshot_source,
-    validate_post_handoff_entry_security, validate_regular_file_security, verify_mark_of_the_web,
-    write_mark_of_the_web,
+    prepare_backend_executable, probe_process_temp, probe_staging_security_write_denials,
+    read_mark_of_the_web, validate_directory_security, validate_extracted_entry_security,
+    validate_open_snapshot_source, validate_post_handoff_entry_security,
+    validate_regular_file_security, verify_mark_of_the_web, write_mark_of_the_web,
 };
 
 #[cfg(not(windows))]

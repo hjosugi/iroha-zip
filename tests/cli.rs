@@ -108,6 +108,12 @@ fn internal_failure_probes_are_hidden_but_parseable() {
         Command::InternalStagingWriteProbe { root } if root == std::path::Path::new("source")
     ));
 
+    let process_temp = Cli::try_parse_from(["iroha-zip", "internal-process-temp-probe"]).unwrap();
+    assert!(matches!(
+        process_temp.command,
+        Command::InternalProcessTempProbe
+    ));
+
     let listing = Cli::try_parse_from([
         "iroha-zip",
         "internal-archive-listing",

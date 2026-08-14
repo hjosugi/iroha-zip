@@ -77,6 +77,37 @@ pub fn memory_probe(bytes: u64) -> Result<()> {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProcessTempProbeResult {
+    pub schema_version: u32,
+    pub temp_environment: String,
+    pub tmp_environment: String,
+    pub resolved_path: String,
+    pub rng_succeeded: bool,
+    pub delete_on_close_succeeded: bool,
+}
+
+#[cfg(windows)]
+pub fn process_temp_probe() -> Result<ProcessTempProbeResult> {
+    let observed = crate::platform::probe_process_temp()?;
+    Ok(ProcessTempProbeResult {
+        schema_version: 1,
+        temp_environment: observed.temp_environment.to_string_lossy().into_owned(),
+        tmp_environment: observed.tmp_environment.to_string_lossy().into_owned(),
+        resolved_path: observed.resolved_path.to_string_lossy().into_owned(),
+        rng_succeeded: true,
+        delete_on_close_succeeded: true,
+    })
+}
+
+#[cfg(not(windows))]
+pub fn process_temp_probe() -> Result<ProcessTempProbeResult> {
+    Err(IrohaZipError::Unsupported(
+        "the process temp probe is available only on Windows".to_owned(),
+    ))
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StagingWriteProbeResult {
     pub schema_version: u32,
     pub readable_paths: Vec<String>,
@@ -308,6 +339,7 @@ pub struct IsolationReport {
     network: NetworkIsolationReport,
     timeout: TimeoutIsolationReport,
     memory: MemoryIsolationReport,
+    process_temp: ProcessTempProbeResult,
     staging_write_seal: StagingWriteIsolationReport,
     cleanup: Vec<CleanupReport>,
 }
@@ -449,6 +481,55 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
         ));
     }
 
+    let temp_probe = PreparedProbe::new(config, config.sandbox.memory_limit_mib, "process-temp")?;
+    let temp_operation = (|| {
+        let scratch = temp_probe.sandbox.create_process_scratch()?;
+        let stdout = temp_probe.root.join("process-temp-probe.stdout.json");
+        let stderr = temp_probe.root.join("process-temp-probe.stderr.log");
+        let result = temp_probe.sandbox.run(ProcessSpec {
+            program: temp_probe.executable.clone(),
+            args: vec![OsString::from("internal-process-temp-probe")],
+            current_dir: temp_probe.root.clone(),
+            temp_dir: Some(scratch.clone()),
+            stdin_file: None,
+            stdout_log: stdout.clone(),
+            stderr_log: stderr.clone(),
+            timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 10)),
+            monitor_root: None,
+            limits: config.limits.clone(),
+        })?;
+        if result.exit_code != 0 {
+            return Err(IrohaZipError::Sandbox(format!(
+                "process temp probe exited with code {}: {}",
+                result.exit_code,
+                util::read_limited(&stderr, 16 * 1024)?
+            )));
+        }
+        let raw = util::read_limited(&stdout, 16 * 1024)?;
+        let observed: ProcessTempProbeResult = serde_json::from_str(&raw).map_err(|error| {
+            IrohaZipError::Sandbox(format!("cannot parse process temp probe result: {error}"))
+        })?;
+        if observed.schema_version != 1
+            || observed.temp_environment.is_empty()
+            || observed.tmp_environment.is_empty()
+            || observed.resolved_path.is_empty()
+            || !observed.rng_succeeded
+            || !observed.delete_on_close_succeeded
+        {
+            return Err(IrohaZipError::Sandbox(format!(
+                "process temp probe returned incomplete evidence: {observed:?}"
+            )));
+        }
+        temp_probe.sandbox.finish_process_scratch(&scratch)?;
+        Ok((observed, result.isolation))
+    })();
+    let ((process_temp, temp_isolation), temp_cleanup) = finish_probe(temp_probe, temp_operation)?;
+    if temp_isolation != network_result.isolation {
+        return Err(IrohaZipError::Sandbox(
+            "isolation token evidence changed during the process temp probe".to_owned(),
+        ));
+    }
+
     let staging_probe =
         PreparedProbe::new(config, config.sandbox.memory_limit_mib, "staging-write")?;
     let staging_operation = (|| {
@@ -539,7 +620,7 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
     }
 
     Ok(IsolationReport {
-        schema_version: 2,
+        schema_version: 3,
         requested_mode: if config.sandbox.isolation.is_lpac() {
             "lpac"
         } else {
@@ -561,6 +642,7 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
         },
         timeout,
         memory,
+        process_temp,
         staging_write_seal: StagingWriteIsolationReport {
             acl_applied,
             readable_paths: staging.readable_paths,
@@ -570,6 +652,7 @@ pub fn measure(config: &crate::config::Config) -> Result<IsolationReport> {
             network_cleanup,
             timeout_cleanup,
             memory_cleanup,
+            temp_cleanup,
             staging_cleanup,
         ],
     })

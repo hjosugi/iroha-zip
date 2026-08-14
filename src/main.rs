@@ -152,6 +152,17 @@ fn run() -> Result<()> {
         Command::InternalMemoryProbe { bytes } => {
             iroha_zip::isolation::memory_probe(bytes)?;
         }
+        Command::InternalProcessTempProbe => {
+            let report = iroha_zip::isolation::process_temp_probe()?;
+            println!(
+                "{}",
+                serde_json::to_string(&report).map_err(|error| {
+                    iroha_zip::error::IrohaZipError::Sandbox(format!(
+                        "cannot serialize internal process temp probe: {error}"
+                    ))
+                })?
+            );
+        }
         Command::InternalStagingWriteProbe { root } => {
             let report = iroha_zip::isolation::staging_write_probe(&root)?;
             println!(
