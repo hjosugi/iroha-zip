@@ -135,6 +135,7 @@ iroha-zipは次をfail-closedで拒否します。
 ## 動作環境
 
 - Windows 10 version 1903以降。x64とnative ARM64を配布し、ARM64自動実機証拠はWindows 11 ARMで取得
+- 対象architectureの[Microsoft Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)。公式EXEは`VCRUNTIME140.dll`を使用します。DLL不足時はMicrosoft公式packageを導入し、第三者DLL配布siteから単体fileを取得しないでください
 - libarchive 3.8.9系の`bsdtar.exe`と実行に必要なDLL
 - PowerShell 5.1以降
 

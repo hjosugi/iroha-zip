@@ -5,6 +5,8 @@
 - Record the independently verified immutable `v0.5.3` publication, exact 11-asset inventory,
   tag-ref attestations, intentionally unsigned PE state, and byte-matched bilingual Pages deployment.
 - Record the reviewed test-only CodeQL alert #234 and refresh issue-reporting guidance for `v0.5.3`.
+- Document the official Microsoft Visual C++ v14 runtime prerequisite discovered by inspecting every
+  published x64/ARM64 executable import table.
 
 ## 0.5.3 - 2026-08-14
 

@@ -134,6 +134,7 @@ See the [threat model](docs/THREAT_MODEL.md). The differences between AppContain
 ## Runtime requirements
 
 - Windows 10 version 1903 or later; x64 and native ARM64 packages are available, with automated ARM64 device evidence on Windows 11 ARM
+- The architecture-matching [Microsoft Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Official EXEs import `VCRUNTIME140.dll`; if it is missing, install Microsoft's official package rather than downloading an individual DLL from a third-party site
 - A libarchive 3.8.9-series `bsdtar.exe` and its required DLLs
 - PowerShell 5.1 or later
 

@@ -7,7 +7,8 @@ iroha-zip の現在の公式 Windows バイナリは Authenticode 未署名で�
 1. `https://github.com/hjosugi/iroha-zip/releases` から取得したことを確認する。
 2. リリース添付の `SHA256SUMS.txt` とダウンロードしたファイルの SHA-256 を比較する。
 3. 必要に応じて GitHub CLI の `gh attestation verify <file> --repo hjosugi/iroha-zip` で artifact attestation を確認する。
-4. バックエンドは同梱されていない。設定画面から自分が信頼する libarchive / `bsdtar.exe` を取り込み、`doctor` が成功することを確認する。
+4. 公式EXEが使用する`VCRUNTIME140.dll`がない場合は、対象architectureの[Microsoft公式Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)を導入する。第三者siteからDLL単体を取得しない。
+5. バックエンドは同梱されていない。設定画面から自分が信頼する libarchive / `bsdtar.exe` を取り込み、`doctor` が成功することを確認する。
 
 PowerShell で SHA-256 を表示する例:
 
@@ -35,7 +36,8 @@ The current official iroha-zip Windows binaries are not Authenticode-signed. Win
 1. Confirm that the file came from `https://github.com/hjosugi/iroha-zip/releases`.
 2. Compare the file's SHA-256 digest with the release's `SHA256SUMS.txt`.
 3. When desired, verify the GitHub artifact attestation with `gh attestation verify <file> --repo hjosugi/iroha-zip`.
-4. The archive backend is not bundled. Import a libarchive / `bsdtar.exe` bundle you trust in Settings and require `doctor` to pass.
+4. If `VCRUNTIME140.dll`, which the official EXEs import, is absent, install the architecture-matching [official Microsoft Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Do not download an individual DLL from a third-party site.
+5. The archive backend is not bundled. Import a libarchive / `bsdtar.exe` bundle you trust in Settings and require `doctor` to pass.
 
 Example SHA-256 check in PowerShell:
 
