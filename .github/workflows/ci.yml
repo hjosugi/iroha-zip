@@ -85,39 +85,55 @@ jobs:
           ./scripts/test-associations.ps1
           -ShellExecutable ./target/debug/iroha-zip-shell.exe
 
-  windows-arm64-build:
-    name: Link Windows ARM64 executables
-    runs-on: windows-2025
+  windows-arm64-native:
+    name: Test Windows ARM64 natively
+    runs-on: windows-11-arm
     timeout-minutes: 30
 
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Install pinned Rust toolchain and ARM64 target
-        shell: bash
+      - name: Install pinned native Rust toolchain
+        shell: pwsh
         run: |
-          rustup toolchain install 1.97.1 --profile minimal
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
           rustup default 1.97.1
-          rustup target add aarch64-pc-windows-msvc
+
+      - name: Require a native ARM64 host toolchain
+        shell: pwsh
+        run: |
+          $os = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          $process = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+          $hostLine = rustc -vV | Where-Object { $_ -like 'host:*' }
+          if ($os -cne 'Arm64' -or $process -cne 'Arm64' -or
+              $hostLine -cne 'host: aarch64-pc-windows-msvc') {
+            throw "Expected native ARM64 execution; os=$os process=$process rust=$hostLine"
+          }
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: ci-windows-arm64-link
+          shared-key: ci-windows-arm64-native
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Link release executables
-        run: >-
-          cargo build --release --bins
-          --target aarch64-pc-windows-msvc --locked
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      - name: Verify exact ARM64 PE inventory
+      - name: Run native tests
+        run: cargo test --all-targets --locked
+
+      - name: Run native Clippy
+        run: cargo clippy --all-targets --locked
+
+      - name: Build native release executables
+        run: cargo build --release --bins --locked
+
+      - name: Verify ARM64 PE inventory and AppContainer evidence
         shell: pwsh
         run: |
-          $root = Join-Path $env:GITHUB_WORKSPACE `
-            'target/aarch64-pc-windows-msvc/release'
+          $root = Join-Path $env:GITHUB_WORKSPACE 'target/release'
           $expected = @(
             'iroha-zip.exe',
             'iroha-zip-settings.exe',
@@ -144,7 +160,75 @@ jobs:
                 $name, $machine)
             }
           }
-          Write-Host 'Verified three linked ARM64 PE executables; no artifact was published.'
+
+          $executable = Join-Path $root 'iroha-zip.exe'
+          $config = Join-Path $env:RUNNER_TEMP 'iroha-zip-arm64-config.toml'
+          & $executable --config $config init-config
+          if ($LASTEXITCODE -ne 0) {
+            throw "ARM64 default configuration failed with exit code $LASTEXITCODE."
+          }
+          $json = & $executable --config $config isolation-report | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "ARM64 isolation report failed with exit code $LASTEXITCODE."
+          }
+          $isolation = $json | ConvertFrom-Json -Depth 20
+          $cleanup = @($isolation.cleanup)
+          if ($isolation.schemaVersion -ne 4 -or
+              $isolation.requestedMode -cne 'appcontainer' -or
+              -not $isolation.token.isAppContainer -or
+              $isolation.token.isLessPrivilegedAppContainer -or
+              $isolation.token.capabilityCount -ne 0 -or
+              -not $isolation.network.denied -or
+              -not $isolation.timeout.rejected -or
+              -not $isolation.memory.rejected -or
+              -not $isolation.crash.terminatedWithoutSuccess -or
+              $isolation.crash.exitCode -eq 0 -or
+              -not $isolation.loaderFailure.createProcessRejected -or
+              -not $isolation.processTemp.rngSucceeded -or
+              -not $isolation.processTemp.deleteOnCloseSucceeded -or
+              -not $isolation.stagingWriteSeal.aclApplied -or
+              $cleanup.Count -ne 7 -or
+              @($cleanup | Where-Object {
+                -not $_.profileDeleteSucceeded -or -not $_.temporaryRootRemoved
+              }).Count -ne 0) {
+            throw 'Native ARM64 isolation evidence did not satisfy the complete contract.'
+          }
+          $binaryHash = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($isolation.probeSha256 -cne $binaryHash) {
+            throw 'ARM64 isolation probe did not execute the release binary bytes.'
+          }
+          $evidence = [ordered]@{
+            schemaVersion = 1
+            runner = [ordered]@{
+              osDescription = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+              osArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+              processArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+              imageOs = $env:ImageOS
+              imageVersion = $env:ImageVersion
+            }
+            rustHost = (rustc -vV | Where-Object { $_ -like 'host:*' })
+            binarySha256 = $binaryHash
+            peMachine = '0xAA64'
+            isolation = $isolation
+            backendArchiveMatrixExecuted = $false
+            releaseAssetPublished = $false
+          }
+          $evidencePath = Join-Path $env:RUNNER_TEMP 'windows-arm64-native.json'
+          [IO.File]::WriteAllText(
+            $evidencePath,
+            (ConvertTo-Json -InputObject $evidence -Depth 30),
+            [Text.UTF8Encoding]::new($false)
+          )
+          Write-Host 'Verified three native ARM64 PEs and AppContainer evidence; no binary artifact was published.'
+
+      - name: Upload native ARM64 evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-arm64-native
+          path: ${{ runner.temp }}/windows-arm64-native.json
+          if-no-files-found: warn
+          retention-days: 14
 
   windows-e2e:
     # The fixed-label AppContainer/backend matrix is deliberately separated

@@ -125,7 +125,7 @@ iroha-zipは次をfail-closedで拒否します。
 - バックエンドフォルダ内の余分なファイル、欠落ファイル、リンク
 - 既存の展開先や既存の出力書庫の上書き
 
-さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。sandboxへコピーしたbackend treeと入力書庫copyは再帰的にread／execute専用へ封印し、入力書庫は保持handleでも固定します。展開先directoryはlisting process終了・一覧検証・入力再照合の後に親が新規作成するため、侵害されたlisting processは書庫差替え、backend自己改変、展開先への置き土産を次のpassへ残せません。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。信頼する親プロセスがこのtreeを有界PAX streamへ変換し、backendには通常の圧縮元pathやtree operandを渡さず、sandbox内の固定`@source.pax.tar`だけを渡します。7z writerが必要とする削除時close付き一時fileには、sandbox内の専用scratchだけをread／write／delete可能にし、全使用量を監視し、process終了後に空であることを必須検証して削除します。PAXとstaging treeは保持中のhandleとfingerprintで再照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
+さらに、Job Objectで子プロセス数を1、メモリ上限を設定し、指定時間を超えた処理を終了します。Windowsの子processはsuspended状態で生成し、要求したAppContainer／LPAC tokenとcapability 0を親が確認した後だけ実行を開始します。照合やresumeに失敗した場合は、backendの実行開始前にJobごと終了します。展開完了後は、一時領域から直接利用せず、検査済みの通常ファイルだけを新しいフォルダへコピーしてからrenameします。Windowsのツリー監査は、rename／delete共有を許さず開いた親directory handleからmember名を有界列挙し、directory identityも監査時とコピー時に照合します。sandboxへコピーしたbackend treeと入力書庫copyは再帰的にread／execute専用へ封印し、入力書庫は保持handleでも固定します。展開先directoryはlisting process終了・一覧検証・入力再照合の後に親が新規作成するため、侵害されたlisting processは書庫差替え、backend自己改変、展開先への置き土産を次のpassへ残せません。作成時は圧縮元を一意な外部staging treeへ監査付きで複製し、全file／directoryのDACLを継承から保護してPackage SIDへread／executeだけを個別付与します。信頼する親プロセスがこのtreeを有界PAX streamへ変換し、backendには通常の圧縮元pathやtree operandを渡さず、sandbox内の固定`@source.pax.tar`だけを渡します。7z writerが必要とする削除時close付き一時fileには、sandbox内の専用scratchだけをread／write／delete可能にし、全使用量を監視し、process終了後に空であることを必須検証して削除します。PAXとstaging treeは保持中のhandleとfingerprintで再照合し、生成書庫は別sandboxへ再展開して元treeと一致するまで公開しません。明示的なunsandboxed検証経路ではDACL封印を行わず、前後fingerprintによる検出だけです。
 
 詳細は[脅威モデル](docs/THREAT_MODEL.md)を参照してください。通常AppContainerと実験的LPACの差、fail-closed条件、未完の検証matrixは[LPAC評価](docs/LPAC_EVALUATION.md)、Windows自動E2Eの証跡項目と限界は[Windows E2E](docs/WINDOWS_E2E.md)、生成型の攻撃書庫と非公開方針は[悪性コーパス](docs/MALICIOUS_CORPUS.md)に分離しています。
 
@@ -305,6 +305,7 @@ iroha-zip.exe doctor
 - AppContainerやWindowsカーネル、libarchive自体の未知の脆弱性を防げる保証はありません。
 - 既定は通常AppContainerです。実験的LPACは設定画面から選べますが、対象backendで`doctor`が成功した環境だけで使用してください。互換モードへ暗黙に降格しません。
 - 同一ユーザー権限をすでに奪取した攻撃者との競合を完全には防げません。
+- 公開済み`v0.4.0`はWindows x64専用です。native ARM64のRust/AppContainer CIと、backend/archive/Releaseに残る正確な境界は[ARM64対応状況](docs/ARM64.md)で追跡します。
 - Linuxでの全テスト、Clippy、Windows MSVC targetの型検査に加え、manifest、Windows path、書庫名、Windows command line、設定往復の5つのbounded fuzz targetを実行済みです。Server 2022/2025向けWindows E2Eと生成型の悪性コーパスも[Actions run 31763927176](https://github.com/hjosugi/iroha-zip/actions/runs/31763927176)で合格しました。ただし、これはWindows 10/11実機検証やセキュリティ監査の代替ではありません。再現可能な定期fuzzingは[`docs/FUZZING.md`](docs/FUZZING.md)、E2Eの正確な範囲は[`docs/WINDOWS_E2E.md`](docs/WINDOWS_E2E.md)、コーパス範囲は[`docs/MALICIOUS_CORPUS.md`](docs/MALICIOUS_CORPUS.md)、全体状況は[`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)に記録しています。
 
 残作業は、優先度・依存関係・受け入れ条件を付けた[`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md)で追跡します。変更を提案する場合は[`CONTRIBUTING.md`](CONTRIBUTING.md)も確認してください。
