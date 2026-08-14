@@ -310,6 +310,9 @@ $report = [ordered]@{
     isolation = $null
     doctor = $null
     lpac = [ordered]@{
+        supported = $null
+        failureClass = $null
+        failClosed = $null
         isolation = $null
         doctor = $null
     }
@@ -398,23 +401,59 @@ try {
 
     $lpacIsolationRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
         "--config", $lpacConfigPath, "isolation-report"
-    )
-    $lpacIsolation = $lpacIsolationRun.stdout | ConvertFrom-Json -Depth 20
-    Assert-IsolationEvidence $lpacIsolation $true $report.binaries.irohaZipSha256
-    $report.lpac.isolation = $lpacIsolation
+    ) -ExpectedExitCodes @(0, 2)
+    if ($lpacIsolationRun.exitCode -eq 0) {
+        $lpacIsolation = $lpacIsolationRun.stdout | ConvertFrom-Json -Depth 20
+        Assert-IsolationEvidence $lpacIsolation $true $report.binaries.irohaZipSha256
+        $report.lpac.supported = $true
+        $report.lpac.failClosed = $true
+        $report.lpac.isolation = $lpacIsolation
 
-    $lpacDoctorRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
-        "--config", $lpacConfigPath, "doctor"
-    )
-    if ($lpacDoctorRun.stdout -notmatch 'requested=LPAC' -or
-        $lpacDoctorRun.stdout -notmatch 'AppContainer=true' -or
-        $lpacDoctorRun.stdout -notmatch 'LPAC=true' -or
-        $lpacDoctorRun.stdout -notmatch 'capabilities=0') {
-        throw "Doctor output did not expose measured zero-capability LPAC token evidence."
+        $lpacDoctorRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+            "--config", $lpacConfigPath, "doctor"
+        )
+        if ($lpacDoctorRun.stdout -notmatch 'requested=LPAC' -or
+            $lpacDoctorRun.stdout -notmatch 'AppContainer=true' -or
+            $lpacDoctorRun.stdout -notmatch 'LPAC=true' -or
+            $lpacDoctorRun.stdout -notmatch 'capabilities=0') {
+            throw "Doctor output did not expose measured zero-capability LPAC token evidence."
+        }
+        $report.lpac.doctor = [ordered]@{
+            exitCode = $lpacDoctorRun.exitCode
+            elapsedMilliseconds = $lpacDoctorRun.elapsedMilliseconds
+            outputSha256 = Get-StringSha256 $lpacDoctorRun.stdout
+        }
     }
-    $report.lpac.doctor = [ordered]@{
-        elapsedMilliseconds = $lpacDoctorRun.elapsedMilliseconds
-        outputSha256 = Get-StringSha256 $lpacDoctorRun.stdout
+    else {
+        $unsupportedPattern = 'GetTokenInformation\(TokenIsLessPrivilegedAppContainer\) failed: The parameter is incorrect\.'
+        if (-not [string]::IsNullOrWhiteSpace($lpacIsolationRun.stdout) -or
+            $lpacIsolationRun.stderr -notmatch $unsupportedPattern) {
+            throw "LPAC isolation failed for an unrecognized reason: $($lpacIsolationRun.stderr.Trim())"
+        }
+
+        $lpacDoctorRun = Invoke-TestProcess -FilePath $executablePath -Arguments @(
+            "--config", $lpacConfigPath, "doctor"
+        ) -ExpectedExitCodes @(2)
+        if ($lpacDoctorRun.stderr -notmatch $unsupportedPattern -or
+            $lpacDoctorRun.stdout -match 'backend execution succeeded') {
+            throw "LPAC doctor did not fail closed at the token verification boundary."
+        }
+        $report.lpac.supported = $false
+        $report.lpac.failureClass = "token-query-invalid-parameter"
+        $report.lpac.failClosed = $true
+        $report.lpac.isolation = [ordered]@{
+            exitCode = $lpacIsolationRun.exitCode
+            elapsedMilliseconds = $lpacIsolationRun.elapsedMilliseconds
+            stdoutEmpty = $true
+            stderrSha256 = Get-StringSha256 $lpacIsolationRun.stderr
+        }
+        $report.lpac.doctor = [ordered]@{
+            exitCode = $lpacDoctorRun.exitCode
+            elapsedMilliseconds = $lpacDoctorRun.elapsedMilliseconds
+            backendExecutionReported = $false
+            stdoutSha256 = Get-StringSha256 $lpacDoctorRun.stdout
+            stderrSha256 = Get-StringSha256 $lpacDoctorRun.stderr
+        }
     }
 
     $archivesRoot = Join-Path $testRoot "archives"
