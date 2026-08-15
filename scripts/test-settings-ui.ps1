@@ -29,10 +29,21 @@ using System.Runtime.InteropServices;
  }
 
 public static class IrohaZipUiAutomationNative {
+    private const uint InputMouse = 0;
     private const uint InputKeyboard = 1;
     private const uint KeyEventKeyUp = 0x0002;
+    private const uint MouseEventMove = 0x0001;
+    private const uint MouseEventLeftDown = 0x0002;
+    private const uint MouseEventLeftUp = 0x0004;
+    private const uint MouseEventVirtualDesk = 0x4000;
+    private const uint MouseEventAbsolute = 0x8000;
     private const ushort VirtualKeyShift = 0x10;
     private const ushort VirtualKeyTab = 0x09;
+    private const int ShowRestore = 9;
+    private const int SmXVirtualScreen = 76;
+    private const int SmYVirtualScreen = 77;
+    private const int SmCxVirtualScreen = 78;
+    private const int SmCyVirtualScreen = 79;
 
     [StructLayout(LayoutKind.Explicit, Size = 40)]
     private struct IrohaZipInput {
@@ -42,6 +53,12 @@ public static class IrohaZipUiAutomationNative {
         [FieldOffset(12)] public uint Flags;
         [FieldOffset(16)] public uint Time;
         [FieldOffset(24)] public UIntPtr ExtraInfo;
+        [FieldOffset(8)] public int MouseX;
+        [FieldOffset(12)] public int MouseY;
+        [FieldOffset(16)] public uint MouseData;
+        [FieldOffset(20)] public uint MouseFlags;
+        [FieldOffset(24)] public uint MouseTime;
+        [FieldOffset(32)] public UIntPtr MouseExtraInfo;
     }
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -82,6 +99,17 @@ public static class IrohaZipUiAutomationNative {
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool BringWindowToTop(IntPtr window);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindowAsync(IntPtr window, int command);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
     private static IrohaZipInput Key(ushort virtualKey, uint flags) {
         return new IrohaZipInput {
             Type = InputKeyboard,
@@ -107,6 +135,55 @@ public static class IrohaZipUiAutomationNative {
                 Key(VirtualKeyTab, 0),
                 Key(VirtualKeyTab, KeyEventKeyUp)
             };
+        return SendInput(
+            (uint)inputs.Length,
+            inputs,
+            Marshal.SizeOf(typeof(IrohaZipInput))
+        ) == (uint)inputs.Length;
+    }
+
+    public static bool ActivateAndClick(IntPtr window, int screenX, int screenY) {
+        if (IntPtr.Size != 8) {
+            throw new PlatformNotSupportedException(
+                "The iroha-zip Settings keyboard test requires a 64-bit Windows process."
+            );
+        }
+        ShowWindowAsync(window, ShowRestore);
+        BringWindowToTop(window);
+        SetForegroundWindow(window);
+
+        int left = GetSystemMetrics(SmXVirtualScreen);
+        int top = GetSystemMetrics(SmYVirtualScreen);
+        int width = GetSystemMetrics(SmCxVirtualScreen);
+        int height = GetSystemMetrics(SmCyVirtualScreen);
+        if (width <= 1 || height <= 1) {
+            throw new InvalidOperationException("Windows reported an invalid virtual desktop.");
+        }
+        screenX = Math.Max(left, Math.Min(left + width - 1, screenX));
+        screenY = Math.Max(top, Math.Min(top + height - 1, screenY));
+        int absoluteX = (int)(((long)(screenX - left) * 65535L) / (width - 1));
+        int absoluteY = (int)(((long)(screenY - top) * 65535L) / (height - 1));
+        uint positionFlags = MouseEventMove | MouseEventVirtualDesk | MouseEventAbsolute;
+        IrohaZipInput[] inputs = new IrohaZipInput[] {
+            new IrohaZipInput {
+                Type = InputMouse,
+                MouseX = absoluteX,
+                MouseY = absoluteY,
+                MouseFlags = positionFlags
+            },
+            new IrohaZipInput {
+                Type = InputMouse,
+                MouseX = absoluteX,
+                MouseY = absoluteY,
+                MouseFlags = MouseEventLeftDown | MouseEventVirtualDesk | MouseEventAbsolute
+            },
+            new IrohaZipInput {
+                Type = InputMouse,
+                MouseX = absoluteX,
+                MouseY = absoluteY,
+                MouseFlags = MouseEventLeftUp | MouseEventVirtualDesk | MouseEventAbsolute
+            }
+        };
         return SendInput(
             (uint)inputs.Length,
             inputs,
@@ -252,11 +329,18 @@ function Test-KeyboardTabOrder {
         }
     }
 
-    $windowHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
-    [void][IrohaZipUiAutomationNative]::SetForegroundWindow($windowHandle)
-
     $firstId = [int]$TabOrder[0]
-    $Controls[$firstId].SetFocus()
+    $windowHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
+    $firstBounds = $Controls[$firstId].Current.BoundingRectangle
+    $firstCenterX = [int][Math]::Round($firstBounds.Left + ($firstBounds.Width / 2))
+    $firstCenterY = [int][Math]::Round($firstBounds.Top + ($firstBounds.Height / 2))
+    if (-not [IrohaZipUiAutomationNative]::ActivateAndClick(
+        $windowHandle,
+        $firstCenterX,
+        $firstCenterY
+    )) {
+        throw "SendInput could not activate the first Settings control (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+    }
     Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
     $foregroundWindowConfirmed =
         [IrohaZipUiAutomationNative]::GetForegroundWindow() -eq $windowHandle
@@ -272,7 +356,6 @@ function Test-KeyboardTabOrder {
         $forwardObserved += [int]$focused.Current.AutomationId
     }
 
-    $Controls[$firstId].SetFocus()
     Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
     $reverseObserved = @($firstId)
     $reverseExpected = @($TabOrder[($TabOrder.Count - 1)..0])
@@ -287,6 +370,7 @@ function Test-KeyboardTabOrder {
 
     return [ordered]@{
         method = "SendInput"
+        activationMethod = "SendInputMouseClick"
         forwardObserved = $forwardObserved
         reverseObserved = $reverseObserved
         forwardWrapTarget = $firstId

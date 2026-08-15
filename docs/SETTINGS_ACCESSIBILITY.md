@@ -53,10 +53,10 @@ all 26 controls for:
 - successful focus and full visibility after automatic scrolling, including controls initially
   outside the viewport.
 
-The test first requests foreground activation for the Settings HWND, focuses the first edit, and
-injects real `VK_TAB`/`VK_SHIFT` keyboard input through Win32 `SendInput`. Hosted Windows runners do
-not always report that HWND from `GetForegroundWindow()`, so the evidence records that observation
-without treating it as the input-routing oracle. After every key chord, UI Automation must report
+The test first restores and raises the Settings HWND, injects a real Win32 `SendInput` mouse click
+at the visible first edit, and then injects real `VK_TAB`/`VK_SHIFT` keyboard input through the same
+API. Hosted Windows runners do not always report that HWND from `GetForegroundWindow()`, so the
+evidence records that observation without treating it as the input-routing oracle. After every key chord, UI Automation must report
 the expected process and AutomationId and a non-empty rectangle fully inside the top-level window.
 The forward cycle must return from Cancel to the first edit; the reverse cycle
 must reach Cancel from the first edit and return through the exact opposite order. This exercises

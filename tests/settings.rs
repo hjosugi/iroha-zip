@@ -119,6 +119,8 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
     for marker in [
         "[IrohaZipUiAutomationNative]::SendTab($false)",
         "[IrohaZipUiAutomationNative]::SendTab($true)",
+        "[IrohaZipUiAutomationNative]::ActivateAndClick(",
+        "activationMethod = \"SendInputMouseClick\"",
         "forwardWrapTarget = $firstId",
         "reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]",
         "allFocusedControlsVisible = $true",
