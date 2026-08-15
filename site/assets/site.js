@@ -30,6 +30,7 @@
   const locale = document.documentElement.lang === "ja" ? "ja-JP" : "en-US";
   const fallbackVersion = "v0.6.2";
   const stableTagPattern = /^v(\d+\.\d+\.\d+)$/;
+  const sha256DigestPattern = /^sha256:[0-9a-f]{64}$/;
 
   const setText = (selector, value) => {
     document.querySelectorAll(selector).forEach((node) => {
@@ -90,7 +91,13 @@
         expectedAssetNames.some((name) => {
           const asset = assetByName.get(name);
           const expectedUrl = `https://github.com/${repository}/releases/download/${tag}/${name}`;
-          return asset?.state !== "uploaded" || asset.browser_download_url !== expectedUrl;
+          return (
+            asset?.state !== "uploaded" ||
+            asset.browser_download_url !== expectedUrl ||
+            !Number.isSafeInteger(asset.size) ||
+            asset.size <= 0 ||
+            !sha256DigestPattern.test(asset.digest)
+          );
         })
       ) {
         throw new Error("Latest release does not have the exact uploaded asset inventory");

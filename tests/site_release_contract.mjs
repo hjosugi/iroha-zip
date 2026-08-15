@@ -34,6 +34,8 @@ const validRelease = () => ({
   assets: expectedAssetNames.map((name) => ({
     name,
     state: "uploaded",
+    size: 1024,
+    digest: `sha256:${"a".repeat(64)}`,
     browser_download_url: `https://github.com/${repository}/releases/download/${tag}/${name}`,
   })),
 });
@@ -142,6 +144,24 @@ const rejectedReleases = [
     ...validRelease(),
     assets: validRelease().assets.map((asset, index) =>
       index === 0 ? { ...asset, browser_download_url: "https://example.invalid/file" } : asset
+    ),
+  },
+  {
+    ...validRelease(),
+    assets: validRelease().assets.map((asset, index) =>
+      index === 0 ? { ...asset, size: 0 } : asset
+    ),
+  },
+  {
+    ...validRelease(),
+    assets: validRelease().assets.map((asset, index) =>
+      index === 0 ? { ...asset, digest: null } : asset
+    ),
+  },
+  {
+    ...validRelease(),
+    assets: validRelease().assets.map((asset, index) =>
+      index === 0 ? { ...asset, digest: `sha256:${"A".repeat(64)}` } : asset
     ),
   },
 ];

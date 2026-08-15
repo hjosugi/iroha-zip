@@ -258,9 +258,12 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
         "dependency-free Pages contract has a stale release tag"
     );
     assert!(site_script.contains("const stableTagPattern = /^v(\\d+\\.\\d+\\.\\d+)$/;"));
+    assert!(site_script.contains("const sha256DigestPattern = /^sha256:[0-9a-f]{64}$/;"));
     assert!(site_script.contains("release.immutable !== true"));
     assert!(site_script.contains("assets.length !== expectedAssetNames.length"));
     assert!(site_script.contains("asset?.state !== \"uploaded\""));
+    assert!(site_script.contains("!Number.isSafeInteger(asset.size)"));
+    assert!(site_script.contains("!sha256DigestPattern.test(asset.digest)"));
     assert!(site_script.contains("releases/download/${tag}/${name}"));
     assert_eq!(site_script.matches("expectedAssetNames").count(), 3);
     for expected in [
