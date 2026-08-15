@@ -287,8 +287,9 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     }
 
     assert!(root.contains("data-page=\"language-gate\""));
-    assert!(root.contains("href=\"ja/\" data-language-choice=\"ja\""));
-    assert!(root.contains("href=\"en/\" data-language-choice=\"en\""));
+    assert!(root.contains("name=\"description\" content=\"iroha-zipの日本語または英語サイトを選択 / Choose the iroha-zip website in Japanese or English.\""));
+    assert!(root.contains("href=\"ja/\" hreflang=\"ja\" data-language-choice=\"ja\""));
+    assert!(root.contains("href=\"en/\" hreflang=\"en\" data-language-choice=\"en\" lang=\"en\""));
     assert!(root.contains("http-equiv=\"Content-Security-Policy\""));
     assert!(root.contains("connect-src 'self' https://api.github.com;"));
     assert!(root.contains("style-src 'self'; script-src 'self';"));
@@ -331,7 +332,13 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     assert!(site_styles.contains("--footer: #070b10;"));
     assert_eq!(site_styles.matches("color: var(--on-accent);").count(), 3);
     assert_eq!(site_styles.matches("background: var(--footer);").count(), 1);
+    assert!(not_found_page.contains("<html lang=\"ja\">"));
     assert!(not_found_page.contains("name=\"robots\" content=\"noindex\""));
+    assert!(not_found_page.contains("aria-labelledby=\"not-found-title\""));
+    assert!(not_found_page.contains("id=\"not-found-title\""));
+    assert!(not_found_page.contains("<span lang=\"en\">The requested page was not found.</span>"));
+    assert!(not_found_page.contains("href=\"/iroha-zip/ja/\" hreflang=\"ja\""));
+    assert!(not_found_page.contains("href=\"/iroha-zip/en/\" hreflang=\"en\" lang=\"en\""));
     for path in [
         "/iroha-zip/assets/favicon.svg",
         "/iroha-zip/assets/styles.css",
