@@ -173,6 +173,54 @@ fn packaged_release_documents_match_the_crate_version() {
 }
 
 #[test]
+fn release_workflow_requires_bounded_release_attestation_verification() {
+    let workflow = include_str!("../.github/workflows/release.yml");
+    let ci = include_str!("../.github/workflows/ci.yml");
+    let verifier = include_str!("../scripts/verify-github-release-attestation.ps1");
+    let self_test = include_str!("../scripts/test-github-release-attestation.ps1");
+    let documentation = include_str!("../docs/RELEASE_VERIFICATION.md");
+
+    assert_eq!(
+        workflow
+            .matches("./scripts/verify-github-release-attestation.ps1")
+            .count(),
+        1,
+        "publication must invoke the release-attestation verifier exactly once"
+    );
+    assert_eq!(
+        ci.matches("./scripts/test-github-release-attestation.ps1")
+            .count(),
+        1,
+        "ordinary CI must exercise the release-attestation verifier"
+    );
+    for marker in [
+        "[int]$MaxAttempts = 24",
+        "[int]$RetryDelayMilliseconds = 5000",
+        "if ($AssetFiles.Count -ne 11)",
+        "foreach ($attempt in 1..$MaxAttempts)",
+        "\"release\", \"verify\"",
+        "\"release\", \"verify-asset\"",
+    ] {
+        assert!(
+            verifier.contains(marker),
+            "release-attestation verifier is missing contract marker: {marker}"
+        );
+    }
+    for marker in [
+        "release proof unavailable",
+        "asset proof mismatch",
+        "Expected exactly 11 release assets; found 10.",
+        "Duplicate local release asset name: asset-1.bin",
+    ] {
+        assert!(
+            self_test.contains(marker),
+            "release-attestation self-test is missing rejection marker: {marker}"
+        );
+    }
+    assert!(documentation.contains("at most 24 times with five-second intervals"));
+}
+
+#[test]
 fn bilingual_pages_match_the_crate_version_and_topology() {
     let version = env!("CARGO_PKG_VERSION");
     let tag = format!("v{version}");
