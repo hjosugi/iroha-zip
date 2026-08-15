@@ -1,0 +1,217 @@
+{
+  "backendManifestSha256": "77d839023d31bb5e303318a0ff4c529f3860cfa549228d925fbcae16a0d3f523",
+  "executableSha256": "1d68087d610140b7be16b84f818f116fc594c751fa6384d93c054c27a03ce904",
+  "failure": null,
+  "policyFixtures": [
+    {
+      "errorClass": "policy",
+      "id": "duplicate-file-identity",
+      "rejected": true
+    },
+    {
+      "errorClass": "policy",
+      "id": "ntfs-alternate-data-stream",
+      "rejected": true
+    },
+    {
+      "errorClass": "policy",
+      "id": "ntfs-junction-reparse-point",
+      "rejected": true
+    }
+  ],
+  "samples": [
+    {
+      "archiveBytes": 117,
+      "archiveSha256": "1d2c3f2cf87d5448f78a6f02694807d46c846d9a06bf292764d58787fefe350c",
+      "destinationPublished": true,
+      "exitCode": 0,
+      "expected": "accept-control",
+      "id": "control-zip",
+      "rejectionClass": null,
+      "threat": "benign harness control"
+    },
+    {
+      "archiveBytes": 130,
+      "archiveSha256": "2521a0070fe6c648c77cf6d13af7e884815f7ca0d003d594c6734200de3282cd",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-parent-traversal",
+      "rejectionClass": "policy",
+      "threat": "parent traversal"
+    },
+    {
+      "archiveBytes": 132,
+      "archiveSha256": "31083efda8d6d7b7ba14e97a17946331e25d494475b6cdfcdcab7bfe3c61c5c6",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-absolute-path",
+      "rejectionClass": "policy",
+      "threat": "absolute path"
+    },
+    {
+      "archiveBytes": 127,
+      "archiveSha256": "f717df54bec1b6ab62b21f10f9cd780e56ccb0f0b0a940ebec87972279e25a20",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-drive-path",
+      "rejectionClass": "policy",
+      "threat": "Windows drive prefix"
+    },
+    {
+      "archiveBytes": 145,
+      "archiveSha256": "d2286ed224920838865c244192b03091b1cf1762080270ad00a6ecac6bbb5b19",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-unc-path",
+      "rejectionClass": "policy",
+      "threat": "UNC path"
+    },
+    {
+      "archiveBytes": 133,
+      "archiveSha256": "6811b8d364a584ddaf2e9b44c7239950366179f762bd0438d4b3b9a589328806",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-ads-name",
+      "rejectionClass": "policy",
+      "threat": "alternate data stream name"
+    },
+    {
+      "archiveBytes": 118,
+      "archiveSha256": "2e35a7cb454ef968026895a0aff9791979af3aaed501978ed75c6f2eae1bd358",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-device-name",
+      "rejectionClass": "policy",
+      "threat": "Windows device name"
+    },
+    {
+      "archiveBytes": 115,
+      "archiveSha256": "eac1a5ef9cde13ece268e7037dfa8bb5e33ef18423916360298dd03dea36c0c7",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-trailing-dot-alias",
+      "rejectionClass": "policy",
+      "threat": "trailing-dot alias"
+    },
+    {
+      "archiveBytes": 115,
+      "archiveSha256": "824571198fd1b18782e4b43aea423c5a5d81ea2ebe3409ca6cc95641c81357a2",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-trailing-space-alias",
+      "rejectionClass": "policy",
+      "threat": "trailing-space alias"
+    },
+    {
+      "archiveBytes": 121,
+      "archiveSha256": "900ee841d2f4cd75790a2a9b9f1217ec00bd072243dde0387a3d76c6e27e6399",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-invalid-character",
+      "rejectionClass": "policy",
+      "threat": "Windows-invalid path character"
+    },
+    {
+      "archiveBytes": 237,
+      "archiveSha256": "11ebe096f48cad7eac16a5039d6668d7f7780fd39995750c8a18b407da838ba0",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-duplicate-name",
+      "rejectionClass": "policy",
+      "threat": "duplicate path"
+    },
+    {
+      "archiveBytes": 226,
+      "archiveSha256": "70ed866826d8ee5e6e797489d3abb7b531bb43578c7ede9baf0350f968f77483",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "zip-symlink",
+      "rejectionClass": "backend",
+      "threat": "symbolic-link/reparse entry"
+    },
+    {
+      "archiveBytes": 2560,
+      "archiveSha256": "436cf6c151de068586f8097682bef9f78a37c5297eca683b36f6b23e69bd1c7a",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "tar-symlink",
+      "rejectionClass": "backend",
+      "threat": "symbolic-link/reparse entry"
+    },
+    {
+      "archiveBytes": 2560,
+      "archiveSha256": "4db6c1196029a2bb5654c3d7bd4fd6dae058cfa1cc673247b40e9608c3589307",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "tar-hardlink",
+      "rejectionClass": "policy",
+      "threat": "hardlink/duplicate file identity"
+    },
+    {
+      "archiveBytes": 2048,
+      "archiveSha256": "18c0d6110b43d75aecd5614b5efbe46afa54b798f9cee2d6a949e004be249c20",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "tar-depth-limit",
+      "rejectionClass": "policy",
+      "threat": "path-depth bomb"
+    },
+    {
+      "archiveBytes": 10240,
+      "archiveSha256": "91f65da47544f68a2bfa855f0c3133340df7ed321e5366799f9dfe728b1a5e8a",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "tar-file-count-limit",
+      "rejectionClass": "policy",
+      "threat": "file-count bomb"
+    },
+    {
+      "archiveBytes": 133120,
+      "archiveSha256": "1d01fce241f835bbf3e50670e9768c3fdc9099d59d257cf4d7a6b1e7fba17b10",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "tar-single-file-limit",
+      "rejectionClass": "policy",
+      "threat": "single-file expansion bomb"
+    },
+    {
+      "archiveBytes": 182272,
+      "archiveSha256": "ab17f76b64880a6d27ad370cb7c2d2e9df4fb30657e04ae78affac72197400a2",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "tar-total-size-limit",
+      "rejectionClass": "policy",
+      "threat": "total expansion bomb"
+    },
+    {
+      "archiveBytes": 2048,
+      "archiveSha256": "aa18b73d27e788782695fa4422dfa0f330a71ed28c764e38f644f09ad575016e",
+      "destinationPublished": false,
+      "exitCode": 2,
+      "expected": "reject-before-publication",
+      "id": "tar-sparse-expansion",
+      "rejectionClass": "policy",
+      "threat": "sparse logical-size expansion bomb"
+    }
+  ],
+  "schemaVersion": 1,
+  "status": "passed",
+  "temporaryRootRemoved": true
+}

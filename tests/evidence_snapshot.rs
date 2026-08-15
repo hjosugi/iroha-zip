@@ -12,12 +12,20 @@ struct Snapshot {
     settings_schema: u64,
 }
 
-const SNAPSHOTS: [Snapshot; 1] = [Snapshot {
-    root: "evidence/windows/31868019031",
-    run: "31868019031",
-    commit: "5cbc6c27fb67466369b20180a9c5aa2fdd3f6713",
-    settings_schema: 1,
-}];
+const SNAPSHOTS: [Snapshot; 2] = [
+    Snapshot {
+        root: "evidence/windows/31868019031",
+        run: "31868019031",
+        commit: "5cbc6c27fb67466369b20180a9c5aa2fdd3f6713",
+        settings_schema: 1,
+    },
+    Snapshot {
+        root: "evidence/windows/31875638650",
+        run: "31875638650",
+        commit: "9debd02e819899f8dbdfdd5281d3d0b2a68a89db",
+        settings_schema: 2,
+    },
+];
 const REPORTS: [&str; 11] = [
     "windows-arm64-native/windows-arm64-e2e.json",
     "windows-arm64-native/windows-arm64-malicious-corpus.json",
@@ -77,6 +85,39 @@ fn lowercase_sha256(bytes: &[u8]) -> String {
         encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     encoded
+}
+
+fn json_inventory(root: &Path) -> BTreeSet<String> {
+    let mut pending = vec![root.to_owned()];
+    let mut reports = BTreeSet::new();
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory)
+            .unwrap_or_else(|error| panic!("cannot enumerate {}: {error}", directory.display()))
+        {
+            let path = entry
+                .expect("snapshot directory entry must be readable")
+                .path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path
+                .extension()
+                .is_some_and(|extension| extension == "json")
+            {
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("snapshot report must remain beneath its root")
+                    .components()
+                    .map(|component| component.as_os_str().to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/");
+                assert!(
+                    reports.insert(relative.clone()),
+                    "duplicate snapshot report path: {relative}"
+                );
+            }
+        }
+    }
+    reports
 }
 
 fn require_true(value: &Value, pointer: &str, report: &str) {
@@ -334,6 +375,7 @@ fn durable_windows_evidence_inventory_hashes_and_contracts_match() {
             .collect::<BTreeSet<_>>();
         let source_manifest = parse_sha256_manifest(snapshot, "SOURCE_SHA256SUMS.txt");
         let canonical_manifest = parse_sha256_manifest(snapshot, "SHA256SUMS.txt");
+        assert_eq!(json_inventory(&snapshot_root(snapshot)), expected);
         assert_eq!(
             source_manifest.keys().cloned().collect::<BTreeSet<_>>(),
             expected
