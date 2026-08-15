@@ -1,0 +1,11 @@
+5d8e5d278792f91acfb2570f6530ba32be61de6054d8b13690b7f94ae405ce94  SHA256SUMS.txt
+4ce060df9d32e9b0b3b77fba7af8248035c7e2e3f391f5dc493393e56fb65926  iroha-zip-0.6.2-windows-arm64.exe
+82ce74477fcbf8f6d89459af535c62aa5d567353bcebe4384d9c7fe9e104f9f7  iroha-zip-0.6.2-windows-arm64.zip
+11869f2ba766cb0b7d3e4cd79ca807af0d02251ffd9e4f9b8ac0695b2cbd86d0  iroha-zip-0.6.2-windows-arm64.zip.sha256
+a118ed9501dfcf9a90a133ec385dd226a8c8eb9bbed6e22ccff7c3159ab087e4  iroha-zip-0.6.2-windows-x64.exe
+19e2644882208605d855d9b7a45c9c43e487e86d5e167a1c75d309252d891888  iroha-zip-0.6.2-windows-x64.zip
+0a71d97502ec68ed886997f21b34158dc36051eeb619935ccecd7051f2f6f388  iroha-zip-0.6.2-windows-x64.zip.sha256
+39ae33f81982b39c63f966fee49a2ad8d75492f02668a8bcbbfd398139cfdc11  iroha-zip-settings-0.6.2-windows-arm64.exe
+61f071ea112705e35f10842fd90ceb3569ffae45dc7d240389c84fea92369c87  iroha-zip-settings-0.6.2-windows-x64.exe
+2680935cc3f0bf3c6341490d2216f948fa2a31ee7f21706b155cd9811a7a1691  iroha-zip-shell-0.6.2-windows-arm64.exe
+ce36253c45c676c22069603d24f637a1e013c3d331374bda9f0f598fa0eb4c16  iroha-zip-shell-0.6.2-windows-x64.exe

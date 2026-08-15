@@ -10,10 +10,16 @@ struct ReleaseSnapshot {
     version: &'static str,
 }
 
-const RELEASE_SNAPSHOTS: [ReleaseSnapshot; 1] = [ReleaseSnapshot {
-    root: "evidence/releases/v0.6.1",
-    version: "0.6.1",
-}];
+const RELEASE_SNAPSHOTS: [ReleaseSnapshot; 2] = [
+    ReleaseSnapshot {
+        root: "evidence/releases/v0.6.1",
+        version: "0.6.1",
+    },
+    ReleaseSnapshot {
+        root: "evidence/releases/v0.6.2",
+        version: "0.6.2",
+    },
+];
 
 fn snapshot_root(snapshot: ReleaseSnapshot) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(snapshot.root)
