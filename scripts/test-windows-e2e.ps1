@@ -31,6 +31,17 @@ public static class IrohaZipPasswordAutomationNative {
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindow(IntPtr window);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessageTimeoutW(
+        IntPtr window,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam,
+        uint flags,
+        uint timeoutMilliseconds,
+        out UIntPtr result
+    );
 }
 "@
 
@@ -38,6 +49,9 @@ $PasswordDialogTitle = "Archive password / 書庫のパスワード"
 $PasswordEditId = 100
 $PasswordConfirmId = 1
 $PasswordCancelId = 2
+$ButtonClickMessage = 0x00F5
+$SendMessageBlock = 0x0001
+$SendMessageAbortIfHung = 0x0002
 
 function Wait-Until {
     param(
@@ -174,6 +188,11 @@ function Invoke-PasswordTestProcess {
         }
         $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
 
+        $buttonHandle = [IntPtr]$button.Current.NativeWindowHandle
+        if ($buttonHandle -eq [IntPtr]::Zero) {
+            throw "Password dialog button ID $buttonId has no native window handle."
+        }
+
         if (-not $Cancel) {
             $edit.SetFocus()
             if (-not [IrohaZipPasswordAutomationNative]::SetWindowTextW(
@@ -183,7 +202,20 @@ function Invoke-PasswordTestProcess {
                 throw "Cannot set the public E2E fixture password in the native password control."
             }
         }
-        $invokePattern.Invoke()
+        [UIntPtr]$messageResult = [UIntPtr]::Zero
+        $sendResult = [IrohaZipPasswordAutomationNative]::SendMessageTimeoutW(
+            $buttonHandle,
+            $ButtonClickMessage,
+            [UIntPtr]::Zero,
+            [IntPtr]::Zero,
+            ($SendMessageBlock -bor $SendMessageAbortIfHung),
+            5000,
+            [ref]$messageResult
+        )
+        if ($sendResult -eq [IntPtr]::Zero) {
+            $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            throw "Password dialog button ID $buttonId did not complete its bounded standard click (Win32 error $nativeError)."
+        }
         Wait-Until -TimeoutSeconds 10 `
             -Description "password dialog to close after button ID $buttonId" `
             -Condition {
