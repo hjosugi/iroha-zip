@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.3 - 2026-08-15
+
 - Preserve the independently verified `v0.6.2` immutable Release as an exact 11-asset snapshot with
   API digests and lengths, checksum subjects, x64/ARM64 PE identities, ZIP-to-standalone equality,
   unsigned Certificate Tables, annotated-tag identity, release/workflow attestations, and ordinary

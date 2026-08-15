@@ -28,7 +28,7 @@
   }
 
   const locale = document.documentElement.lang === "ja" ? "ja-JP" : "en-US";
-  const fallbackVersion = "v0.6.2";
+  const fallbackVersion = "v0.6.3";
   const stableTagPattern = /^v(\d+\.\d+\.\d+)$/;
   const sha256DigestPattern = /^sha256:[0-9a-f]{64}$/;
 
