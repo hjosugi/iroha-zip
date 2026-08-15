@@ -99,8 +99,8 @@ The native GitHub `windows-11-arm` job requires OS/process architecture `Arm64` 
 machine `0xAA64`, and exports a signature-verified MSYS2 CLANGARM64 backend. It runs the complete
 create/read matrix, malicious corpus, shell, Japanese and English Settings, normal-AppContainer
 isolation, and exact LPAC fail-closed branch. The schema-v5 password expansion passed at exact `main`
-commit `3ec61f665a3d50a046d3a28c178a8ced7f4276ed` in
-[Actions run 31867159915](https://github.com/hjosugi/iroha-zip/actions/runs/31867159915). All five reports
+commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
+[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). All five reports
 were downloaded by exact filename and independently checked: ZipCrypto, WinZip AES-128, and AES-256
 each used the bilingual protected native control and one-use channel, exposed no password in output,
 and produced preview/extraction trees matching the controlled source. Wrong-password and cancel paths
@@ -115,8 +115,8 @@ binaries once per supported Server image, exports the verified backend once per 
 machine-readable archive/isolation, malicious-corpus, and settings artifacts. The Server 2025 path
 reuses that backend to validate supported evidence, the explicit unsupported-bundle path,
 `--require-supported`, rollback, and evidence-tamper failures. The schema-v5 matrix passed on both
-images at exact `main` commit `3ec61f665a3d50a046d3a28c178a8ced7f4276ed` in
-[Actions run 31867159915](https://github.com/hjosugi/iroha-zip/actions/runs/31867159915). All six reports
+images at exact `main` commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
+[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). All six reports
 were downloaded by exact artifact name and independently checked. Each OS passed ZipCrypto,
 AES-128, and AES-256 with the protected bilingual dialog, one-use channel, password output absence,
 source-identical preview/extraction trees, wrong-password/cancel non-publication, and complete
@@ -141,7 +141,8 @@ A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` bui
 - Native archive-preview tree/search/selection UI, progress/cancellation accessibility, and real-format selected-publication matrix
 - Broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures beyond the passing pinned and generated corpora
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule
-- Reviewed Windows evidence preservation beyond the rolling 90-day public-repository artifact maximum
+- Periodic promotion of reviewed Windows evidence beyond the one checked-in canonical snapshot and
+  rolling 90-day public-repository artifact window
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring
 - Real-Windows reparse point race stress tests and native child open relative to a parent handle
 - Attachment Services with Defender enabled/disabled/unavailable, third-party providers, quarantine/deletion, ADS inventory, and MotW preservation across publication

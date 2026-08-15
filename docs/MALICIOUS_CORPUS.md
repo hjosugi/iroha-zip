@@ -2,7 +2,7 @@
 
 Updated: 2026-08-15
 
-This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs and the native Windows 11 ARM64 job produced reviewed passing evidence in [Actions run 31867159915](https://github.com/hjosugi/iroha-zip/actions/runs/31867159915) from exact `main` commit `3ec61f665a3d50a046d3a28c178a8ced7f4276ed`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed.
+This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs and the native Windows 11 ARM64 job produced reviewed passing evidence in [Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031) from exact `main` commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed. Canonical copies and both source/canonical SHA-256 inventories are retained in the [durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31868019031); no generated archive is retained.
 
 ## Distribution and retention policy
 
@@ -94,6 +94,7 @@ The implemented scope meets SAFE-002's acceptance criteria. The passing Server e
 4. nested archive recursion, decompressor CPU bombs, extreme compression ratios, and memory-pressure combinations;
 5. malformed central-directory, ZIP64, PAX, extended sparse-map, and truncated archive cases;
 6. crash, loader-failure, cancellation, disk-full, and reparse-race exit paths;
-7. long-term reviewed evidence retention beyond the rolling 90-day Actions artifact window.
+7. periodic promotion of additional reviewed runs beyond the one durable snapshot and rolling
+   90-day Actions artifact window.
 
 Do not claim complete format coverage, malware safety, or Windows desktop certification from this matrix.

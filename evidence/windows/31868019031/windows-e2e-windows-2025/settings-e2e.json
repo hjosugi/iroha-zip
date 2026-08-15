@@ -1,0 +1,24 @@
+{
+  "backendDoctorSucceeded": true,
+  "backendPathSaved": true,
+  "cancelButtonDiscardCancelAndConfirm": true,
+  "configSha256": "c5ff3b9346f7f404ea0f6210b43835ffa21e81c9a38f6bd2f52dfd11a3eb1bcd",
+  "controlCount": 26,
+  "doctorElapsedMilliseconds": 789,
+  "dpiAwareness": "PerMonitorV2",
+  "generatedAtUtc": "2026-08-15T05:56:38.7143910Z",
+  "language": "en",
+  "longAndNonAsciiPathEdited": true,
+  "restoreDefaultsCancelAndConfirm": true,
+  "safeFolderPickerCancellations": 3,
+  "schemaVersion": 1,
+  "settingsExecutableSha256": "bf25d4b7bfaf0b20c44cf61578c325636dda6c68e136e2986d4512e781bf6b28",
+  "status": "passed",
+  "syntheticDpiTransitions": [
+    96,
+    144,
+    96
+  ],
+  "temporaryRootRemoved": true,
+  "unsavedChangeConfirmationExposed": true
+}

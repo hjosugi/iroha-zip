@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Declare Per-Monitor V2 DPI awareness in every Windows executable and make Settings consume the
+  `WM_DPICHANGED` suggested rectangle, rebuild fonts from the effective DPI, and relayout from a
+  stable 96-DPI baseline. Extend native Settings evidence with an effective-awareness assertion and
+  a drift-free synthetic 96→144→96 transition.
+- Retain native ARM64 and fixed Windows Server evidence artifacts for 90 days, and preserve the
+  independently reviewed exact-main run as 11 canonical machine-readable reports with original and
+  canonical SHA-256 inventories, source artifact digests, bilingual scope notes, and an ordinary Rust
+  regression that rechecks the principal security assertions.
+
 ## 0.6.0 - 2026-08-15
 
 - Add a one-use, AppContainer-preserving anonymous-pipe password channel and sealed internal
