@@ -481,7 +481,7 @@ jobs:
             ${{ runner.temp }}/windows-arm64-settings-ja.json
             ${{ runner.temp }}/windows-arm64-settings-en.json
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 90
 
   windows-e2e:
     # The fixed-label AppContainer/backend matrix is deliberately separated
@@ -708,7 +708,7 @@ jobs:
             ${{ runner.temp }}/malicious-corpus.json
             ${{ runner.temp }}/bsdtar-crash-dumps/*.dmp
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 90
 
   dependency-policy:
     runs-on: ubuntu-latest

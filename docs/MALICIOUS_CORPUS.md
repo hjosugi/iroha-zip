@@ -1,8 +1,8 @@
 # Malicious archive regression corpus
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
-This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs produced reviewed passing evidence in [Actions run 31768440143](https://github.com/hjosugi/iroha-zip/actions/runs/31768440143) from commit `e81b42aaeb1a4826dfe38043e33564271889c1f8`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed.
+This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs and the native Windows 11 ARM64 job produced reviewed passing evidence in [Actions run 31867159915](https://github.com/hjosugi/iroha-zip/actions/runs/31867159915) from exact `main` commit `3ec61f665a3d50a046d3a28c178a8ced7f4276ed`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed.
 
 ## Distribution and retention policy
 
@@ -82,7 +82,7 @@ They then run the ignored Windows test. The configuration uses a 4 MiB input cap
 - each native policy fixture and returned error class;
 - whether the complete temporary root was removed.
 
-The artifact upload runs even after a failing test, but a panic before report initialization may leave no report. Artifact retention is 14 days. The JSON is diagnostic evidence, not a signature, malware verdict, or release attestation.
+The artifact upload runs even after a failing test, but a panic before report initialization may leave no report. Artifact retention is 90 days, the maximum configured and permitted for this public repository. The JSON is diagnostic evidence, not a signature, malware verdict, or release attestation.
 
 ## Verified scope and further work
 
@@ -94,6 +94,6 @@ The implemented scope meets SAFE-002's acceptance criteria. The passing Server e
 4. nested archive recursion, decompressor CPU bombs, extreme compression ratios, and memory-pressure combinations;
 5. malformed central-directory, ZIP64, PAX, extended sparse-map, and truncated archive cases;
 6. crash, loader-failure, cancellation, disk-full, and reparse-race exit paths;
-7. long-term reviewed evidence retention beyond ephemeral Actions artifacts.
+7. long-term reviewed evidence retention beyond the rolling 90-day Actions artifact window.
 
 Do not claim complete format coverage, malware safety, or Windows desktop certification from this matrix.

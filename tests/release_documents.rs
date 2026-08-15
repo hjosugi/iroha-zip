@@ -208,3 +208,24 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     assert_eq!(sitemap.matches("hreflang=\"en\"").count(), 3);
     assert_eq!(sitemap.matches("hreflang=\"x-default\"").count(), 3);
 }
+
+#[test]
+fn windows_evidence_uses_the_public_repository_retention_maximum() {
+    let ci = include_str!("../.github/workflows/ci.yml");
+    assert_eq!(
+        ci.matches("retention-days: 90").count(),
+        2,
+        "native ARM64 and fixed-Server evidence must both use 90-day retention"
+    );
+    assert!(
+        !ci.contains("retention-days: 14"),
+        "Windows evidence must not regress to the old 14-day window"
+    );
+
+    let windows_e2e = include_str!("../docs/WINDOWS_E2E.md");
+    let malicious_corpus = include_str!("../docs/MALICIOUS_CORPUS.md");
+    for document in [windows_e2e, malicious_corpus] {
+        assert!(document.contains("90 days"));
+        assert!(!document.contains("retention is 14 days"));
+    }
+}
