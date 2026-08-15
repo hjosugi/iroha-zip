@@ -67,10 +67,11 @@ Immediately after traversal, while the same window is still the verified real-in
 the test changes the timeout, sends `VK_RETURN`, requires the native saved message and
 `timeout_seconds = 301` on disk, and dismisses the message with a second real Enter. It then changes
 the value to 302, sends `VK_ESCAPE`, requires the unsaved-change confirmation, cancels that close,
-and confirms the process survived. The temporary saved file is removed after the form returns to
-its saved value, so the existing Restore Defaults and both later Cancel decisions still run from
-their original state. This covers the production Enter-to-save and Escape-to-close-request mappings
-rather than inferring shortcuts from the `IDOK`/`IDCANCEL` control IDs.
+and confirms the process survived. The test then saves the default timeout through the native Save
+button to restore the form's internal baseline and removes that temporary file, so the existing
+Restore Defaults and both later Cancel decisions still run from their original state. This covers
+the production Enter-to-save and Escape-to-close-request mappings rather than inferring shortcuts
+from the `IDOK`/`IDCANCEL` control IDs.
 
 `windows-latest` and the fixed Server x64 matrix must complete that real-input path in both
 languages. The GitHub-hosted Windows ARM64 image currently accepts `SendInput` but exposes no

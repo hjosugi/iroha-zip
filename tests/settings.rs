@@ -131,6 +131,8 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
         "escapeCloseRequestCompleted = $true",
         "closeCancellationPreservedProcess = $true",
         "savedTimeoutSeconds = 301",
+        "$shortcutTimeoutPattern.SetValue(\"300\")",
+        "the shortcut-test default-baseline saved message",
         "keyboardShortcuts = $shortcutEvidence",
         "forwardWrapTarget = $firstId",
         "reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]",

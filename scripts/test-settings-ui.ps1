@@ -928,10 +928,23 @@ try {
     if ($process.HasExited) {
         throw "Cancelling the shortcut-test close unexpectedly exited Settings."
     }
-    $shortcutTimeoutPattern.SetValue("301")
+    $shortcutTimeoutPattern.SetValue("300")
+    Wait-Until {
+        $window.Current.Name -match '\s\*$'
+    } -Description "the shortcut-test form to return to the default value" | Out-Null
+    Invoke-Control -MainWindow $window -Control $controls[1]
+    $resetSavedMessage = Wait-Until {
+        Find-SecondaryWindow -Process $process -MainWindow $window
+    } -Description "the shortcut-test default-baseline saved message"
+    Dismiss-Message $resetSavedMessage
+    Wait-ForNoSecondaryWindow -Process $process -MainWindow $window
+    $resetConfig = [System.IO.File]::ReadAllText($configPath)
+    if ($resetConfig -notmatch '(?m)^timeout_seconds = 300\r?$') {
+        throw "The shortcut test could not restore the default timeout baseline."
+    }
     Wait-Until {
         $window.Current.Name -notmatch '\s\*$'
-    } -Description "the shortcut-test form to return to its saved value" | Out-Null
+    } -Description "the shortcut-test form to save the default baseline" | Out-Null
     Remove-Item -LiteralPath $configPath -Force
 
     $shortcutMethod = if ($shortcutRealKeyInput) { "SendInput" } else { "UIAutomationFallback" }
