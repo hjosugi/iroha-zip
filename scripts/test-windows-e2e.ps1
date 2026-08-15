@@ -17,6 +17,209 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "..\tests\windows-fixture-tools.ps1")
 
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class IrohaZipPasswordAutomationNative {
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowTextW(IntPtr window, string text);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostMessageW(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+}
+"@
+
+$ButtonClickMessage = 0x00F5
+$PasswordDialogTitle = "Archive password / 書庫のパスワード"
+$PasswordEditId = 100
+$PasswordConfirmId = 1
+$PasswordCancelId = 2
+
+function Wait-Until {
+    param(
+        [scriptblock]$Condition,
+        [int]$TimeoutSeconds = 30,
+        [string]$Description = "the requested state"
+    )
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $value = & $Condition
+        if ($null -ne $value -and $value -ne $false) { return $value }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Timed out waiting for $Description."
+}
+
+function Find-PasswordControl {
+    param(
+        [System.Windows.Automation.AutomationElement]$Dialog,
+        [int]$Id
+    )
+    $condition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+        [string]$Id
+    )
+    return $Dialog.FindFirst(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        $condition
+    )
+}
+
+function Wait-ForPasswordDialog {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [int]$TimeoutSeconds = 60
+    )
+    return Wait-Until -TimeoutSeconds $TimeoutSeconds `
+        -Description "the password dialog for process $($Process.Id)" `
+        -Condition {
+            $Process.Refresh()
+            if ($Process.HasExited) {
+                throw "Process $($Process.Id) exited before creating the password dialog (exit code $($Process.ExitCode))."
+            }
+            $processCondition = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+                $Process.Id
+            )
+            $nameCondition = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::NameProperty,
+                $PasswordDialogTitle
+            )
+            $condition = [System.Windows.Automation.AndCondition]::new(
+                $processCondition,
+                $nameCondition
+            )
+            [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+                [System.Windows.Automation.TreeScope]::Children,
+                $condition
+            )
+        }
+}
+
+function Invoke-PasswordTestProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+
+        [string]$Password,
+
+        [switch]$Cancel,
+
+        [int[]]$ExpectedExitCodes = @(0),
+
+        [int]$TimeoutSeconds = 120
+    )
+
+    if (-not $Cancel -and [string]::IsNullOrEmpty($Password)) {
+        throw "A non-cancelled password UI run requires a password."
+    }
+
+    $start = [System.Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = $FilePath
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $false
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in $Arguments) {
+        $start.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $started = $false
+    try {
+        if (-not $process.Start()) {
+            throw "Password test process did not start: $FilePath"
+        }
+        $started = $true
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $dialog = Wait-ForPasswordDialog -Process $process
+        $dialogName = $dialog.Current.Name
+        if ($dialogName -cne $PasswordDialogTitle) {
+            throw "Password dialog title is not the exact bilingual contract: $dialogName"
+        }
+
+        $edit = Find-PasswordControl -Dialog $dialog -Id $PasswordEditId
+        if ($null -eq $edit -or
+            $edit.Current.ControlType -ne [System.Windows.Automation.ControlType]::Edit -or
+            -not $edit.Current.IsPassword -or
+            -not $edit.Current.IsEnabled -or
+            -not $edit.Current.IsKeyboardFocusable) {
+            throw "Password dialog did not expose an enabled, focusable ES_PASSWORD edit control."
+        }
+
+        $buttonId = if ($Cancel) { $PasswordCancelId } else { $PasswordConfirmId }
+        $button = Find-PasswordControl -Dialog $dialog -Id $buttonId
+        if ($null -eq $button -or
+            $button.Current.ControlType -ne [System.Windows.Automation.ControlType]::Button -or
+            -not $button.Current.IsEnabled -or
+            -not $button.Current.IsKeyboardFocusable -or
+            [string]::IsNullOrWhiteSpace($button.Current.Name)) {
+            throw "Password dialog did not expose an accessible button with ID $buttonId."
+        }
+
+        if (-not $Cancel) {
+            $edit.SetFocus()
+            if (-not [IrohaZipPasswordAutomationNative]::SetWindowTextW(
+                [IntPtr]$edit.Current.NativeWindowHandle,
+                $Password
+            )) {
+                throw "Cannot set the public E2E fixture password in the native password control."
+            }
+        }
+        if (-not [IrohaZipPasswordAutomationNative]::PostMessageW(
+            [IntPtr]$button.Current.NativeWindowHandle,
+            $ButtonClickMessage,
+            [UIntPtr]::Zero,
+            [IntPtr]::Zero
+        )) {
+            throw "Cannot activate password dialog button ID $buttonId."
+        }
+
+        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            $process.Kill($true)
+            $process.WaitForExit()
+            throw "Password test process exceeded ${TimeoutSeconds}s: $FilePath $($Arguments -join ' ')"
+        }
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        if (-not [string]::IsNullOrEmpty($Password) -and
+            ($stdout.Contains($Password) -or $stderr.Contains($Password))) {
+            throw "The public E2E fixture password reached process output."
+        }
+        if ($ExpectedExitCodes -notcontains $process.ExitCode) {
+            throw "Unexpected exit code $($process.ExitCode) from password test process. stderr=$($stderr.Trim()) stdout=$($stdout.Trim())"
+        }
+        return [pscustomobject][ordered]@{
+            exitCode = $process.ExitCode
+            elapsedMilliseconds = $stopwatch.ElapsedMilliseconds
+            stdout = $stdout
+            stderr = $stderr
+            dialogTitle = $dialogName
+            passwordControlProtected = $true
+            action = if ($Cancel) { "cancel" } else { "confirm" }
+        }
+    }
+    finally {
+        if ($started -and -not $process.HasExited) {
+            $process.Kill($true)
+            $process.WaitForExit()
+        }
+        $stopwatch.Stop()
+        $process.Dispose()
+    }
+}
+
 function Resolve-Leaf([string]$Path, [string]$Description) {
     $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
     if (-not (Test-Path -LiteralPath $resolved.Path -PathType Leaf)) {
@@ -312,7 +515,7 @@ if ($builtExecutableHash -cne $executableHash -or $builtShellHash -cne $shellHas
 }
 $failure = $null
 $report = [ordered]@{
-    schemaVersion = 4
+    schemaVersion = 5
     status = "running"
     generatedAtUtc = [DateTime]::UtcNow.ToString("o")
     runner = [ordered]@{
@@ -339,6 +542,8 @@ $report = [ordered]@{
         doctor = $null
     }
     formats = @()
+    encryptedArchives = @()
+    encryptedArchiveFailures = $null
     readFixtures = @()
     pinnedFixtureDecoderSelfTest = $null
     rawStreamNegative = $null
@@ -536,6 +741,93 @@ try {
         [byte[]](0, 1, 2, 127, 128, 254, 255)
     )
     $filterSourceTree = Compare-Tree $filterSourceRoot $filterSourceRoot
+    $publicFixturePassword = "公開テスト-日本語-password-42"
+    $encryptedFormats = @(
+        [pscustomobject]@{ name = "zipcrypt"; option = "zip:encryption=zipcrypt" },
+        [pscustomobject]@{ name = "aes128"; option = "zip:encryption=aes128" },
+        [pscustomobject]@{ name = "aes256"; option = "zip:encryption=aes256" }
+    )
+    $encryptedArchives = @{}
+    foreach ($fixture in $encryptedFormats) {
+        $generatedArchive = Join-Path $filterArchivesRoot `
+            ("encrypted-$($fixture.name).zip")
+        $generateRun = Invoke-TestProcess -FilePath $backendExecutable -Arguments @(
+            "-c", "--format=zip", "--options", $fixture.option,
+            "--passphrase", $publicFixturePassword,
+            "--no-xattrs", "--no-acls", "--no-fflags",
+            "-f", $generatedArchive, "-C", $filterSourceRoot,
+            "fixture.txt", "nested", "empty"
+        )
+        $archive = Join-Path $archivesRoot ("暗号化-$($fixture.name).zip")
+        Copy-Item -LiteralPath $generatedArchive -Destination $archive
+        $destination = Join-Path $extractedRoot ("encrypted-$($fixture.name)")
+        $previewRun = Invoke-PasswordTestProcess -FilePath $executablePath -Arguments @(
+            "--config", $configPath, "preview", $archive, "--prompt-password"
+        ) -Password $publicFixturePassword
+        if ($previewRun.stdout -notmatch '(?m)^file\s+\d+\s+fixture\.txt$') {
+            throw "Encrypted $($fixture.name) preview did not expose the controlled fixture tree."
+        }
+        $extractRun = Invoke-PasswordTestProcess -FilePath $executablePath -Arguments @(
+            "--config", $configPath, "extract", $archive,
+            "--output", $destination, "--prompt-password"
+        ) -Password $publicFixturePassword
+        $tree = Compare-Tree $filterSourceRoot $destination
+        $report.encryptedArchives += [pscustomobject][ordered]@{
+            format = "zip"
+            encryption = $fixture.name
+            archiveBytes = (Get-Item -LiteralPath $archive).Length
+            archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            controlledSourceManifestSha256 = $filterSourceTree.manifestSha256
+            treeManifestSha256 = $tree.manifestSha256
+            controlledFixtureGenerationMilliseconds = $generateRun.elapsedMilliseconds
+            previewMilliseconds = $previewRun.elapsedMilliseconds
+            extractMilliseconds = $extractRun.elapsedMilliseconds
+            nativeBilingualDialog = ($previewRun.dialogTitle -ceq $PasswordDialogTitle -and
+                $extractRun.dialogTitle -ceq $PasswordDialogTitle)
+            passwordControlProtected = ($previewRun.passwordControlProtected -and
+                $extractRun.passwordControlProtected)
+            passwordAbsentFromOutput = $true
+            oneUsePrompt = $true
+            explicitCleanupRequired = $true
+        }
+        $encryptedArchives[$fixture.name] = $archive
+    }
+
+    $wrongPasswordDestination = Join-Path $extractedRoot "encrypted-wrong-must-not-exist"
+    $wrongPasswordRun = Invoke-PasswordTestProcess -FilePath $executablePath -Arguments @(
+        "--config", $configPath, "extract", $encryptedArchives["aes256"],
+        "--output", $wrongPasswordDestination, "--prompt-password"
+    ) -Password "公開テスト-日本語-wrong-42" -ExpectedExitCodes @(2)
+    if (Test-Path -LiteralPath $wrongPasswordDestination) {
+        throw "Wrong encrypted-archive password published a destination tree."
+    }
+
+    $cancelDestination = Join-Path $extractedRoot "encrypted-cancel-must-not-exist"
+    $cancelRun = Invoke-PasswordTestProcess -FilePath $executablePath -Arguments @(
+        "--config", $configPath, "extract", $encryptedArchives["aes256"],
+        "--output", $cancelDestination, "--prompt-password"
+    ) -Cancel
+    if ($cancelRun.exitCode -ne 0 -or
+        -not [string]::IsNullOrWhiteSpace($cancelRun.stdout) -or
+        -not [string]::IsNullOrWhiteSpace($cancelRun.stderr) -or
+        (Test-Path -LiteralPath $cancelDestination)) {
+        throw "Cancelling the password dialog was not a clean no-publication result."
+    }
+    $report.encryptedArchiveFailures = [ordered]@{
+        wrongPasswordRejected = $true
+        wrongPasswordExitCode = $wrongPasswordRun.exitCode
+        wrongPasswordDestinationAbsent = $true
+        wrongPasswordStderrSha256 = Get-StringSha256 $wrongPasswordRun.stderr
+        cancelExitCode = $cancelRun.exitCode
+        cancelOutputEmpty = $true
+        cancelDestinationAbsent = $true
+        nativeBilingualDialog = ($wrongPasswordRun.dialogTitle -ceq $PasswordDialogTitle -and
+            $cancelRun.dialogTitle -ceq $PasswordDialogTitle)
+        passwordControlsProtected = ($wrongPasswordRun.passwordControlProtected -and
+            $cancelRun.passwordControlProtected)
+        explicitCleanupRequired = $true
+    }
+
     $readFixtures = @(
         [pscustomobject]@{ name = "tar-bz2"; filter = "-j"; extension = "tar.bz2" },
         [pscustomobject]@{ name = "tar-xz"; filter = "-J"; extension = "tar.xz" },
@@ -1041,6 +1333,12 @@ try {
     if ((ConvertTo-Json -InputObject $actualReadFormats -Compress) -cne
         (ConvertTo-Json -InputObject $expectedReadFormats -Compress)) {
         throw "Windows E2E did not execute the exact 14-format additional-read matrix."
+    }
+    $expectedEncryptedFormats = @("zipcrypt", "aes128", "aes256")
+    $actualEncryptedFormats = @($report.encryptedArchives | ForEach-Object { $_.encryption })
+    if ((ConvertTo-Json -InputObject $actualEncryptedFormats -Compress) -cne
+        (ConvertTo-Json -InputObject $expectedEncryptedFormats -Compress)) {
+        throw "Windows E2E did not execute the exact three-format encrypted ZIP matrix."
     }
 
     $report.status = "passed"
