@@ -126,16 +126,19 @@ function Convert-EnvironmentPath([string]$UnixPath) {
 }
 
 $pending = [System.Collections.Generic.Queue[string]]::new()
+$queued = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $maximumRuntimeFiles = 256
 $lddBatchSize = 64
 $pending.Enqueue("${environmentBinUnix}bsdtar.exe")
+$null = $queued.Add("${environmentBinUnix}bsdtar.exe")
 
 Write-Host "Resolving $([string]$environmentContract.displayName) runtime dependencies..."
 while ($pending.Count -gt 0) {
     $batch = [System.Collections.Generic.List[string]]::new()
     while ($pending.Count -gt 0 -and $batch.Count -lt $lddBatchSize) {
         $current = $pending.Dequeue()
+        $null = $queued.Remove($current)
         if (-not $seen.Add($current)) {
             continue
         }
@@ -150,6 +153,13 @@ while ($pending.Count -gt 0) {
 
     foreach ($lineObject in (Invoke-Ldd $batch.ToArray())) {
         $line = [string]$lineObject
+        if ($line -match '=>\s+not found(?:\s|$)') {
+            $unresolved = $line.Trim()
+            if ($unresolved.Length -gt 512) {
+                $unresolved = $unresolved.Substring(0, 512) + "..."
+            }
+            throw "ldd reported an unresolved runtime dependency: $unresolved"
+        }
         $dependency = $null
         if ($line -match '=>\s+(/[^\s]+)' -and
             $Matches[1].StartsWith($environmentBinUnix, [System.StringComparison]::Ordinal)) {
@@ -159,7 +169,12 @@ while ($pending.Count -gt 0) {
             $Matches[1].StartsWith($environmentBinUnix, [System.StringComparison]::Ordinal)) {
             $dependency = [string]$Matches[1]
         }
-        if ($null -ne $dependency -and -not $seen.Contains($dependency)) {
+        if ($null -ne $dependency -and
+            -not $seen.Contains($dependency) -and
+            $queued.Add($dependency)) {
+            if ($seen.Count + $queued.Count -gt $maximumRuntimeFiles) {
+                throw "MSYS2 runtime dependency inventory exceeds the $maximumRuntimeFiles-file limit."
+            }
             $pending.Enqueue($dependency)
         }
     }

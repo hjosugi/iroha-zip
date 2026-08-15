@@ -31,6 +31,8 @@ foreach ($marker in @(
     'ldd "$@"',
     '$maximumRuntimeFiles = 256',
     '$lddBatchSize = 64',
+    '$queued.Add($dependency)',
+    "ldd reported an unresolved runtime dependency",
     'Invoke-Ldd $batch.ToArray()'
 )) {
     if (-not $exporterSource.Contains($marker)) {
