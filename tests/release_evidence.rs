@@ -10,7 +10,7 @@ struct ReleaseSnapshot {
     version: &'static str,
 }
 
-const RELEASE_SNAPSHOTS: [ReleaseSnapshot; 2] = [
+const RELEASE_SNAPSHOTS: [ReleaseSnapshot; 3] = [
     ReleaseSnapshot {
         root: "evidence/releases/v0.6.1",
         version: "0.6.1",
@@ -18,6 +18,10 @@ const RELEASE_SNAPSHOTS: [ReleaseSnapshot; 2] = [
     ReleaseSnapshot {
         root: "evidence/releases/v0.6.2",
         version: "0.6.2",
+    },
+    ReleaseSnapshot {
+        root: "evidence/releases/v0.6.3",
+        version: "0.6.3",
     },
 ];
 
