@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve the independently verified `v0.6.3` immutable Release as a third exact 11-asset snapshot,
+  including API digests and lengths, workflow artifact digests, x64/ARM64 PE identities,
+  ZIP-to-standalone equality, unsigned Certificate Tables, tag/release/workflow attestations, public
+  Pages equality, and an ordinary Rust regression for the retained evidence.
+
 ## 0.6.3 - 2026-08-15
 
 - Preserve the independently verified `v0.6.2` immutable Release as an exact 11-asset snapshot with
