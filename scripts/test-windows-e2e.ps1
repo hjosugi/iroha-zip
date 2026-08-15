@@ -28,13 +28,12 @@ public static class IrohaZipPasswordAutomationNative {
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetWindowTextW(IntPtr window, string text);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool PostMessageW(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+    public static extern bool IsWindow(IntPtr window);
 }
 "@
 
-$ButtonClickMessage = 0x00F5
 $PasswordDialogTitle = "Archive password / 書庫のパスワード"
 $PasswordEditId = 100
 $PasswordConfirmId = 1
@@ -167,6 +166,13 @@ function Invoke-PasswordTestProcess {
             [string]::IsNullOrWhiteSpace($button.Current.Name)) {
             throw "Password dialog did not expose an accessible button with ID $buttonId."
         }
+        $invokePattern = $button.GetCurrentPattern(
+            [System.Windows.Automation.InvokePattern]::Pattern
+        )
+        if ($null -eq $invokePattern) {
+            throw "Password dialog button ID $buttonId does not expose InvokePattern."
+        }
+        $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
 
         if (-not $Cancel) {
             $edit.SetFocus()
@@ -177,14 +183,12 @@ function Invoke-PasswordTestProcess {
                 throw "Cannot set the public E2E fixture password in the native password control."
             }
         }
-        if (-not [IrohaZipPasswordAutomationNative]::PostMessageW(
-            [IntPtr]$button.Current.NativeWindowHandle,
-            $ButtonClickMessage,
-            [UIntPtr]::Zero,
-            [IntPtr]::Zero
-        )) {
-            throw "Cannot activate password dialog button ID $buttonId."
-        }
+        $invokePattern.Invoke()
+        Wait-Until -TimeoutSeconds 10 `
+            -Description "password dialog to close after button ID $buttonId" `
+            -Condition {
+                -not [IrohaZipPasswordAutomationNative]::IsWindow($dialogHandle)
+            } | Out-Null
 
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
             $process.Kill($true)
