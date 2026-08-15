@@ -32,6 +32,9 @@ public static class IrohaZipPasswordAutomationNative {
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindow(IntPtr window);
 
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
     [DllImport("user32.dll", SetLastError = true, ExactSpelling = true)]
     public static extern IntPtr SendMessageTimeoutW(
         IntPtr window,
@@ -219,7 +222,17 @@ function Invoke-PasswordTestProcess {
         Wait-Until -TimeoutSeconds 10 `
             -Description "password dialog to close after button ID $buttonId" `
             -Condition {
-                -not [IrohaZipPasswordAutomationNative]::IsWindow($dialogHandle)
+                $process.Refresh()
+                if ($process.HasExited -or
+                    -not [IrohaZipPasswordAutomationNative]::IsWindow($dialogHandle)) {
+                    return $true
+                }
+                [uint32]$windowProcessId = 0
+                $windowThreadId = [IrohaZipPasswordAutomationNative]::GetWindowThreadProcessId(
+                    $dialogHandle,
+                    [ref]$windowProcessId
+                )
+                ($windowThreadId -eq 0 -or $windowProcessId -ne [uint32]($process.Id))
             } | Out-Null
 
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
