@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.6.2 - 2026-08-15
+
+- Decouple completed immutable-release evidence from the crate's not-yet-published version so release
+  preparation validates an explicit bounded snapshot list; new release evidence is added only after
+  its public assets, attestations, tag, workflows, and Pages result have been independently checked.
 - Preserve a second independently reviewed exact-`main` Windows evidence run as 11 canonical JSON
   reports with original/canonical hashes and source artifact digests. Extend the ordinary snapshot
   regression to reject extra JSON and validate schema-v2 Settings keyboard evidence: real

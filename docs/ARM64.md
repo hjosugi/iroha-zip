@@ -52,7 +52,7 @@ schema-v2 Settingsの2 reportは全26 controlsの正逆順、wrap、可視性、
 
 ### 配布境界
 
-[`v0.6.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.1)は`windows-arm64`と
+`v0.6.2`は`windows-arm64`と
 `windows-x64`を別名で扱います。release workflowはnative ARM64 runnerでbuild/packageし、
 次のtag-driven境界で取り違えを拒否します。
 
@@ -78,7 +78,7 @@ Release APIはlatest／stable／immutableと、exact 11 assetの公開状態を�
 
 ### ARM64での導入
 
-1. `iroha-zip-0.6.1-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
+1. `iroha-zip-0.6.2-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
 2. native ARM64版MSYS2で`mingw-w64-clang-aarch64-libarchive`を導入します。
 3. ARM64版の設定画面で「MSYS2から取り込む」を選びます。設定画面はCLANGARM64を自動指定します。
 4. CLI自動化では次を使用します。
@@ -153,7 +153,7 @@ verification as false; this is not claimed as physical-keyboard evidence.
 
 ### Distribution boundary
 
-[`v0.6.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.1) uses separately named
+`v0.6.2` uses separately named
 `windows-arm64` and `windows-x64` assets. The release workflow builds/packages on a native ARM64
 runner and rejects architecture confusion at these tag-driven boundaries:
 
@@ -182,7 +182,7 @@ metadata, all asset hashes, workflow artifact digests, and independent results a
 
 ### ARM64 setup
 
-1. Download `iroha-zip-0.6.1-windows-arm64.zip` and verify its SHA-256 and attestation.
+1. Download `iroha-zip-0.6.2-windows-arm64.zip` and verify its SHA-256 and attestation.
 2. Install `mingw-w64-clang-aarch64-libarchive` in native ARM64 MSYS2.
 3. Choose **Import from MSYS2** in the ARM64 Settings build. It selects CLANGARM64 automatically.
 4. For CLI automation, use:

@@ -4,10 +4,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-fn snapshot_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("evidence/releases")
-        .join(format!("v{}", env!("CARGO_PKG_VERSION")))
+#[derive(Clone, Copy)]
+struct ReleaseSnapshot {
+    root: &'static str,
+    version: &'static str,
+}
+
+const RELEASE_SNAPSHOTS: [ReleaseSnapshot; 1] = [ReleaseSnapshot {
+    root: "evidence/releases/v0.6.1",
+    version: "0.6.1",
+}];
+
+fn snapshot_root(snapshot: ReleaseSnapshot) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(snapshot.root)
 }
 
 fn parse_sha256_manifest(path: &Path) -> BTreeMap<String, String> {
@@ -78,13 +87,12 @@ fn expected_asset_names(version: &str) -> BTreeSet<String> {
     .collect()
 }
 
-#[test]
-fn current_release_evidence_is_complete_and_self_consistent() {
-    let root = snapshot_root();
+fn validate_release_snapshot(snapshot: ReleaseSnapshot) {
+    let root = snapshot_root(snapshot);
     let metadata_bytes = fs::read(root.join("release.json")).expect("release evidence must exist");
     let metadata: Value =
         serde_json::from_slice(&metadata_bytes).expect("release evidence must be valid JSON");
-    let version = env!("CARGO_PKG_VERSION");
+    let version = snapshot.version;
     let tag = format!("v{version}");
 
     assert_eq!(metadata["schema_version"], 1);
@@ -248,5 +256,12 @@ fn current_release_evidence_is_complete_and_self_consistent() {
             Some(lowercase_sha256(&bytes).as_str()),
             "snapshot hash differs for {name}"
         );
+    }
+}
+
+#[test]
+fn completed_release_evidence_is_complete_and_self_consistent() {
+    for snapshot in RELEASE_SNAPSHOTS {
+        validate_release_snapshot(snapshot);
     }
 }
