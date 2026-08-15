@@ -187,10 +187,9 @@ zeroizationはbest effortであり、paging、hibernation、privileged debugger�
 ## 7. 将来の強化候補
 
 - LPACの実書庫・ACL・network denial matrixと必要capability 0件の実証
-- 最初の実環境Authenticode署名済みrelease証跡と独立レビュー、および署名済みアップデート（未署名`v0.5.3`はGitHub immutable policy、draft-first検証、公開後のexact asset readbackを完了した。これはpublisher署名の代替ではない）
+- 最初の実環境Authenticode署名済みrelease証跡と独立レビュー、および署名済みアップデート（未署名`v0.6.0`はGitHub immutable policy、draft-first検証、公開後のexact asset readbackを要求する。これはpublisher署名の代替ではない）
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
-- パスワードを保護された匿名パイプで渡す仕組み
 - 親handleをrootにしたnative child openとWindows reparse競合stress test
 - passing generated corpusの範囲外にあるformat／control-byte／CPU-bomb／crash／race拡張（[`MALICIOUS_CORPUS.md`](MALICIOUS_CORPUS.md)）と、Windows 10/11、LPAC、legacy read-format、追加denial、crash／race matrix（[`WINDOWS_E2E.md`](WINDOWS_E2E.md)）
 - MSYS2 package key rotation、過去archive availability、生成済みbackend SBOM/license証跡の独立レビュー

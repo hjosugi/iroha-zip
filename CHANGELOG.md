@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-08-15
+
 - Add a one-use, AppContainer-preserving anonymous-pipe password channel and sealed internal
   libarchive extractor for encrypted ZIP `preview` and `extract`, with no password-value CLI option,
   environment/config/file/log storage, or unsandboxed fallback.

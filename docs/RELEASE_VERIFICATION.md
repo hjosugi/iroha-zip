@@ -1,6 +1,6 @@
 # Release and independent verification
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 The current official iroha-zip binaries are unsigned. The release boundary combines a pinned source
 tag, native architecture-specific hosted runners, exact PE checks, SHA-256 inventories, GitHub artifact
@@ -9,7 +9,7 @@ attestations, and immutable asset readback. None of these is an Authenticode pub
 
 ## Current unsigned artifact contract
 
-Version `0.5.3` contains exactly 11 assets. Substitute the version for later releases:
+Version `0.6.0` contains exactly 11 assets. Substitute the version for later releases:
 
 - `iroha-zip-<version>-windows-x64.zip`
 - `iroha-zip-<version>-windows-x64.zip.sha256`
@@ -110,7 +110,7 @@ Download only from `https://github.com/hjosugi/iroha-zip/releases`. Select `x64`
 `arm64` for Windows on ARM, then compare it with `SHA256SUMS.txt`:
 
 ```powershell
-$asset = Get-Item .\iroha-zip-0.5.3-windows-arm64.zip
+$asset = Get-Item .\iroha-zip-0.6.0-windows-arm64.zip
 $expected = Get-Content .\SHA256SUMS.txt |
   Where-Object { $_ -match ([regex]::Escape($asset.Name) + '$') }
 if (@($expected).Count -ne 1) { throw 'Missing or duplicate checksum entry' }
@@ -122,10 +122,10 @@ if ($actual -cne $expectedHash) { throw 'SHA-256 mismatch' }
 Then verify the GitHub artifact attestation:
 
 ```powershell
-gh attestation verify .\iroha-zip-0.5.3-windows-arm64.zip `
+gh attestation verify .\iroha-zip-0.6.0-windows-arm64.zip `
   --repo hjosugi/iroha-zip `
   --signer-workflow hjosugi/iroha-zip/.github/workflows/release.yml `
-  --source-ref refs/tags/v0.5.3 `
+  --source-ref refs/tags/v0.6.0 `
   --deny-self-hosted-runners
 ```
 

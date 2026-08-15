@@ -2,15 +2,15 @@
 
 [日本語](#日本語) | [English](#english)
 
-iroha-zip 0.5.x はセキュリティ指向の実用版ですが、第三者監査済み製品ではありません。未署名リリースの意味と検証方法は [未署名リリースについて](docs/UNSIGNED_RELEASE.md) を参照してください。
+iroha-zip 0.6.x はセキュリティ指向の実用版ですが、第三者監査済み製品ではありません。未署名リリースの意味と検証方法は [未署名リリースについて](docs/UNSIGNED_RELEASE.md) を参照してください。
 
-iroha-zip 0.5.x is a security-oriented usable release, but it is not a third-party-audited product. See [About unsigned releases](docs/UNSIGNED_RELEASE.md#english) for the current signing status and verification procedure.
+iroha-zip 0.6.x is a security-oriented usable release, but it is not a third-party-audited product. See [About unsigned releases](docs/UNSIGNED_RELEASE.md#english) for the current signing status and verification procedure.
 
 ## 日本語
 
 ### サポート対象
 
-最新の `main` と `0.5.x` を対象とします。`0.4.x` 以前はソースレビュー用の旧版であり、セキュリティ修正の対象外です。
+最新の `main` と `0.6.x` を対象とします。`0.5.x` 以前はソースレビュー用の旧版であり、セキュリティ修正の対象外です。
 
 ### 脆弱性の報告
 
@@ -50,7 +50,7 @@ iroha-zip 0.5.x is a security-oriented usable release, but it is not a third-par
 
 ### Supported versions
 
-The latest `main` branch and `0.5.x` are supported. Versions `0.4.x` and earlier are historical releases retained for source review and do not receive security fixes.
+The latest `main` branch and `0.6.x` are supported. Versions `0.5.x` and earlier are historical releases retained for source review and do not receive security fixes.
 
 ### Reporting a vulnerability
 

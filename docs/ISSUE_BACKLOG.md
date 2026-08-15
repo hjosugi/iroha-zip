@@ -1,6 +1,6 @@
 # Issue backlog
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 This backlog records the remaining work discovered during the v0.2.0 refactor. Each stable ID links to its GitHub issue. Priority is based on security and release risk; an item being listed here does not mean its unsafe behavior is currently enabled.
 
@@ -13,6 +13,14 @@ Run extraction and creation on disposable Windows 10/11 x64 machines with a pinn
 Acceptance: the matrix is automated where possible; created archives are re-extracted and content-hashed; AppContainer identity and network denial are recorded; no residual profile or temporary tree remains after every tested exit path.
 
 Progress (2026-08-14): the expanded schema-v4 matrix passed on Windows Server 2022, Windows Server 2025, and native Windows 11 ARM from commit `27610e69f21bf85709f70a68695acc1113d22dca` in [Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604); native ARM64 independently repeated it in [run 31778405711](https://github.com/hjosugi/iroha-zip/actions/runs/31778405711). Independently downloaded JSON for every environment records a verified MSYS2 backend, zero-capability AppContainer identity, active-loopback denial, deterministic timeout and memory rejection, abnormal child termination, corrupt-loader process-creation rejection, one effective process-temp path, and seven explicit profile/root cleanups. Each report covers ZIP/7z/TAR/TAR.GZ creation-preview-re-extraction plus 14 exact reads: four filtered TARs; standalone GZ/BZ2/XZ/Zstandard/compress; validly Microsoft-signed LZX CAB; and exact official libarchive 3.8.9 RAR/RAR5/LHA-level-3/ZIPX fixtures. All three raw-stream mismatch/limit/corruption cases reject without publication; normal ZIP and standalone-raw shell dispatch, matching SHA-256 trees, Japanese and >260-character paths, invalid-input non-publication, the generated malicious corpus, x64 English Settings, and native ARM64 Japanese/English Settings also pass. A Windows regression holds the child suspended through a forced two-second token-verification failure and requires zero child stdout. Disposable Windows 10/11 x64 desktop runs, broader LPAC denial measurements, concurrent race stress, further legacy/malformed fixtures, and long-term evidence retention remain open; see [the evidence contract](WINDOWS_E2E.md).
+
+Current extension (2026-08-15): schema-v5 passed on both fixed Windows Server x64 images and native
+Windows 11 ARM from exact `main` commit `1f8cce72c1730ae3026bf386988f62b32c0470c4` in
+[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). Exact-name local
+checks of all 11 downloaded reports confirmed ZipCrypto/AES-128/AES-256
+native-dialog extraction, one-use secret transport, wrong-password/cancel non-publication, the 19-sample
+corpus, Settings diagnosis, capability 0, and complete cleanup. Disposable Windows 10/11 x64 desktop
+execution remains the acceptance gap; hosted Server/ARM evidence is not relabelled as desktop proof.
 
 ### [SAFE-002: Malicious archive regression corpus](https://github.com/hjosugi/iroha-zip/issues/4)
 
@@ -62,7 +70,7 @@ Support passwords without command-line, environment, log, crash-report, or persi
 
 Acceptance: use a protected anonymous channel or equivalent one-use mechanism, zero sensitive buffers where practical, prevent inherited handles, and test cancellation/wrong-password paths.
 
-Progress (2026-08-15): the product path now uses a one-use anonymous pipe without `--passphrase`,
+Acceptance met (2026-08-15): the product path uses a one-use anonymous pipe without `--passphrase`,
 inheritable controller handles, or environment/config/file/log storage. A byte-identical sealed
 internal child remains suspended until its AppContainer/LPAC token and zero capabilities are
 verified; only its stdin read handle is admitted through the explicit handle list. The parent writes
@@ -75,7 +83,15 @@ buffers, and the bilingual password control is cleared before destruction. Platf
 and a real-AppContainer probe cover Japanese input, cancellation, EOF after one value, timeout,
 large output, crash, cleanup, and log absence. The schema-v5 matrix generates
 ZipCrypto/AES-128/AES-256 ZIPs, drives the native UI, compares preview/extracted trees, and requires
-wrong-password/cancel non-publication. Hosted real-backend evidence and review remain the final gate.
+wrong-password/cancel non-publication. PR [#16](https://github.com/hjosugi/iroha-zip/pull/16)
+merged after all hosted checks passed. Exact-main
+[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811) exercised the
+real encrypted backend for ZipCrypto, AES-128, and AES-256 on Windows Server 2022/2025 x64 and native
+Windows 11 ARM. All 11 downloaded evidence JSON files were independently checked for schema-v5
+success, protected bilingual controls, secret output absence, one-use delivery,
+wrong-password/cancel non-publication, AppContainer capability 0, malicious-corpus rejection,
+Japanese/English Settings diagnosis, correct ARM64 PE identity, and complete temporary-root cleanup.
+Issue #9 closed with the reviewed merge.
 
 ### [SAFE-008: Defender/antimalware handoff](https://github.com/hjosugi/iroha-zip/issues/10)
 
@@ -109,7 +125,7 @@ Design an opt-in updater with rollback, channel selection, signature verificatio
 
 Acceptance: packages are verified before execution, downgrade policy is explicit, and backend trust remains independently controlled by the user.
 
-Progress (2026-08-14): iroha-zip still ships no updater and performs no background update check because the `0.5.x` line, including the `v0.5.3` package, is intentionally unsigned. The bilingual [signed-updater design](UPDATER.md) fixes the disabled-by-default stable/preview channels, Authenticode publisher/EKU/timestamp and exact digest/inventory gates, default downgrade denial plus explicit signed recovery downgrade, same-volume replacement and byte-identical rollback behavior, and the invariant that updater code never modifies backend trust/evidence. Tamper, interruption, AV, disk-full, concurrent-update, launch, and rollback tests remain prerequisites. Implementation remains gated on SAFE-003's owner-controlled signing identity and first reviewed signed immutable release.
+Progress (2026-08-15): iroha-zip still ships no updater and performs no background update check because the `0.6.x` line, including the `v0.6.0` package, is intentionally unsigned. The bilingual [signed-updater design](UPDATER.md) fixes the disabled-by-default stable/preview channels, Authenticode publisher/EKU/timestamp and exact digest/inventory gates, default downgrade denial plus explicit signed recovery downgrade, same-volume replacement and byte-identical rollback behavior, and the invariant that updater code never modifies backend trust/evidence. Tamper, interruption, AV, disk-full, concurrent-update, launch, and rollback tests remain prerequisites. Implementation remains gated on SAFE-003's owner-controlled signing identity and first reviewed signed immutable release.
 
 ### [QA-001: Fuzzing and property tests](https://github.com/hjosugi/iroha-zip/issues/14)
 

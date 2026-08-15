@@ -1,6 +1,6 @@
 # Windows ARM64 status / Windows ARM64 対応状況
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 ## 日本語
 
@@ -19,6 +19,8 @@ CIはGitHubのnative `windows-11-arm` runner上で、OS／process architecture�
 - 単体streamのfilter不一致、展開容量超過、圧縮payload破損を非公開で拒否
 - 18拒否例＋1 controlとnative hardlink／ADS／junctionを含む悪性コーパス
 - 通常ZIPと単体gzipのshell経路、日本語／英語それぞれ26 controlのSettings UI／backend診断
+- ZipCrypto／WinZip AES-128／AES-256のnative password dialog、preview／extract tree一致、
+  wrong-password／cancel非公開、秘密output非露出、一回限りchannel
 - 通常AppContainerのcapability 0、loopback、timeout、memory、異常終了、loader、temp、DACL、
   7 profile/root cleanup
 - LPAC成功時は同じschema-v4契約、非対応時はexact failure class、exit 2、空stdout、完全cleanup
@@ -34,9 +36,16 @@ AppContainerがcapability 0であること、7 profile/rootと全一時rootが�
 このWindows 11 ARM環境ではLPAC queryは`ERROR_INVALID_PARAMETER`となり、通常AppContainerへ降格せず
 fail closedしました。
 
+暗号化ZIPを含むschema-v5拡張はexact `main` commit
+`1f8cce72c1730ae3026bf386988f62b32c0470c4`の
+[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811)で合格しました。
+downloadした5 JSONを独立に確認し、3暗号方式すべてで保護された日英control、一回限りchannel、
+passwordのstdout／stderr非露出、sourceと同じpreview／extract tree、wrong-password／cancel時の
+destination非公開、全PEの`0xAA64` identity、完全cleanupを確認しました。
+
 ### 配布境界
 
-[`v0.5.3`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.3)は`windows-arm64`と
+[`v0.6.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.0)は`windows-arm64`と
 `windows-x64`を別名で扱います。release workflowはnative ARM64 runnerでbuild/packageし、
 次のtag-driven境界で取り違えを拒否します。
 
@@ -55,7 +64,7 @@ Release APIはlatest／stable／immutableと、exact 11 assetの公開状態を�
 
 ### ARM64での導入
 
-1. `iroha-zip-0.5.3-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
+1. `iroha-zip-0.6.0-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
 2. native ARM64版MSYS2で`mingw-w64-clang-aarch64-libarchive`を導入します。
 3. ARM64版の設定画面で「MSYS2から取り込む」を選びます。設定画面はCLANGARM64を自動指定します。
 4. CLI自動化では次を使用します。
@@ -94,6 +103,8 @@ CI first requires `Arm64` for both OS and process architecture and
 - the hostile corpus with 18 rejects, one control, and native hardlink/ADS/junction cases;
 - normal-ZIP and standalone-gzip shell handling, plus both Japanese and English 26-control
   Settings/backend-diagnosis paths;
+- native password-dialog, preview/extract tree matching, wrong-password/cancel non-publication,
+  secret output absence, and one-use-channel checks for ZipCrypto, WinZip AES-128, and AES-256;
 - normal AppContainer with zero capabilities, loopback/timeout/memory/crash/loader/temp/DACL checks,
   and seven profile/root cleanups; and
 - the same schema-v4 contract on LPAC success, or exact failure class, exit 2, empty stdout, and full
@@ -111,9 +122,17 @@ AppContainer with zero capabilities, and removal of all seven profiles/roots and
 The LPAC query returned `ERROR_INVALID_PARAMETER` on that Windows 11 ARM environment and failed closed
 without a normal-AppContainer fallback.
 
+The schema-v5 encrypted-ZIP expansion passed for exact `main` commit
+`1f8cce72c1730ae3026bf386988f62b32c0470c4` in
+[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). Independent
+checks of all five downloaded JSON reports confirmed the protected bilingual control, one-use
+channel, password absence from stdout/stderr, source-identical preview/extraction trees for all three
+encryption modes, wrong-password/cancel destination absence, `0xAA64` identity for every PE, and
+complete cleanup.
+
 ### Distribution boundary
 
-[`v0.5.3`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.3) uses separately named
+[`v0.6.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.0) uses separately named
 `windows-arm64` and `windows-x64` assets. The release workflow builds/packages on a native ARM64
 runner and rejects architecture confusion at these tag-driven boundaries:
 
@@ -134,7 +153,7 @@ API reports it as latest, stable, immutable, and complete with the exact 11-asse
 
 ### ARM64 setup
 
-1. Download `iroha-zip-0.5.3-windows-arm64.zip` and verify its SHA-256 and attestation.
+1. Download `iroha-zip-0.6.0-windows-arm64.zip` and verify its SHA-256 and attestation.
 2. Install `mingw-w64-clang-aarch64-libarchive` in native ARM64 MSYS2.
 3. Choose **Import from MSYS2** in the ARM64 Settings build. It selects CLANGARM64 automatically.
 4. For CLI automation, use:
