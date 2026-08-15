@@ -88,10 +88,10 @@ fn conpty_delivers_one_non_ascii_password_without_logging_it() {
 
 #[test]
 fn conpty_rejects_wrong_password_retry_and_bounds_failure_paths() {
-    let wrong = run_probe("repeat", "wrong-password", Duration::from_secs(10));
+    let wrong = run_probe("repeat", EXPECTED_PASSWORD, Duration::from_secs(10));
     let wrong_error = wrong.result.as_ref().unwrap_err().to_string();
     assert!(wrong_error.contains("automatic retries are forbidden"));
-    assert_secret_absent(&wrong, "wrong-password");
+    assert_secret_absent(&wrong, EXPECTED_PASSWORD);
 
     let timeout = run_probe("sleep", EXPECTED_PASSWORD, Duration::from_millis(500));
     assert!(

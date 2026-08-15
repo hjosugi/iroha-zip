@@ -348,6 +348,15 @@ fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
 
     const EXPECTED: &str = "日本語-password-probe";
 
+    if std::env::args_os()
+        .chain(std::env::vars_os().flat_map(|(key, value)| [key, value]))
+        .any(|value| value.to_string_lossy().contains(EXPECTED))
+    {
+        return Err(IrohaZipError::Sandbox(
+            "password probe sentinel reached command-line or environment state".to_owned(),
+        ));
+    }
+
     if mode == PasswordProbeMode::Overflow {
         let block = vec![b'X'; 64 * 1024];
         let mut output = std::io::stdout().lock();

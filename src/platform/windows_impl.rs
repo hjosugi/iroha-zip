@@ -17,9 +17,9 @@ use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_HANDLE_EOF, ERROR_INVALID_PARAMETER,
-    ERROR_NO_MORE_FILES, ERROR_SUCCESS, FreeLibrary, GetLastError, HANDLE, HANDLE_FLAG_INHERIT,
-    HANDLE_FLAGS, HLOCAL, LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0,
-    WAIT_TIMEOUT,
+    ERROR_NO_MORE_FILES, ERROR_SUCCESS, FreeLibrary, GetHandleInformation, GetLastError, HANDLE,
+    HANDLE_FLAG_INHERIT, HANDLE_FLAGS, HLOCAL, LocalFree, SetHandleInformation, WAIT_ABANDONED,
+    WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Security::Authorization::{
     ConvertSidToStringSidW, EXPLICIT_ACCESS_W, GetNamedSecurityInfoW, NO_MULTIPLE_TRUSTEE,
@@ -1849,6 +1849,14 @@ fn create_noninheritable_pipe() -> Result<(OwnedHandle, OwnedHandle)> {
     for handle in [read.handle(), write.handle()] {
         unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)) }
             .map_err(|error| windows_error("clear ConPTY pipe inheritance", error))?;
+        let mut flags = 0u32;
+        unsafe { GetHandleInformation(handle, &raw mut flags) }
+            .map_err(|error| windows_error("verify ConPTY pipe inheritance", error))?;
+        if flags & HANDLE_FLAG_INHERIT.0 != 0 {
+            return Err(IrohaZipError::Sandbox(
+                "ConPTY controller handle remained inheritable".to_owned(),
+            ));
+        }
     }
     Ok((read, write))
 }
