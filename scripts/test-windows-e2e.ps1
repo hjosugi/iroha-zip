@@ -24,10 +24,6 @@ using System;
 using System.Runtime.InteropServices;
 
 public static class IrohaZipPasswordAutomationNative {
-    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool SetWindowTextW(IntPtr window, string text);
-
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindow(IntPtr window);
@@ -45,6 +41,23 @@ public static class IrohaZipPasswordAutomationNative {
         uint timeoutMilliseconds,
         out UIntPtr result
     );
+
+    [DllImport(
+        "user32.dll",
+        EntryPoint = "SendMessageTimeoutW",
+        SetLastError = true,
+        CharSet = CharSet.Unicode,
+        ExactSpelling = true
+    )]
+    public static extern IntPtr SendStringMessageTimeoutW(
+        IntPtr window,
+        uint message,
+        UIntPtr wParam,
+        [MarshalAs(UnmanagedType.LPWStr)] string text,
+        uint flags,
+        uint timeoutMilliseconds,
+        out UIntPtr result
+    );
 }
 "@
 
@@ -52,6 +65,7 @@ $PasswordDialogTitle = "Archive password / 書庫のパスワード"
 $PasswordEditId = 100
 $PasswordConfirmId = 1
 $PasswordCancelId = 2
+$SetTextMessage = 0x000C
 $WindowCommandMessage = 0x0111
 $SendMessageBlock = 0x0001
 $SendMessageAbortIfHung = 0x0002
@@ -198,11 +212,19 @@ function Invoke-PasswordTestProcess {
 
         if (-not $Cancel) {
             $edit.SetFocus()
-            if (-not [IrohaZipPasswordAutomationNative]::SetWindowTextW(
+            [UIntPtr]$setTextResult = [UIntPtr]::Zero
+            $setTextSend = [IrohaZipPasswordAutomationNative]::SendStringMessageTimeoutW(
                 [IntPtr]$edit.Current.NativeWindowHandle,
-                $Password
-            )) {
-                throw "Cannot set the public E2E fixture password in the native password control."
+                $SetTextMessage,
+                [UIntPtr]::Zero,
+                $Password,
+                ($SendMessageBlock -bor $SendMessageAbortIfHung),
+                5000,
+                [ref]$setTextResult
+            )
+            if ($setTextSend -eq [IntPtr]::Zero -or $setTextResult -eq [UIntPtr]::Zero) {
+                $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                throw "Cannot set the public E2E fixture password through bounded WM_SETTEXT (Win32 error $nativeError)."
             }
         }
         [UIntPtr]$messageResult = [UIntPtr]::Zero

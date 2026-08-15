@@ -17,6 +17,8 @@
 - Expand Windows evidence to schema v5 with native-UI ZipCrypto, WinZip AES-128, and AES-256
   preview/extraction, complete tree comparison, public-sentinel output-absence checks, and
   wrong-password/cancel non-publication. Require standard UI Automation `InvokePattern` exposure,
+  set the cross-process protected edit through bounded `WM_SETTEXT` rather than the in-process-only
+  `SetWindowTextW` helper,
   drive the real window procedure through the button's bounded synchronous `WM_COMMAND` / `BN_CLICKED`
   notification, and require process-identity-checked dialog closure within a bounded interval so a
   recycled HWND cannot cause a false timeout.
