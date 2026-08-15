@@ -75,9 +75,9 @@ filesystem boundaries. The rule remains enabled for new flows. See the bilingual
 A later Pages behavior regression produced one `js/code-injection` alert (#234) at the test-only
 `vm.runInNewContext` boundary. Only checked-in `site/assets/site.js` reaches that VM, so the alert was
 dismissed as `used in tests` after review. The current three-language
-[CodeQL run 31862434987](https://github.com/hjosugi/iroha-zip/actions/runs/31862434987) passed for
+[CodeQL run 31863791321](https://github.com/hjosugi/iroha-zip/actions/runs/31863791321) passed for
 Rust, Actions, and JavaScript/TypeScript on exact `main` commit
-`1f8cce72c1730ae3026bf386988f62b32c0470c4`. The repository had zero open CodeQL, Dependabot, and
+`4464e4fb7ef36e1e24c54969df57817dd4202b25`. The repository had zero open CodeQL, Dependabot, and
 secret-scanning alerts on 2026-08-15.
 
 The fast CI matrix runs formatting, tests, and Clippy on both `ubuntu-latest` and `windows-latest`,
@@ -86,8 +86,10 @@ contract and disposable association-state round trip. The matrix also injects ba
 immediately after the prior tree is renamed to backup and requires byte-identical restoration, zero
 transaction residue, and a subsequent successful import. These gates, the native ARM64 job, and the
 Windows PowerShell 5.1 launcher regression passed for exact `main` commit
-`1f8cce72c1730ae3026bf386988f62b32c0470c4` in
-[Actions run 31862435136](https://github.com/hjosugi/iroha-zip/actions/runs/31862435136). All external
+`4464e4fb7ef36e1e24c54969df57817dd4202b25` in
+[Actions run 31863791449](https://github.com/hjosugi/iroha-zip/actions/runs/31863791449). The same tag
+commit passed again in
+[Actions run 31864491729](https://github.com/hjosugi/iroha-zip/actions/runs/31864491729). All external
 action uses are pinned to exact 40-hex commits, and the repository Actions policy rejects non-SHA
 references while retaining read-only default workflow permissions. Production-profile compilation
 and signed-MSYS2 backend work are intentionally kept out of the duplicate x64 matrix path.
@@ -129,7 +131,7 @@ result and failed closed without backend-success output or residue. The Server m
 10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md),
 [LPAC evidence](LPAC_EVALUATION.md), and [corpus contract](MALICIOUS_CORPUS.md).
 
-A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` builds unsigned x64 and native ARM64 packages on separate native runners. It requires x64 `0x8664` and ARM64 `0xAA64` across build output, standalone assets, and expanded ZIPs; attests both ZIPs, all six EXEs, and the combined checksum inventory; and permits exactly 11 architecture-separated assets. Publication uses the immutable-release policy, creates a draft without overwriting an existing version, verifies exact name/length/digest before publishing, marks it latest, and requires immutable exact readback. The immutable stable [v0.5.3 release](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.3) passed that entire path in [Actions run 31792172328](https://github.com/hjosugi/iroha-zip/actions/runs/31792172328), after [non-publishing run 31791555768](https://github.com/hjosugi/iroha-zip/actions/runs/31791555768) passed the same package path. An independent public re-download matched all 11 API digests and byte lengths, eight checksum subjects, two sidecars, every direct and ZIP-contained PE identity, all ZIP-to-standalone bytes, both 90-link bilingual package trees, backend non-inclusion, annotated tag object `0973a3b9a12813f2fb0b94003a1be8187c987e3d`, exact commit `7d5e60a907b7681c09aebff03d66f78c172d7c3e`, and all nine hosted-runner-only tag-ref attestations; all six distinct executables had empty Authenticode Certificate Tables as disclosed. The public Japanese, English, project-root, and 404 Pages matched the deployed source byte-for-byte and returned zero W3C Nu errors or warnings. `v0.5.2` was the previous complete-contract release, `v0.4.1` was the first post-policy immutable release, and `v0.4.0` predates enforcement and remains mutable. The future Authenticode verification path remains available locally but is inactive until the owner configures and independently reviews a signing identity. See [release verification](RELEASE_VERIFICATION.md).
+A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` builds unsigned x64 and native ARM64 packages on separate native runners. It requires x64 `0x8664` and ARM64 `0xAA64` across build output, standalone assets, and expanded ZIPs; attests both ZIPs, all six EXEs, and the combined checksum inventory; and permits exactly 11 architecture-separated assets. Publication uses the immutable-release policy, creates a draft without overwriting an existing version, verifies exact name/length/digest before publishing, marks it latest, and requires immutable exact readback. The immutable stable [v0.6.0 release](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.0) passed that entire path in [Actions run 31864491738, attempt 2](https://github.com/hjosugi/iroha-zip/actions/runs/31864491738), after [non-publishing run 31864073772](https://github.com/hjosugi/iroha-zip/actions/runs/31864073772) passed the same package path. Attempt 1 stopped before publication when GitHub's x64 signing-certificate endpoint transiently returned HTTP 403; rerunning the complete attempt preserved architecture isolation and succeeded. An independent public re-download matched all 11 API digests and byte lengths, eight checksum subjects, two sidecars, every direct and ZIP-contained PE identity, all ZIP-to-standalone bytes, both bilingual package trees and checked-in source documents, backend non-inclusion, annotated tag object `4464c6b61ee809d9079a45b29c1626df5188303d`, exact commit `4464e4fb7ef36e1e24c54969df57817dd4202b25`, and all nine hosted-runner-only tag-ref attestations; all six distinct executables had empty Authenticode Certificate Tables as disclosed. The public project-root, Japanese, English, JavaScript, CSS, favicon, robots, and sitemap resources returned HTTP 200 and matched the source deployed by [Pages run 31863791453](https://github.com/hjosugi/iroha-zip/actions/runs/31863791453) byte-for-byte. `v0.5.3` was the previous complete-contract release, `v0.4.1` was the first post-policy immutable release, and `v0.4.0` predates enforcement and remains mutable. The future Authenticode verification path remains available locally but is inactive until the owner configures and independently reviews a signing identity. See [release verification](RELEASE_VERIFICATION.md).
 
 ## Still requires a real Windows validation machine
 
