@@ -116,6 +116,16 @@ fn packaged_release_documents_match_the_crate_version() {
 
     let updater = include_str!("../docs/UPDATER.md");
     assert!(updater.contains(&tag));
+
+    let threat_model = include_str!("../docs/THREAT_MODEL.md");
+    assert!(
+        threat_model.contains(&format!("未署名`{tag}`は")),
+        "threat model is missing the current unsigned release marker"
+    );
+    assert!(
+        threat_model.contains(&format!("evidence/releases/{tag}")),
+        "threat model is missing the current release-evidence snapshot"
+    );
 }
 
 #[test]
