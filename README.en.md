@@ -211,7 +211,7 @@ dist\iroha-zip\
 dist\iroha-zip-0.6.1-windows-x64.zip
 ```
 
-The normal invocation creates the x64 package; pass `-Target aarch64-pc-windows-msvc` for a local ARM64 build. The tag-driven workflow builds both packages independently on native x64 and ARM64 runners. Official releases attach two ZIPs, six standalone executables, two ZIP sidecars, one combined SHA-256 inventory, and GitHub artifact attestations. See [About unsigned releases](docs/UNSIGNED_RELEASE.md) for SmartScreen and independent verification guidance. The strict verification path required for future Authenticode-signed releases remains documented in the [release verification specification](docs/RELEASE_VERIFICATION.md).
+The normal invocation creates the x64 package; pass `-Target aarch64-pc-windows-msvc` for a local ARM64 build. The tag-driven workflow builds both packages independently on native x64 and ARM64 runners. Official releases attach two ZIPs, six standalone executables, two ZIP sidecars, one combined SHA-256 inventory, and GitHub artifact attestations. See [About unsigned releases](docs/UNSIGNED_RELEASE.md) for SmartScreen and independent verification guidance. The strict verification path required for future Authenticode-signed releases remains documented in the [release verification specification](docs/RELEASE_VERIFICATION.md), while the current publication result is fixed in the [v0.6.1 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.1).
 
 If `Cargo.lock` is initially absent, the script creates it. Review and commit it; all subsequent builds use `--locked`.
 
