@@ -27,9 +27,9 @@ buildを主張しません。依存crateのpanic位置には、一般的なGitHu
 source prefix（`C:\Users\runneradmin\.cargo\registry\src\...`）も残ります。6 EXEのASCII／UTF-16
 文字列検査では、repository workspace path、runner temporary-directory path、明白なsecret-value
 markerは検出されませんでしたが、build-path-independentとも主張しません。必ず公開Release自身の
-`SHA256SUMS.txt`とtag-ref attestationを確認してください。
+`SHA256SUMS.txt`、release attestation、tag-ref workflow attestationを確認してください。
 
-未署名であることは、ファイルが安全であることも危険であることも単独では証明しません。リポジトリ、ハッシュ、GitHub artifact attestation、公開ソースを組み合わせて出所を確認してください。
+未署名であることは、ファイルが安全であることも危険であることも単独では証明しません。リポジトリ、ハッシュ、GitHub release／workflow attestations、公開ソースを組み合わせて出所を確認してください。
 
 ## English
 
@@ -58,6 +58,7 @@ PDB GUIDs. Dependency panic locations also retain the generic GitHub-hosted runn
 source prefix (`C:\Users\runneradmin\.cargo\registry\src\...`). An ASCII/UTF-16 string scan of all
 six EXEs found no repository-workspace path, runner temporary-directory path, or obvious
 secret-value marker. Bit-reproducible or build-path-independent PE/PDB output is not currently
-claimed. Always verify the published Release's own `SHA256SUMS.txt` and tag-ref attestation.
+claimed. Always verify the published Release's own `SHA256SUMS.txt`, release attestation, and
+tag-ref workflow attestation.
 
-The absence of an Authenticode signature does not, by itself, prove that a file is safe or unsafe. Establish provenance by combining the repository URL, SHA-256 digest, GitHub artifact attestation, and published source.
+The absence of an Authenticode signature does not, by itself, prove that a file is safe or unsafe. Establish provenance by combining the repository URL, SHA-256 digest, GitHub release/workflow attestations, and published source.

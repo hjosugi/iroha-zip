@@ -10,7 +10,7 @@ iroha-zipは、未信頼の圧縮ファイルをWindows上でできるだけ小�
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/hjosugi/iroha-zip/releases/latest) から Windows x64／native ARM64 ZIP、または各architectureの個別EXEをダウンロードできます。現在の公式バイナリは未署名です。`SHA256SUMS.txt`とGitHub artifact attestationで出所を確認してください。詳しい確認手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)にあります。
+[GitHub Releases](https://github.com/hjosugi/iroha-zip/releases/latest) から Windows x64／native ARM64 ZIP、または各architectureの個別EXEをダウンロードできます。現在の公式バイナリは未署名です。`SHA256SUMS.txt`とGitHub release／workflow attestationsで出所を確認してください。詳しい確認手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)にあります。
 
 配布物にはlibarchive / `bsdtar.exe`を同梱していません。初回起動後、設定画面から自分が信頼するバックエンドを取り込む必要があります。
 
@@ -212,7 +212,7 @@ dist\iroha-zip\
    dist\iroha-zip-0.6.2-windows-x64.zip
 ```
 
-この通常実行はx64 packageを作成します。ARM64をローカルbuildする場合は`-Target aarch64-pc-windows-msvc`を指定します。tag-driven workflowはnative x64／ARM64 runnerで両packageを別々に作成します。公式リリースには2つのZIP、6つの個別EXE、2つのZIP sidecar、全体SHA-256一覧を添付し、GitHub artifact attestationも発行します。未署名であること、SmartScreen警告、独立検証手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)を参照してください。将来Authenticode署名を有効にするための厳格な検証経路は[リリース検証仕様](docs/RELEASE_VERIFICATION.md)に保持し、最新の独立検証済み公開結果は[v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2)へ固定しています。
+この通常実行はx64 packageを作成します。ARM64をローカルbuildする場合は`-Target aarch64-pc-windows-msvc`を指定します。tag-driven workflowはnative x64／ARM64 runnerで両packageを別々に作成します。公式リリースには2つのZIP、6つの個別EXE、2つのZIP sidecar、全体SHA-256一覧と、GitHub release／workflow attestationsがあります。未署名であること、SmartScreen警告、独立検証手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)を参照してください。将来Authenticode署名を有効にするための厳格な検証経路は[リリース検証仕様](docs/RELEASE_VERIFICATION.md)に保持し、最新の独立検証済み公開結果は[v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2)へ固定しています。
 
 初回ビルド時に`Cargo.lock`がない場合は生成されます。以後は`Cargo.lock`をバージョン管理し、`--locked`でビルドしてください。
 
