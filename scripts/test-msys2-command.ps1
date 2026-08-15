@@ -23,6 +23,9 @@ if ($exporterSource -notmatch '\. \(Join-Path \$PSScriptRoot "msys2-command\.ps1
     $exporterSource -notmatch 'Invoke-IrohaZipMsys2Command') {
     throw "The backend exporter is not wired to the tested bounded launcher."
 }
+if ($exporterSource -match '(?m)^\s*&\s+\$bsdtar\b') {
+    throw "The backend exporter invokes bsdtar outside the tested bounded launcher."
+}
 $packagerSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot "build-release.ps1") -Raw
 if ($packagerSource -notmatch '"msys2-command\.ps1"') {
     throw "Release packages do not include the backend exporter's bounded launcher."

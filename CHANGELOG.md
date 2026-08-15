@@ -27,6 +27,8 @@
   policy, deterministic regression, native x64/ARM64 CI, CodeQL, and a five-target sanitizer campaign.
 - Give double-click shell warnings and failures Japanese and English outcome summaries while
   retaining the underlying technical details, with regression coverage for every error category.
+- Route the backend exporter's signed-package `bsdtar` license inventory through the same bounded
+  MSYS2 launcher as `ldd` and pacman, and reject any reintroduced direct invocation in normal CI.
 
 ## 0.6.2 - 2026-08-15
 

@@ -53,6 +53,8 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
   有界retryで照合します。PagesはRelease APIのasset名、正のbyte長、SHA-256 digestも必須にします。
 - 全workflow jobのtimeout、全checkoutのcredential非保持、full-SHA action、write permission、
   repository内Markdown link、日英contribution template／Pages metadataを通常testで固定しました。
+- backend exporterの署名済みpackageにlicense一覧を取る`bsdtar`も、`ldd`やpacmanと同じ
+  個別180秒timeoutのlauncherを必ず通し、直接起動の再導入を通常CIで拒否します。
 
 ### 既知の境界
 
@@ -130,6 +132,9 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
 - Lock every workflow job timeout, discarded checkout credential, full-SHA action, write permission,
   repository Markdown link, and bilingual contribution-template/Pages-metadata contract into
   ordinary tests.
+- Route the backend exporter's `bsdtar` inventory of signed-package licenses through the same
+  per-command 180-second launcher as `ldd` and pacman, and make ordinary CI reject any reintroduced
+  direct invocation.
 
 ### Known boundaries
 
