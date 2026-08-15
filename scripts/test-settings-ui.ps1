@@ -20,10 +20,32 @@ Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 
+ [StructLayout(LayoutKind.Sequential)]
+ public struct IrohaZipRect {
+     public int Left;
+     public int Top;
+     public int Right;
+     public int Bottom;
+ }
+
 public static class IrohaZipUiAutomationNative {
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessageW(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessageW(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetWindowRect(IntPtr window, out IrohaZipRect rectangle);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetWindowDpiAwarenessContext(IntPtr window);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AreDpiAwarenessContextsEqual(IntPtr first, IntPtr second);
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetParent(IntPtr window);
@@ -36,6 +58,7 @@ public static class IrohaZipUiAutomationNative {
 $ButtonClickMessage = 0x00F5
 $CommandMessage = 0x0111
 $CloseMessage = 0x0010
+$DpiChangedMessage = 0x02E0
 
 function Wait-Until {
     param(
@@ -263,6 +286,106 @@ function Invoke-AndCancelFolderPicker {
     Wait-ForNoSecondaryWindow -Process $Process -MainWindow $MainWindow
 }
 
+function Test-SyntheticDpiTransition {
+    param(
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [hashtable]$Controls
+    )
+
+    $windowHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
+    $originalWindowRect = [IrohaZipRect]::new()
+    if (-not [IrohaZipUiAutomationNative]::GetWindowRect(
+        $windowHandle,
+        [ref]$originalWindowRect
+    )) {
+        throw "Cannot read the settings window rectangle before the synthetic DPI transition."
+    }
+
+    $sampleIds = @(2002, 2012)
+    $originalWidths = @{}
+    foreach ($id in $sampleIds) {
+        $originalWidths[$id] = $Controls[$id].Current.BoundingRectangle.Width
+        if ($originalWidths[$id] -le 0) {
+            throw "Control $id has no measurable width before the synthetic DPI transition."
+        }
+    }
+
+    $scaledWindowRect = [IrohaZipRect]::new()
+    $scaledWindowRect.Left = $originalWindowRect.Left
+    $scaledWindowRect.Top = $originalWindowRect.Top
+    $scaledWindowRect.Right = $originalWindowRect.Right
+    $scaledWindowRect.Bottom = $originalWindowRect.Bottom
+    $scaledWindowRect.Right -= 16
+    $scaledWindowRect.Bottom -= 16
+    $rectanglePointer = [Runtime.InteropServices.Marshal]::AllocHGlobal(
+        [Runtime.InteropServices.Marshal]::SizeOf([type][IrohaZipRect])
+    )
+    try {
+        [Runtime.InteropServices.Marshal]::StructureToPtr(
+            $scaledWindowRect,
+            $rectanglePointer,
+            $false
+        )
+        $dpi144 = [UIntPtr]([uint64](144 -bor (144 -shl 16)))
+        [void][IrohaZipUiAutomationNative]::SendMessageW(
+            $windowHandle,
+            $DpiChangedMessage,
+            $dpi144,
+            $rectanglePointer
+        )
+        Wait-Until {
+            $Controls[2002].Current.BoundingRectangle.Width -gt
+                ($originalWidths[2002] * 1.4)
+        } -Description "the controls to relayout at 150% DPI" | Out-Null
+
+        $actualWindowRect = [IrohaZipRect]::new()
+        if (-not [IrohaZipUiAutomationNative]::GetWindowRect(
+            $windowHandle,
+            [ref]$actualWindowRect
+        ) -or
+            $actualWindowRect.Left -ne $scaledWindowRect.Left -or
+            $actualWindowRect.Top -ne $scaledWindowRect.Top -or
+            $actualWindowRect.Right -ne $scaledWindowRect.Right -or
+            $actualWindowRect.Bottom -ne $scaledWindowRect.Bottom) {
+            throw "WM_DPICHANGED did not apply the suggested top-level window rectangle."
+        }
+        foreach ($id in $sampleIds) {
+            $expectedWidth = $originalWidths[$id] * 1.5
+            $actualWidth = $Controls[$id].Current.BoundingRectangle.Width
+            if ([Math]::Abs($actualWidth - $expectedWidth) -gt 3) {
+                throw "Control $id width did not scale from 96 to 144 DPI: expected $expectedWidth, actual $actualWidth."
+            }
+        }
+
+        [Runtime.InteropServices.Marshal]::StructureToPtr(
+            $originalWindowRect,
+            $rectanglePointer,
+            $false
+        )
+        $dpi96 = [UIntPtr]([uint64](96 -bor (96 -shl 16)))
+        [void][IrohaZipUiAutomationNative]::SendMessageW(
+            $windowHandle,
+            $DpiChangedMessage,
+            $dpi96,
+            $rectanglePointer
+        )
+        Wait-Until {
+            [Math]::Abs(
+                $Controls[2002].Current.BoundingRectangle.Width - $originalWidths[2002]
+            ) -le 2
+        } -Description "the controls to return to 100% DPI" | Out-Null
+        foreach ($id in $sampleIds) {
+            $restoredWidth = $Controls[$id].Current.BoundingRectangle.Width
+            if ([Math]::Abs($restoredWidth - $originalWidths[$id]) -gt 2) {
+                throw "Control $id did not return to its 96-DPI width."
+            }
+        }
+    }
+    finally {
+        [Runtime.InteropServices.Marshal]::FreeHGlobal($rectanglePointer)
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($BackendDirectory) -ne
     [string]::IsNullOrWhiteSpace($EvidenceOutput)) {
     throw "-BackendDirectory and -EvidenceOutput must be provided together."
@@ -307,6 +430,17 @@ try {
     if ($window.Current.Name -notlike "$expectedWindowPrefix*") {
         throw "Unexpected settings window name: $($window.Current.Name)"
     }
+    $windowHandle = [IntPtr]$window.Current.NativeWindowHandle
+    $perMonitorV2 = [IntPtr](-4)
+    $windowDpiContext = [IrohaZipUiAutomationNative]::GetWindowDpiAwarenessContext(
+        $windowHandle
+    )
+    if (-not [IrohaZipUiAutomationNative]::AreDpiAwarenessContextsEqual(
+        $windowDpiContext,
+        $perMonitorV2
+    )) {
+        throw "The settings window is not running in the Per-Monitor V2 DPI-awareness context."
+    }
 
     $editIds = @(2001, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011)
     $comboIds = @(2002, 2014, 2015)
@@ -341,6 +475,8 @@ try {
             throw "Control $($entry.Key) is not localized for ${Language}: $($controls[[int]$entry.Key].Current.Name)"
         }
     }
+
+    Test-SyntheticDpiTransition -MainWindow $window -Controls $controls
 
     foreach ($id in @(1001, 1003, 1004)) {
         Invoke-AndCancelFolderPicker -Process $process -MainWindow $window `
@@ -430,7 +566,7 @@ try {
         throw "Settings did not exit after confirming unsaved-change discard."
     }
 
-    Write-Host "Settings UI Automation contract passed for 26 controls and safe button paths."
+    Write-Host "Settings UI Automation contract passed for 26 controls, 96/144/96-DPI relayout, and safe button paths."
 
     if ($null -ne $backendPath) {
         $process = Start-Process -FilePath $executablePath `
@@ -497,6 +633,8 @@ try {
             language = $Language
             generatedAtUtc = [DateTime]::UtcNow.ToString("o")
             controlCount = 26
+            dpiAwareness = "PerMonitorV2"
+            syntheticDpiTransitions = @(96, 144, 96)
             safeFolderPickerCancellations = 3
             restoreDefaultsCancelAndConfirm = $true
             cancelButtonDiscardCancelAndConfirm = $true

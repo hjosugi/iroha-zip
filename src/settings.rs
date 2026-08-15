@@ -24,6 +24,30 @@ pub fn scale_logical(value: i32, dpi: u32) -> i32 {
     })
 }
 
+/// Rescales an already-physical value between two DPI coordinate spaces.
+///
+/// This is used for transient state such as a scrollbar position. Static
+/// control geometry should continue to use [`scale_logical`] so every DPI
+/// transition starts from the lossless 96-DPI layout baseline.
+pub fn scale_between_dpi(value: i32, source_dpi: u32, target_dpi: u32) -> i32 {
+    let source_dpi = source_dpi.max(BASE_DPI);
+    let target_dpi = target_dpi.max(BASE_DPI);
+    let numerator = i64::from(value) * i64::from(target_dpi);
+    let half_source = i64::from(source_dpi / 2);
+    let rounded = if numerator >= 0 {
+        numerator + half_source
+    } else {
+        numerator - half_source
+    };
+    i32::try_from(rounded / i64::from(source_dpi)).unwrap_or_else(|_| {
+        if rounded.is_negative() {
+            i32::MIN
+        } else {
+            i32::MAX
+        }
+    })
+}
+
 pub mod control_id {
     pub const BACKEND_BROWSE: usize = 1001;
     pub const BACKEND_DOCTOR: usize = 1002;

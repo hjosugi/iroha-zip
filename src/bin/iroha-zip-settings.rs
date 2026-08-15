@@ -10,7 +10,8 @@ mod windows_app {
         AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode, default_config_path,
     };
     use iroha_zip::settings::{
-        BASE_DPI, SettingsAction, SettingsField, SettingsForm, control_id, scale_logical,
+        BASE_DPI, SettingsAction, SettingsField, SettingsForm, control_id, scale_between_dpi,
+        scale_logical,
     };
     use iroha_zip::util;
     use std::cell::{Cell, RefCell};
@@ -27,8 +28,8 @@ mod windows_app {
     };
     use windows::Win32::Globalization::GetUserDefaultUILanguage;
     use windows::Win32::Graphics::Gdi::{
-        COLOR_3DFACE, DEFAULT_GUI_FONT, GetStockObject, GetSysColorBrush, ScreenToClient,
-        UpdateWindow,
+        COLOR_3DFACE, CreateFontIndirectW, DEFAULT_GUI_FONT, DeleteObject, GetStockObject,
+        GetSysColorBrush, HFONT, ScreenToClient, UpdateWindow,
     };
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -36,7 +37,7 @@ mod windows_app {
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::Controls::SetScrollInfo;
-    use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
+    use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow, SystemParametersInfoForDpi};
     use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, GetFocus, SetFocus};
     use windows::Win32::UI::Shell::{
         FOS_DONTADDTORECENT, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS,
@@ -51,16 +52,17 @@ mod windows_app {
         GWLP_USERDATA, GetClientRect, GetMessageW, GetScrollInfo, GetSystemMetrics,
         GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HMENU, IDC_ARROW,
         IDC_WAIT, IDYES, IsChild, IsDialogMessageW, LoadCursorW, MB_ICONERROR, MB_ICONINFORMATION,
-        MB_ICONWARNING, MB_OK, MB_YESNO, MESSAGEBOX_STYLE, MSG, MessageBoxW, PostQuitMessage,
-        RegisterClassW, SB_BOTTOM, SB_HORZ, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP,
-        SB_THUMBPOSITION, SB_THUMBTRACK, SB_TOP, SB_VERT, SCROLLINFO, SIF_ALL, SIF_PAGE, SIF_POS,
-        SIF_RANGE, SM_CXSCREEN, SM_CYSCREEN, SW_ERASE, SW_INVALIDATE, SW_SCROLLCHILDREN,
-        SW_SHOWNORMAL, ScrollWindowEx, SendMessageW, SetCursor, SetWindowLongPtrW, SetWindowTextW,
+        MB_ICONWARNING, MB_OK, MB_YESNO, MESSAGEBOX_STYLE, MSG, MessageBoxW, NONCLIENTMETRICSW,
+        PostQuitMessage, RegisterClassW, SB_BOTTOM, SB_HORZ, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN,
+        SB_PAGEUP, SB_THUMBPOSITION, SB_THUMBTRACK, SB_TOP, SB_VERT, SCROLLINFO, SIF_ALL, SIF_PAGE,
+        SIF_POS, SIF_RANGE, SM_CXSCREEN, SM_CYSCREEN, SPI_GETNONCLIENTMETRICS, SW_ERASE,
+        SW_INVALIDATE, SW_SCROLLCHILDREN, SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOZORDER,
+        ScrollWindowEx, SendMessageW, SetCursor, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
         ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND,
-        WM_CREATE, WM_DESTROY, WM_HSCROLL, WM_MOUSEWHEEL, WM_NCCREATE, WM_SETFONT, WM_SIZE,
-        WM_VSCROLL, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_EX_CLIENTEDGE, WS_HSCROLL, WS_MAXIMIZEBOX,
-        WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_THICKFRAME, WS_VISIBLE,
-        WS_VSCROLL,
+        WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_HSCROLL, WM_MOUSEWHEEL, WM_NCCREATE, WM_SETFONT,
+        WM_SIZE, WM_VSCROLL, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_EX_CLIENTEDGE, WS_HSCROLL,
+        WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_THICKFRAME,
+        WS_VISIBLE, WS_VSCROLL,
     };
     use windows::core::{Error as WindowsError, HRESULT, PCWSTR};
 
@@ -150,12 +152,30 @@ mod windows_app {
         status: HWND,
     }
 
+    #[derive(Clone, Copy)]
+    struct ControlLayout {
+        window: HWND,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+    }
+
+    thread_local! {
+        static CREATED_CONTROL_LAYOUTS: RefCell<Vec<ControlLayout>> = const {
+            RefCell::new(Vec::new())
+        };
+    }
+
     struct App {
         config_path: PathBuf,
         controls: Controls,
         saved_config: RefCell<Config>,
         scroll_x: Cell<i32>,
         scroll_y: Cell<i32>,
+        dpi: Cell<u32>,
+        font: Cell<HFONT>,
+        control_layouts: Vec<ControlLayout>,
     }
 
     impl App {
@@ -166,6 +186,9 @@ mod windows_app {
                 saved_config: RefCell::new(Config::default()),
                 scroll_x: Cell::new(0),
                 scroll_y: Cell::new(0),
+                dpi: Cell::new(BASE_DPI),
+                font: Cell::new(HFONT::default()),
+                control_layouts: Vec::new(),
             }
         }
 
@@ -175,6 +198,9 @@ mod windows_app {
             instance: HINSTANCE,
         ) -> Result<(), String> {
             let config = Config::load(&self.config_path).map_err(|error| error.to_string())?;
+            self.dpi
+                .set(unsafe { GetDpiForWindow(parent) }.max(BASE_DPI));
+            CREATED_CONTROL_LAYOUTS.with(|layouts| layouts.borrow_mut().clear());
 
             unsafe {
                 add_static(
@@ -684,9 +710,144 @@ mod windows_app {
                 )?;
             }
 
+            self.control_layouts =
+                CREATED_CONTROL_LAYOUTS.with(|layouts| std::mem::take(&mut *layouts.borrow_mut()));
+            self.refresh_font(self.dpi.get())?;
+
             self.apply_config(&config);
             self.saved_config.replace(config);
             self.update_dirty_title(parent);
+            self.update_scrollbar(parent);
+            Ok(())
+        }
+
+        fn scale(&self, value: i32) -> i32 {
+            scale_logical(value, self.dpi.get())
+        }
+
+        fn refresh_font(&self, dpi: u32) -> Result<(), String> {
+            let mut metrics = NONCLIENTMETRICSW {
+                cbSize: u32::try_from(size_of::<NONCLIENTMETRICSW>()).unwrap_or(u32::MAX),
+                ..Default::default()
+            };
+            unsafe {
+                SystemParametersInfoForDpi(
+                    SPI_GETNONCLIENTMETRICS.0,
+                    metrics.cbSize,
+                    Some((&raw mut metrics).cast::<c_void>()),
+                    0,
+                    dpi,
+                )
+            }
+            .map_err(|error| {
+                format!(
+                    "{}: {error}",
+                    tr(
+                        "DPI対応system fontを取得できません",
+                        "Cannot obtain the DPI-aware system font"
+                    )
+                )
+            })?;
+            let font = unsafe { CreateFontIndirectW(&raw const metrics.lfMessageFont) };
+            if font.is_invalid() {
+                return Err(format!(
+                    "{}: {}",
+                    tr(
+                        "DPI対応system fontを作成できません",
+                        "Cannot create the DPI-aware system font"
+                    ),
+                    WindowsError::from_thread()
+                ));
+            }
+
+            for layout in &self.control_layouts {
+                unsafe {
+                    SendMessageW(
+                        layout.window,
+                        WM_SETFONT,
+                        Some(WPARAM(font.0 as usize)),
+                        Some(LPARAM(1)),
+                    );
+                }
+            }
+            release_font(self.font.replace(font));
+            Ok(())
+        }
+
+        fn layout_controls(&self) -> Result<(), String> {
+            let scroll_x = self.scroll_x.get();
+            let scroll_y = self.scroll_y.get();
+            for layout in &self.control_layouts {
+                unsafe {
+                    SetWindowPos(
+                        layout.window,
+                        None,
+                        self.scale(layout.x) - scroll_x,
+                        self.scale(layout.y) - scroll_y,
+                        self.scale(layout.width),
+                        self.scale(layout.height),
+                        SWP_NOZORDER | SWP_NOACTIVATE,
+                    )
+                }
+                .map_err(|error| {
+                    format!(
+                        "{}: {error}",
+                        tr(
+                            "DPI変更後にcontrolを再配置できません",
+                            "Cannot relayout a control after the DPI change"
+                        )
+                    )
+                })?;
+            }
+            Ok(())
+        }
+
+        unsafe fn handle_dpi_changed(
+            &self,
+            parent: HWND,
+            wparam: WPARAM,
+            lparam: LPARAM,
+        ) -> Result<(), String> {
+            let suggested = lparam.0 as *const RECT;
+            if suggested.is_null() {
+                return Err(tr(
+                    "DPI変更通知に推奨window領域がありません。",
+                    "The DPI-change notification has no suggested window rectangle.",
+                )
+                .to_owned());
+            }
+            let new_dpi = u32::try_from(wparam.0 & 0xffff)
+                .unwrap_or(BASE_DPI)
+                .max(BASE_DPI);
+            let old_dpi = self.dpi.replace(new_dpi);
+            self.scroll_x
+                .set(scale_between_dpi(self.scroll_x.get(), old_dpi, new_dpi));
+            self.scroll_y
+                .set(scale_between_dpi(self.scroll_y.get(), old_dpi, new_dpi));
+
+            let suggested = unsafe { &*suggested };
+            unsafe {
+                SetWindowPos(
+                    parent,
+                    None,
+                    suggested.left,
+                    suggested.top,
+                    suggested.right - suggested.left,
+                    suggested.bottom - suggested.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                )
+            }
+            .map_err(|error| {
+                format!(
+                    "{}: {error}",
+                    tr(
+                        "DPI変更後にwindowを再配置できません",
+                        "Cannot resize the window after the DPI change"
+                    )
+                )
+            })?;
+            self.layout_controls()?;
+            self.refresh_font(new_dpi)?;
             self.update_scrollbar(parent);
             Ok(())
         }
@@ -1216,8 +1377,8 @@ mod windows_app {
             }
             let page_width = (client.right - client.left).max(1);
             let page_height = (client.bottom - client.top).max(1);
-            let content_width = scale_for_window(parent, CONTENT_WIDTH).max(1);
-            let content_height = scale_for_window(parent, CONTENT_HEIGHT).max(1);
+            let content_width = self.scale(CONTENT_WIDTH).max(1);
+            let content_height = self.scale(CONTENT_HEIGHT).max(1);
             let max_horizontal_scroll = (content_width - page_width).max(0);
             let max_scroll = (content_height - page_height).max(0);
             if self.scroll_x.get() > max_horizontal_scroll {
@@ -1258,7 +1419,7 @@ mod windows_app {
                 return;
             }
             let page_width = (client.right - client.left).max(1);
-            let content_width = scale_for_window(parent, CONTENT_WIDTH).max(1);
+            let content_width = self.scale(CONTENT_WIDTH).max(1);
             let target = requested.clamp(0, (content_width - page_width).max(0));
             let previous = self.scroll_x.replace(target);
             if previous != target {
@@ -1292,7 +1453,7 @@ mod windows_app {
                 return;
             }
             let page_height = (client.bottom - client.top).max(1);
-            let content_height = scale_for_window(parent, CONTENT_HEIGHT).max(1);
+            let content_height = self.scale(CONTENT_HEIGHT).max(1);
             let target = requested.clamp(0, (content_height - page_height).max(0));
             let previous = self.scroll_y.replace(target);
             if previous != target {
@@ -1331,7 +1492,7 @@ mod windows_app {
                 return;
             }
             let command = i32::from(u16::try_from(wparam.0 & 0xffff).unwrap_or(0));
-            let line = scale_for_window(parent, 32).max(1);
+            let line = self.scale(32).max(1);
             let page = i32::try_from(info.nPage).unwrap_or(i32::MAX).max(line);
             let requested = if command == SB_LINEUP.0 {
                 info.nPos - line
@@ -1361,7 +1522,7 @@ mod windows_app {
             let wheel_bits = u16::try_from((wparam.0 >> 16) & 0xffff).unwrap_or(0);
             let delta = i32::from(wheel_bits.cast_signed());
             if delta != 0 {
-                let line = scale_for_window(parent, 32).max(1);
+                let line = self.scale(32).max(1);
                 self.scroll_vertical_to(parent, self.scroll_y.get() - delta.signum() * line * 3);
             }
         }
@@ -1390,7 +1551,7 @@ mod windows_app {
                 let _ = ScreenToClient(parent, &raw mut top_left);
                 let _ = ScreenToClient(parent, &raw mut bottom_right);
             }
-            let margin = scale_for_window(parent, 12).max(1);
+            let margin = self.scale(12).max(1);
             if top_left.x < margin {
                 self.scroll_horizontal_to(parent, self.scroll_x.get() + top_left.x - margin);
             } else if bottom_right.x > client.right - margin {
@@ -1507,6 +1668,20 @@ mod windows_app {
                 }
                 SettingsAction::Save => self.save(parent),
                 SettingsAction::Cancel => self.request_close(parent),
+            }
+        }
+    }
+
+    impl Drop for App {
+        fn drop(&mut self) {
+            release_font(self.font.replace(HFONT::default()));
+        }
+    }
+
+    fn release_font(font: HFONT) {
+        if !font.is_invalid() {
+            unsafe {
+                let _ = DeleteObject(font.into());
             }
         }
     }
@@ -1705,6 +1880,15 @@ mod windows_app {
             WM_SIZE => {
                 if !app_pointer.is_null() {
                     unsafe { (*app_pointer).update_scrollbar(window) };
+                }
+                LRESULT(0)
+            }
+            WM_DPICHANGED => {
+                if !app_pointer.is_null()
+                    && let Err(error) =
+                        unsafe { (*app_pointer).handle_dpi_changed(window, wparam, lparam) }
+                {
+                    show_error(Some(window), &error);
                 }
                 LRESULT(0)
             }
@@ -1935,20 +2119,20 @@ mod windows_app {
         let class = wide(class);
         let text = wide(text);
         let menu = id.map(|value| HMENU(value as *mut c_void));
-        let x = scale_for_window(parent, x);
-        let y = scale_for_window(parent, y);
-        let width = scale_for_window(parent, width);
-        let height = scale_for_window(parent, height);
+        let scaled_x = scale_for_window(parent, x);
+        let scaled_y = scale_for_window(parent, y);
+        let scaled_width = scale_for_window(parent, width);
+        let scaled_height = scale_for_window(parent, height);
         let control = unsafe {
             CreateWindowExW(
                 extended_style,
                 PCWSTR(class.as_ptr()),
                 PCWSTR(text.as_ptr()),
                 style,
-                x,
-                y,
-                width,
-                height,
+                scaled_x,
+                scaled_y,
+                scaled_width,
+                scaled_height,
                 Some(parent),
                 menu,
                 Some(instance),
@@ -1970,6 +2154,15 @@ mod windows_app {
                 Some(LPARAM(1)),
             );
         }
+        CREATED_CONTROL_LAYOUTS.with(|layouts| {
+            layouts.borrow_mut().push(ControlLayout {
+                window: control,
+                x,
+                y,
+                width,
+                height,
+            });
+        });
         Ok(control)
     }
 
