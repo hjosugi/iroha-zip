@@ -1,3 +1,46 @@
+use std::fs;
+use std::path::Path;
+
+fn latest_release_evidence_tag() -> String {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("evidence/releases");
+    let mut versions = Vec::new();
+    for entry in fs::read_dir(&root).expect("release evidence root must be readable") {
+        let entry = entry.expect("release evidence entry must be readable");
+        let file_type = entry
+            .file_type()
+            .expect("release evidence entry type must be readable");
+        assert!(
+            file_type.is_dir() && !file_type.is_symlink(),
+            "release evidence root must contain only real snapshot directories"
+        );
+        let name = entry
+            .file_name()
+            .into_string()
+            .expect("release evidence directory names must be UTF-8");
+        let components = name
+            .strip_prefix('v')
+            .unwrap_or_else(|| panic!("release evidence directory is not a tag: {name}"))
+            .split('.')
+            .map(|component| {
+                component.parse::<u64>().unwrap_or_else(|error| {
+                    panic!("release evidence directory has invalid semver {name}: {error}")
+                })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            components.len(),
+            3,
+            "release evidence directory must use vX.Y.Z: {name}"
+        );
+        versions.push(((components[0], components[1], components[2]), name));
+    }
+    versions
+        .into_iter()
+        .max_by_key(|(version, _)| *version)
+        .map(|(_, tag)| tag)
+        .expect("at least one completed release evidence snapshot must exist")
+}
+
 #[test]
 fn packaged_release_documents_match_the_crate_version() {
     let version = env!("CARGO_PKG_VERSION");
@@ -118,13 +161,14 @@ fn packaged_release_documents_match_the_crate_version() {
     assert!(updater.contains(&tag));
 
     let threat_model = include_str!("../docs/THREAT_MODEL.md");
+    let latest_evidence_tag = latest_release_evidence_tag();
     assert!(
-        threat_model.contains(&format!("未署名`{tag}`は")),
-        "threat model is missing the current unsigned release marker"
+        threat_model.contains(&format!("未署名`{latest_evidence_tag}`は")),
+        "threat model is missing the latest completed unsigned release marker"
     );
     assert!(
-        threat_model.contains(&format!("evidence/releases/{tag}")),
-        "threat model is missing the current release-evidence snapshot"
+        threat_model.contains(&format!("evidence/releases/{latest_evidence_tag}")),
+        "threat model is missing the latest completed release-evidence snapshot"
     );
 }
 
