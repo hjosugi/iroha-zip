@@ -7,7 +7,8 @@
   environment/config/file/log storage, or unsandboxed fallback.
 - Add a bounded bilingual native password dialog, non-`Clone` zeroizing UTF-16/UTF-8 secret
   storage, explicit inherited-handle allowlisting, child token self-verification, pre-creation entry
-  rejection, and fail-closed EOF, timeout, overflow, crash, wrong-password, and cancellation paths.
+  rejection, exact separator/alias validation, and fail-closed EOF, timeout, overflow, crash,
+  wrong-password, and cancellation paths.
 - Deliver the bounded password into a dedicated 4 KiB pipe after external token verification while
   the child remains suspended, close-delimit it without a synchronous flush, and only then resume
   the child, preventing the reader/flush deadlock observed by native ARM64 E2E.

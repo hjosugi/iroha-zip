@@ -362,6 +362,7 @@ fn extract_archive_entries(
     let mut files = 0u64;
     let mut directories = 0u64;
     let mut total_bytes = 0u64;
+    let bounded_path_bytes = limits.max_path_bytes.min(MAX_INTERNAL_PATH_BYTES);
     loop {
         let mut entry = ptr::null_mut();
         let status = unsafe { (api.next_header)(archive, &raw mut entry) };
@@ -373,19 +374,19 @@ fn extract_archive_entries(
                 "libarchive could not read a password archive header: status {status}"
             )));
         }
-        let name = unsafe { bounded_c_bytes((api.pathname_utf8)(entry), limits.max_path_bytes) }?;
+        let name = unsafe { bounded_c_bytes((api.pathname_utf8)(entry), bounded_path_bytes) }?;
         let name = std::str::from_utf8(&name).map_err(|_| {
             IrohaZipError::Policy(
                 "libarchive returned a password archive pathname that is not UTF-8".to_owned(),
             )
         })?;
-        let relative = validated_member_path(name, limits, &mut aliases)?;
+        let filetype = unsafe { (api.entry_filetype)(entry) };
+        let relative = validated_member_path(name, filetype == AE_IFDIR, limits, &mut aliases)?;
         if unsafe { (api.hardlink_is_set)(entry) } != 0 {
             return Err(IrohaZipError::Policy(format!(
                 "hard-linked archive member is rejected before creation: {name:?}"
             )));
         }
-        let filetype = unsafe { (api.entry_filetype)(entry) };
         match filetype {
             AE_IFDIR => {
                 ensure_directory_chain(
@@ -444,9 +445,16 @@ fn extract_archive_entries(
 
 fn validated_member_path(
     name: &str,
+    is_directory: bool,
     limits: &policy::Limits,
     aliases: &mut HashSet<String>,
 ) -> Result<PathBuf> {
+    policy::validate_archive_member_name(name, limits)?;
+    if name.ends_with(['/', '\\']) && !is_directory {
+        return Err(IrohaZipError::Policy(format!(
+            "regular password archive member has a directory marker: {name:?}"
+        )));
+    }
     let name = name.strip_suffix(['/', '\\']).unwrap_or(name);
     let mut relative = PathBuf::new();
     for component in name.split(['/', '\\']) {
@@ -1015,4 +1023,33 @@ unsafe fn required_symbol<T: Copy>(module: *mut c_void, name: &'static CStr) -> 
 
 fn wide_null(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(Some(0)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_member_paths_reject_erased_separators_and_aliases() {
+        let limits = policy::Limits::default();
+        for unsafe_name in [
+            "/absolute.txt",
+            "\\absolute.txt",
+            "folder//item.txt",
+            "folder\\\\item.txt",
+            "./item.txt",
+            "folder/../item.txt",
+        ] {
+            assert!(
+                validated_member_path(unsafe_name, false, &limits, &mut HashSet::new()).is_err(),
+                "unsafe member was accepted: {unsafe_name:?}"
+            );
+        }
+
+        assert!(validated_member_path("file.txt/", false, &limits, &mut HashSet::new()).is_err());
+
+        let mut aliases = HashSet::new();
+        assert!(validated_member_path("Folder/item.txt", false, &limits, &mut aliases).is_ok());
+        assert!(validated_member_path("folder\\ITEM.TXT", false, &limits, &mut aliases).is_err());
+    }
 }

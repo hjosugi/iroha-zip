@@ -299,7 +299,7 @@ fn validate_archive_listing_inner(
     Ok(entries)
 }
 
-fn validate_archive_member_name(member: &str, limits: &Limits) -> Result<()> {
+pub(crate) fn validate_archive_member_name(member: &str, limits: &Limits) -> Result<()> {
     if member.is_empty()
         || member.starts_with(['/', '\\'])
         || member.as_bytes().get(1).is_some_and(|byte| *byte == b':')
