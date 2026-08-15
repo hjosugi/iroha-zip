@@ -37,14 +37,18 @@ AppContainerがcapability 0であること、7 profile/rootと全一時rootが�
 fail closedしました。
 
 暗号化ZIPを含むschema-v5拡張はexact `main` commit
-`5cbc6c27fb67466369b20180a9c5aa2fdd3f6713`の
-[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031)で合格しました。
+`9debd02e819899f8dbdfdd5281d3d0b2a68a89db`の
+[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650)で合格しました。
 downloadした5 JSONを独立に確認し、3暗号方式すべてで保護された日英control、一回限りchannel、
 passwordのstdout／stderr非露出、sourceと同じpreview／extract tree、wrong-password／cancel時の
 destination非公開、全PEの`0xAA64` identity、完全cleanupを確認しました。
 全5 JSONはraw/canonical SHA-256とartifact API digest付きの
-[長期証跡snapshot](https://github.com/hjosugi/iroha-zip/tree/v0.6.1/evidence/windows/31868019031/windows-arm64-native)
+[長期証跡snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650/windows-arm64-native)
 にも保存しています。
+schema-v2 Settingsの2 reportは全26 controlsの正逆順、wrap、可視性、保存、dirty close取消を
+保持します。GitHub-hosted ARM64 desktopではspawnしたprocessのforeground/global UIA focusを
+取得できないため、限定した`AttachThreadInputSetFocus`／`UIAutomationFallback`経路を明記し、
+実Tab／Enter／Escape検証は`false`と記録します。これは物理keyboard証跡とは主張しません。
 
 ### 配布境界
 
@@ -133,14 +137,19 @@ The LPAC query returned `ERROR_INVALID_PARAMETER` on that Windows 11 ARM environ
 without a normal-AppContainer fallback.
 
 The schema-v5 encrypted-ZIP expansion passed for exact `main` commit
-`5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
-[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). Independent
+`9debd02e819899f8dbdfdd5281d3d0b2a68a89db` in
+[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650). Independent
 checks of all five downloaded JSON reports confirmed the protected bilingual control, one-use
 channel, password absence from stdout/stderr, source-identical preview/extraction trees for all three
 encryption modes, wrong-password/cancel destination absence, `0xAA64` identity for every PE, and
 complete cleanup.
 All five reports are also retained with raw/canonical SHA-256 values and the artifact API digest in the
-[durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/v0.6.1/evidence/windows/31868019031/windows-arm64-native).
+[durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650/windows-arm64-native).
+The two schema-v2 Settings reports preserve the exact 26-control forward/reverse order, wrap,
+visibility, save, and dirty-close cancellation actions. Because the GitHub-hosted ARM64 desktop does
+not expose foreground/global UIA focus for the spawned process, they identify the bounded
+`AttachThreadInputSetFocus`/`UIAutomationFallback` path and record real Tab, Enter, and Escape
+verification as false; this is not claimed as physical-keyboard evidence.
 
 ### Distribution boundary
 

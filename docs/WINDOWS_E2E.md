@@ -4,8 +4,8 @@ Updated: 2026-08-15
 
 This document defines the automated SAFE-001 evidence contract. The schema-v5 contract passed on
 both fixed-label x64 runners and the native `windows-11-arm` runner at exact `main` commit
-`5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
-[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). Independently
+`9debd02e819899f8dbdfdd5281d3d0b2a68a89db` in
+[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650). Independently
 downloaded JSON from all three environments records one effective `AC\Temp` path, successful
 in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven
 explicitly removed AppContainer profiles/roots per environment, all 14 named additional read formats
@@ -14,16 +14,21 @@ native ARM64 Japanese/English Settings, and the encrypted-ZIP/password assertion
 reports were selected by exact artifact filename and mechanically checked for schema-v5 success,
 three encryption modes, non-publication failures, malicious-corpus rejection, Settings diagnosis,
 Per-Monitor V2 awareness with drift-free synthetic 96→144→96 transitions, correct ARM64 PE identity,
-and complete cleanup. These results are evidence for the named disposable
+schema-v2 Settings keyboard traversal/shortcut evidence, and complete cleanup. Server 2022/2025
+records real `SendInput` for the complete forward/reverse 26-control Tab cycles, both wrap targets,
+Enter save/message dismissal, and Escape dirty-close request/cancellation. The hosted ARM64 reports
+preserve the same observed order and actions but explicitly mark the bounded non-key fallback and
+all real-key flags false. These results are evidence for the named disposable
 Server and hosted Windows 11 ARM images, not Windows 10/11 x64 desktop certification or a security
 audit.
 
 A value-preserving canonical copy of all 11 reviewed JSON reports, the SHA-256 of each original
 downloaded file, the canonical-file SHA-256 inventory, and the three source artifact API digests are
-kept in the [durable run snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31868019031).
-Ordinary Rust tests require that exact inventory and recheck its principal security assertions. The
-snapshot contains no generated hostile archive or backend binary and is diagnostic evidence, not a
-release attestation.
+kept in the latest [durable run snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650).
+The earlier run remains alongside it rather than being overwritten. Ordinary Rust tests require each
+snapshot's exact inventory and hashes and recheck its principal security assertions. The snapshots
+contain no generated hostile archive or backend binary and are diagnostic evidence, not release
+attestations.
 
 ## Automated matrix
 
@@ -95,7 +100,7 @@ Normal create, preview, extract, shell, and doctor success now call explicit san
 - invalid-input publication result and shell extraction result;
 - final harness-root cleanup and any failure message.
 
-`malicious-corpus.json` records generated archive hashes and lengths, expected results, exit/rejection classes, publication booleans, native policy fixtures, and cleanup. `settings-e2e.json` records the settings executable hash, saved configuration hash, control count, safe folder-picker cancellation count, Restore Defaults/Cancel confirmation paths, save/doctor results, elapsed time, and cleanup result. These artifacts are diagnostic evidence, not release attestations or signatures; SAFE-003 tracks authenticated release provenance.
+`malicious-corpus.json` records generated archive hashes and lengths, expected results, exit/rejection classes, publication booleans, native policy fixtures, and cleanup. `settings-e2e.json` records the settings executable hash, saved configuration hash, control count, safe folder-picker cancellation count, Restore Defaults/Cancel confirmation paths, exact keyboard order/wrap/method, Enter/Escape action and real-key flags, save/doctor results, elapsed time, and cleanup result. These artifacts are diagnostic evidence, not release attestations or signatures; SAFE-003 tracks authenticated release provenance.
 
 ## Remaining SAFE-001 work
 
@@ -106,7 +111,7 @@ The automated Server matrix does not close SAFE-001. Still required:
 3. record LPAC format and broader filesystem/registry/COM/LAN/Internet denial results;
 4. add concurrent reparse-race stress beyond the deterministic real-junction replacement regression, plus broader backend-specific crash/cancellation cases;
 5. promote additional reviewed runs into durable snapshots so long-term evidence does not depend on
-   one checked-in run or the rolling 90-day public-repository artifact maximum;
+   only the two checked-in runs or the rolling 90-day public-repository artifact maximum;
 6. complete visual DPI, keyboard-only, and screen-reader validation on desktop Windows.
 
 Do not describe the matrix as a sandbox audit, malware verdict, Windows 10/11 certification, or proof for formats that are not named in a passing report.

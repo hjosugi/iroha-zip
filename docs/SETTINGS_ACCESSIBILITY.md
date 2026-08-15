@@ -88,13 +88,18 @@ and the synthetic 96→144→96 relayout contract described above. This detects 
 manifest, a handler that ignores the suggested rectangle, one-time-only child geometry, and
 round-trip scaling drift without claiming physical-monitor evidence.
 
-The exact-main [Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031)
-at commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` produced four independently checked Settings
+The exact-main [Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650)
+at commit `9debd02e819899f8dbdfdd5281d3d0b2a68a89db` produced four independently checked Settings
 reports: English on Server 2022 and Server 2025, plus Japanese and English on native Windows 11
 ARM64. Every report records 26 controls, effective `PerMonitorV2`, the exact 96→144→96 synthetic
 transition, backend diagnosis success, and complete temporary-root removal. New schema-v2 reports
 also record the complete observed forward/reverse keyboard cycles, wrap targets, input method, and
-focused-control visibility result.
+focused-control visibility result. Both Server reports record real `SendInput`, foreground
+confirmation, Enter save and saved-message dismissal, Escape dirty-close request, cancellation that
+preserved the process, and the exact saved value 301. Both hosted ARM64 language reports record
+`AttachThreadInputSetFocus`/`UIAutomationFallback`, the reason
+`GitHubHostedWindowsArm64NoForegroundFocus`, successful traversal/save/close-request/cancellation,
+and explicitly false real-input, Enter-key, and Escape-key claims.
 
 It edits a path and numeric value through `ValuePattern`, toggles a checkbox through
 `TogglePattern`, verifies the dirty-title contract without writing the temporary configuration,

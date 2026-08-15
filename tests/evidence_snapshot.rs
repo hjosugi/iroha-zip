@@ -4,7 +4,28 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path};
 
-const SNAPSHOT_ROOT: &str = "evidence/windows/31868019031";
+#[derive(Clone, Copy)]
+struct Snapshot {
+    root: &'static str,
+    run: &'static str,
+    commit: &'static str,
+    settings_schema: u64,
+}
+
+const SNAPSHOTS: [Snapshot; 2] = [
+    Snapshot {
+        root: "evidence/windows/31868019031",
+        run: "31868019031",
+        commit: "5cbc6c27fb67466369b20180a9c5aa2fdd3f6713",
+        settings_schema: 1,
+    },
+    Snapshot {
+        root: "evidence/windows/31875638650",
+        run: "31875638650",
+        commit: "9debd02e819899f8dbdfdd5281d3d0b2a68a89db",
+        settings_schema: 2,
+    },
+];
 const REPORTS: [&str; 11] = [
     "windows-arm64-native/windows-arm64-e2e.json",
     "windows-arm64-native/windows-arm64-malicious-corpus.json",
@@ -18,13 +39,18 @@ const REPORTS: [&str; 11] = [
     "windows-e2e-windows-2025/settings-e2e.json",
     "windows-e2e-windows-2025/windows-e2e.json",
 ];
+const REPORT_DIRECTORIES: [&str; 3] = [
+    "windows-arm64-native",
+    "windows-e2e-windows-2022",
+    "windows-e2e-windows-2025",
+];
 
-fn snapshot_root() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(SNAPSHOT_ROOT)
+fn snapshot_root(snapshot: Snapshot) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(snapshot.root)
 }
 
-fn parse_sha256_manifest(name: &str) -> BTreeMap<String, String> {
-    let contents = fs::read_to_string(snapshot_root().join(name))
+fn parse_sha256_manifest(snapshot: Snapshot, name: &str) -> BTreeMap<String, String> {
+    let contents = fs::read_to_string(snapshot_root(snapshot).join(name))
         .unwrap_or_else(|error| panic!("cannot read {name}: {error}"));
     let mut entries = BTreeMap::new();
     for (index, line) in contents.lines().enumerate() {
@@ -64,6 +90,74 @@ fn lowercase_sha256(bytes: &[u8]) -> String {
         encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     encoded
+}
+
+fn json_inventory(root: &Path) -> BTreeSet<String> {
+    let mut reports = BTreeSet::new();
+    let root_files = BTreeSet::from(["README.md", "SHA256SUMS.txt", "SOURCE_SHA256SUMS.txt"]);
+    for entry in fs::read_dir(root)
+        .unwrap_or_else(|error| panic!("cannot enumerate {}: {error}", root.display()))
+    {
+        let entry = entry.expect("snapshot root entry must be readable");
+        let name = entry
+            .file_name()
+            .into_string()
+            .expect("snapshot root names must be UTF-8");
+        let file_type = entry
+            .file_type()
+            .expect("snapshot root entry type must be readable");
+        assert!(
+            !file_type.is_symlink(),
+            "snapshot root contains a link: {name}"
+        );
+        if file_type.is_dir() {
+            assert!(
+                REPORT_DIRECTORIES.contains(&name.as_str()),
+                "snapshot root contains an unexpected directory: {name}"
+            );
+        } else {
+            assert!(
+                file_type.is_file() && root_files.contains(name.as_str()),
+                "snapshot root contains an unexpected file: {name}"
+            );
+        }
+    }
+
+    for directory in REPORT_DIRECTORIES {
+        let fixed_directory = root.join(directory);
+        let metadata = fs::symlink_metadata(&fixed_directory)
+            .unwrap_or_else(|error| panic!("cannot inspect {directory}: {error}"));
+        assert!(
+            metadata.file_type().is_dir() && !metadata.file_type().is_symlink(),
+            "snapshot report directory is not a real directory: {directory}"
+        );
+        for entry in fs::read_dir(&fixed_directory)
+            .unwrap_or_else(|error| panic!("cannot enumerate {directory}: {error}"))
+        {
+            let entry = entry.expect("snapshot report entry must be readable");
+            let name = entry
+                .file_name()
+                .into_string()
+                .expect("snapshot report names must be UTF-8");
+            let file_type = entry
+                .file_type()
+                .expect("snapshot report entry type must be readable");
+            assert!(
+                file_type.is_file()
+                    && !file_type.is_symlink()
+                    && Path::new(&name)
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("json")),
+                "snapshot report directory contains an unexpected entry: {directory}/{name}"
+            );
+            let relative = format!("{directory}/{name}");
+            assert!(
+                reports.insert(relative.clone()),
+                "duplicate snapshot report path: {relative}"
+            );
+        }
+    }
+    reports
 }
 
 fn require_true(value: &Value, pointer: &str, report: &str) {
@@ -201,9 +295,15 @@ fn validate_corpus(value: &Value, report: &str) {
     }
 }
 
-fn validate_settings(value: &Value, report: &str) {
-    assert_eq!(value["schemaVersion"], 1);
+fn validate_settings(value: &Value, report: &str, snapshot: Snapshot) {
+    assert_eq!(value["schemaVersion"], snapshot.settings_schema);
     assert_eq!(value["status"], "passed");
+    let expected_language = if report.ends_with("-ja.json") {
+        "ja"
+    } else {
+        "en"
+    };
+    assert_eq!(value["language"], expected_language);
     assert_eq!(value["controlCount"], 26);
     assert_eq!(value["dpiAwareness"], "PerMonitorV2");
     assert_eq!(
@@ -222,6 +322,75 @@ fn validate_settings(value: &Value, report: &str) {
     ] {
         require_true(value, pointer, report);
     }
+
+    if snapshot.settings_schema >= 2 {
+        validate_settings_keyboard_evidence(value, report);
+    }
+}
+
+fn validate_settings_keyboard_evidence(value: &Value, report: &str) {
+    let hosted_arm64 = report.starts_with("windows-arm64-native/");
+    let traversal = &value["keyboardTraversal"];
+    assert_eq!(traversal["activationMethod"], "SendInputMouseClick");
+    assert_eq!(
+        traversal["forwardObserved"],
+        serde_json::json!([
+            2001, 1001, 1002, 1003, 1004, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+            2011, 2012, 2013, 2014, 2015, 1101, 1102, 1103, 1104, 1201, 1, 2, 2001
+        ])
+    );
+    assert_eq!(
+        traversal["reverseObserved"],
+        serde_json::json!([
+            2001, 2, 1, 1201, 1104, 1103, 1102, 1101, 2015, 2014, 2013, 2012, 2011, 2010, 2009,
+            2008, 2007, 2006, 2005, 2004, 2003, 2002, 1004, 1003, 1002, 1001, 2001
+        ])
+    );
+    assert_eq!(traversal["forwardWrapTarget"], 2001);
+    assert_eq!(traversal["reverseWrapTarget"], 2);
+    require_true(
+        traversal,
+        "/allFocusedControlsVisible",
+        "Settings keyboard traversal",
+    );
+    require_true(
+        traversal,
+        "/targetProcessVerifiedAfterEveryChord",
+        "Settings keyboard traversal",
+    );
+
+    let shortcuts = &value["keyboardShortcuts"];
+    require_true(shortcuts, "/saveActionCompleted", report);
+    require_true(shortcuts, "/escapeCloseRequestCompleted", report);
+    require_true(shortcuts, "/closeCancellationPreservedProcess", report);
+    assert_eq!(shortcuts["savedTimeoutSeconds"], 301);
+    if hosted_arm64 {
+        assert_eq!(traversal["method"], "AttachThreadInputSetFocus");
+        assert_eq!(traversal["realKeyInput"], false);
+        assert_eq!(traversal["foregroundWindowConfirmed"], false);
+        assert_eq!(
+            traversal["fallbackReason"],
+            "GitHubHostedWindowsArm64NoForegroundFocus"
+        );
+        assert_eq!(shortcuts["method"], "UIAutomationFallback");
+        assert_eq!(shortcuts["realKeyInput"], false);
+        assert_eq!(shortcuts["enterKeyVerified"], false);
+        assert_eq!(shortcuts["escapeKeyVerified"], false);
+        assert_eq!(
+            shortcuts["fallbackReason"],
+            "GitHubHostedWindowsArm64NoForegroundFocus"
+        );
+    } else {
+        assert_eq!(traversal["method"], "SendInput");
+        assert_eq!(traversal["realKeyInput"], true);
+        assert_eq!(traversal["foregroundWindowConfirmed"], true);
+        assert!(traversal["fallbackReason"].is_null());
+        assert_eq!(shortcuts["method"], "SendInput");
+        assert_eq!(shortcuts["realKeyInput"], true);
+        assert_eq!(shortcuts["enterKeyVerified"], true);
+        assert_eq!(shortcuts["escapeKeyVerified"], true);
+        assert!(shortcuts["fallbackReason"].is_null());
+    }
 }
 
 fn validate_arm64_identity(value: &Value, report: &str) {
@@ -239,56 +408,63 @@ fn validate_arm64_identity(value: &Value, report: &str) {
 
 #[test]
 fn durable_windows_evidence_inventory_hashes_and_contracts_match() {
-    let expected = REPORTS
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<BTreeSet<_>>();
-    let source_manifest = parse_sha256_manifest("SOURCE_SHA256SUMS.txt");
-    let canonical_manifest = parse_sha256_manifest("SHA256SUMS.txt");
-    assert_eq!(
-        source_manifest.keys().cloned().collect::<BTreeSet<_>>(),
-        expected
-    );
-    assert_eq!(
-        canonical_manifest.keys().cloned().collect::<BTreeSet<_>>(),
-        expected
-    );
-
-    for report in REPORTS {
-        let bytes = fs::read(snapshot_root().join(report))
-            .unwrap_or_else(|error| panic!("cannot read {report}: {error}"));
+    for snapshot in SNAPSHOTS {
+        let expected = REPORTS
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>();
+        let source_manifest = parse_sha256_manifest(snapshot, "SOURCE_SHA256SUMS.txt");
+        let canonical_manifest = parse_sha256_manifest(snapshot, "SHA256SUMS.txt");
+        assert_eq!(json_inventory(&snapshot_root(snapshot)), expected);
         assert_eq!(
-            lowercase_sha256(&bytes),
-            canonical_manifest[report],
-            "canonical snapshot hash changed for {report}"
+            source_manifest.keys().cloned().collect::<BTreeSet<_>>(),
+            expected
         );
-        let value: Value = serde_json::from_slice(&bytes)
-            .unwrap_or_else(|error| panic!("cannot parse {report}: {error}"));
-        if report.ends_with("windows-e2e.json") || report.ends_with("windows-arm64-e2e.json") {
-            validate_archive_e2e(&value, report);
-        } else if report.contains("malicious-corpus") {
-            validate_corpus(&value, report);
-        } else if report.contains("settings-") || report.ends_with("settings-e2e.json") {
-            validate_settings(&value, report);
-        } else if report.ends_with("windows-arm64-native.json") {
-            validate_arm64_identity(&value, report);
-        } else {
-            panic!("unclassified evidence report: {report}");
-        }
-    }
+        assert_eq!(
+            canonical_manifest.keys().cloned().collect::<BTreeSet<_>>(),
+            expected
+        );
 
-    let readme = fs::read_to_string(snapshot_root().join("README.md"))
-        .expect("the evidence snapshot README must be present");
-    for marker in [
-        "31868019031",
-        "5cbc6c27fb67466369b20180a9c5aa2fdd3f6713",
-        "SOURCE_SHA256SUMS.txt",
-        "SHA256SUMS.txt",
-        "diagnostic evidence",
-    ] {
+        for report in REPORTS {
+            let bytes = fs::read(snapshot_root(snapshot).join(report))
+                .unwrap_or_else(|error| panic!("cannot read {report}: {error}"));
+            assert_eq!(
+                lowercase_sha256(&bytes),
+                canonical_manifest[report],
+                "canonical snapshot hash changed for {report}"
+            );
+            let value: Value = serde_json::from_slice(&bytes)
+                .unwrap_or_else(|error| panic!("cannot parse {report}: {error}"));
+            if report.ends_with("windows-e2e.json") || report.ends_with("windows-arm64-e2e.json") {
+                validate_archive_e2e(&value, report);
+            } else if report.contains("malicious-corpus") {
+                validate_corpus(&value, report);
+            } else if report.contains("settings-") || report.ends_with("settings-e2e.json") {
+                validate_settings(&value, report, snapshot);
+            } else if report.ends_with("windows-arm64-native.json") {
+                validate_arm64_identity(&value, report);
+            } else {
+                panic!("unclassified evidence report: {report}");
+            }
+        }
+
+        let readme = fs::read_to_string(snapshot_root(snapshot).join("README.md"))
+            .expect("the evidence snapshot README must be present");
+        for marker in [
+            snapshot.run,
+            snapshot.commit,
+            "SOURCE_SHA256SUMS.txt",
+            "SHA256SUMS.txt",
+            "diagnostic evidence",
+        ] {
+            assert!(
+                readme.contains(marker),
+                "snapshot README is missing {marker}"
+            );
+        }
         assert!(
-            readme.contains(marker),
-            "snapshot README is missing {marker}"
+            readme.contains("11 machine-readable JSON reports") || readme.contains("11件"),
+            "snapshot README must state the bounded report inventory"
         );
     }
 }

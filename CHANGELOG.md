@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve a second independently reviewed exact-`main` Windows evidence run as 11 canonical JSON
+  reports with original/canonical hashes and source artifact digests. Extend the ordinary snapshot
+  regression to reject extra JSON and validate schema-v2 Settings keyboard evidence: real
+  forward/reverse Tab, Enter, and Escape on Server 2022/2025, plus explicitly non-key hosted-ARM64
+  fallback results without overstating them as physical-keyboard proof.
 - Correct the detailed preview and Attachment Services documents to mark their completed GitHub
   issues closed while keeping graphical-browser and real-provider interoperability work explicitly
   unclaimed; add a regression that rejects those stale open-state statements.

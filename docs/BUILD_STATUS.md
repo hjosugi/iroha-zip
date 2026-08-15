@@ -99,15 +99,17 @@ The native GitHub `windows-11-arm` job requires OS/process architecture `Arm64` 
 machine `0xAA64`, and exports a signature-verified MSYS2 CLANGARM64 backend. It runs the complete
 create/read matrix, malicious corpus, shell, Japanese and English Settings, normal-AppContainer
 isolation, and exact LPAC fail-closed branch. The schema-v5 password expansion passed at exact `main`
-commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
-[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). All five reports
+commit `9debd02e819899f8dbdfdd5281d3d0b2a68a89db` in
+[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650). All five reports
 were downloaded by exact filename and independently checked: ZipCrypto, WinZip AES-128, and AES-256
 each used the bilingual protected native control and one-use channel, exposed no password in output,
 and produced preview/extraction trees matching the controlled source. Wrong-password and cancel paths
 published no destination. The reports also record normal AppContainer with zero capabilities, seven
 successful profile/root cleanups, four create formats, 14 exact read fixtures, three raw-stream
 rejection cases, one control plus 18 hostile rejects, standalone-raw shell dispatch, both Settings
-languages, and complete temporary-root removal. The LPAC query returned the exact
+languages, and complete temporary-root removal. The two Settings reports also record the exact
+26-control forward/reverse order and successful save/dirty-close actions while explicitly marking
+the hosted image's non-key fallback. The LPAC query returned the exact
 `ERROR_INVALID_PARAMETER` class and did not fall back. See [the ARM64 boundary and setup](ARM64.md).
 
 A separate fixed-label `windows-2022` / `windows-2025` x64 matrix builds the production release
@@ -115,8 +117,8 @@ binaries once per supported Server image, exports the verified backend once per 
 machine-readable archive/isolation, malicious-corpus, and settings artifacts. The Server 2025 path
 reuses that backend to validate supported evidence, the explicit unsupported-bundle path,
 `--require-supported`, rollback, and evidence-tamper failures. The schema-v5 matrix passed on both
-images at exact `main` commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
-[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). All six reports
+images at exact `main` commit `9debd02e819899f8dbdfdd5281d3d0b2a68a89db` in
+[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650). All six reports
 were downloaded by exact artifact name and independently checked. Each OS passed ZipCrypto,
 AES-128, and AES-256 with the protected bilingual dialog, one-use channel, password output absence,
 source-identical preview/extraction trees, wrong-password/cancel non-publication, and complete
@@ -126,7 +128,9 @@ libarchive 3.8.9 RAR, RAR5, LHA level 3, and BZIP2-compressed ZIPX. They also re
 raw-stream rejection cases with non-publication, Japanese and long paths, normal and standalone-raw
 shell extraction, one benign plus 18 rejected generated archives, native hardlink/ADS/junction
 rejection, the 26-control English settings save/diagnosis path, and seven successful profile/root
-cleanups per image. LPAC requests on both images produced the exact classified unsupported token-query
+cleanups per image. The Settings reports require real `SendInput` for both Tab directions and wrap,
+Enter save/message dismissal, and Escape close-request/cancellation. LPAC requests on both images
+produced the exact classified unsupported token-query
 result and failed closed without backend-success output or residue. The Server matrix is not Windows
 10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md),
 [LPAC evidence](LPAC_EVALUATION.md), and [corpus contract](MALICIOUS_CORPUS.md).
@@ -141,7 +145,7 @@ A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` bui
 - Native archive-preview tree/search/selection UI, progress/cancellation accessibility, and real-format selected-publication matrix
 - Broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures beyond the passing pinned and generated corpora
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule
-- Periodic promotion of reviewed Windows evidence beyond the one checked-in canonical snapshot and
+- Periodic promotion of reviewed Windows evidence beyond the two checked-in canonical snapshots and
   rolling 90-day public-repository artifact window
 - First independent inspection of the Windows-generated MSYS2 provenance, SPDX, and license evidence plus ongoing package-key rotation/archive-availability monitoring
 - Real-Windows reparse point race stress tests and native child open relative to a parent handle
