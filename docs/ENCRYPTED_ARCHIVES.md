@@ -148,13 +148,15 @@ platform-neutral testはboolean-only CLI、redaction、変換上限、不正入�
 
 The schema-v5 Windows E2E harness generates deterministic ZipCrypto, AES-128, and AES-256 ZIPs,
 locates and validates the bilingual dialog through UI Automation, drives its native standard buttons
-through bounded synchronous clicks, previews and extracts every variant, compares the
-complete SHA-256 tree, rejects a wrong password, cancels before spawn, requires no destination on
+through bounded synchronous `WM_COMMAND` / `BN_CLICKED` notifications, previews and extracts every
+variant, compares the complete SHA-256 tree, rejects a wrong password, cancels before spawn,
+requires no destination on
 either failure, and checks that its deliberately public sentinel is absent from stdout/stderr. Only
 fixture generation uses generator-side `--passphrase`; the product path never does.
 
 schema-v5 Windows E2E harnessは決定的なZipCrypto、AES-128、AES-256 ZIPを生成し、UI Automationで
-日英dialogと標準button contractを検証してから、有界な同期clickでnative buttonを操作し、
+日英dialogと標準button contractを検証してから、実dialog procedureへ有界な同期
+`WM_COMMAND` / `BN_CLICKED`通知を送り、
 全variantのpreview／extractと完全SHA-256 treeを比較します。wrong password拒否、
 spawn前cancel、両失敗時のdestination不存在、意図的に公開したsentinelのstdout／stderr非露出も検査
 します。generator側`--passphrase`はfixture生成だけで使い、製品経路では使いません。

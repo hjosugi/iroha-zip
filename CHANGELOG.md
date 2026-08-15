@@ -17,8 +17,8 @@
 - Expand Windows evidence to schema v5 with native-UI ZipCrypto, WinZip AES-128, and AES-256
   preview/extraction, complete tree comparison, public-sentinel output-absence checks, and
   wrong-password/cancel non-publication. Require standard UI Automation `InvokePattern` exposure,
-  drive the native button through a bounded synchronous `BM_CLICK`, and require the dialog window
-  to close within a bounded interval.
+  drive the real window procedure through the button's bounded synchronous `WM_COMMAND` / `BN_CLICKED`
+  notification, and require the dialog window to close within a bounded interval.
 - Record the independently verified immutable `v0.5.3` publication, exact 11-asset inventory,
   tag-ref attestations, intentionally unsigned PE state, and byte-matched bilingual Pages deployment.
 - Record the reviewed test-only CodeQL alert #234 and refresh issue-reporting guidance for `v0.5.3`.

@@ -32,7 +32,7 @@ public static class IrohaZipPasswordAutomationNative {
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindow(IntPtr window);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", SetLastError = true, ExactSpelling = true)]
     public static extern IntPtr SendMessageTimeoutW(
         IntPtr window,
         uint message,
@@ -49,7 +49,7 @@ $PasswordDialogTitle = "Archive password / 書庫のパスワード"
 $PasswordEditId = 100
 $PasswordConfirmId = 1
 $PasswordCancelId = 2
-$ButtonClickMessage = 0x00F5
+$WindowCommandMessage = 0x0111
 $SendMessageBlock = 0x0001
 $SendMessageAbortIfHung = 0x0002
 
@@ -204,17 +204,17 @@ function Invoke-PasswordTestProcess {
         }
         [UIntPtr]$messageResult = [UIntPtr]::Zero
         $sendResult = [IrohaZipPasswordAutomationNative]::SendMessageTimeoutW(
+            $dialogHandle,
+            $WindowCommandMessage,
+            [UIntPtr]$buttonId,
             $buttonHandle,
-            $ButtonClickMessage,
-            [UIntPtr]::Zero,
-            [IntPtr]::Zero,
             ($SendMessageBlock -bor $SendMessageAbortIfHung),
             5000,
             [ref]$messageResult
         )
         if ($sendResult -eq [IntPtr]::Zero) {
             $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-            throw "Password dialog button ID $buttonId did not complete its bounded standard click (Win32 error $nativeError)."
+            throw "Password dialog button ID $buttonId did not complete its bounded standard command (Win32 error $nativeError)."
         }
         Wait-Until -TimeoutSeconds 10 `
             -Description "password dialog to close after button ID $buttonId" `
