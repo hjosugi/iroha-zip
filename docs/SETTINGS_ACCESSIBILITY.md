@@ -55,8 +55,8 @@ and the synthetic 96→144→96 relayout contract described above. This detects 
 manifest, a handler that ignores the suggested rectangle, one-time-only child geometry, and
 round-trip scaling drift without claiming physical-monitor evidence.
 
-The exact-main [Actions run 31867159915](https://github.com/hjosugi/iroha-zip/actions/runs/31867159915)
-at commit `3ec61f665a3d50a046d3a28c178a8ced7f4276ed` produced four independently checked Settings
+The exact-main [Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031)
+at commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` produced four independently checked Settings
 reports: English on Server 2022 and Server 2025, plus Japanese and English on native Windows 11
 ARM64. Every report records 26 controls, effective `PerMonitorV2`, the exact 96→144→96 synthetic
 transition, backend diagnosis success, and complete temporary-root removal.

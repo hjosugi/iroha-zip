@@ -4,8 +4,8 @@ Updated: 2026-08-15
 
 This document defines the automated SAFE-001 evidence contract. The schema-v5 contract passed on
 both fixed-label x64 runners and the native `windows-11-arm` runner at exact `main` commit
-`3ec61f665a3d50a046d3a28c178a8ced7f4276ed` in
-[Actions run 31867159915](https://github.com/hjosugi/iroha-zip/actions/runs/31867159915). Independently
+`5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
+[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). Independently
 downloaded JSON from all three environments records one effective `AC\Temp` path, successful
 in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven
 explicitly removed AppContainer profiles/roots per environment, all 14 named additional read formats
@@ -17,6 +17,13 @@ Per-Monitor V2 awareness with drift-free synthetic 96→144→96 transitions, co
 and complete cleanup. These results are evidence for the named disposable
 Server and hosted Windows 11 ARM images, not Windows 10/11 x64 desktop certification or a security
 audit.
+
+A value-preserving canonical copy of all 11 reviewed JSON reports, the SHA-256 of each original
+downloaded file, the canonical-file SHA-256 inventory, and the three source artifact API digests are
+kept in the [durable run snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31868019031).
+Ordinary Rust tests require that exact inventory and recheck its principal security assertions. The
+snapshot contains no generated hostile archive or backend binary and is diagnostic evidence, not a
+release attestation.
 
 ## Automated matrix
 
@@ -98,7 +105,8 @@ The automated Server matrix does not close SAFE-001. Still required:
 2. add further independently redistributable legacy and malformed-format fixtures through SAFE-002;
 3. record LPAC format and broader filesystem/registry/COM/LAN/Internet denial results;
 4. add concurrent reparse-race stress beyond the deterministic real-junction replacement regression, plus broader backend-specific crash/cancellation cases;
-5. preserve reviewed evidence beyond the rolling 90-day public-repository artifact maximum;
+5. promote additional reviewed runs into durable snapshots so long-term evidence does not depend on
+   one checked-in run or the rolling 90-day public-repository artifact maximum;
 6. complete visual DPI, keyboard-only, and screen-reader validation on desktop Windows.
 
 Do not describe the matrix as a sandbox audit, malware verdict, Windows 10/11 certification, or proof for formats that are not named in a passing report.
