@@ -6,9 +6,11 @@ iroha-zip の現在の公式 Windows バイナリは Authenticode 未署名で�
 
 1. `https://github.com/hjosugi/iroha-zip/releases` から取得したことを確認する。
 2. リリース添付の `SHA256SUMS.txt` とダウンロードしたファイルの SHA-256 を比較する。
-3. 必要に応じて GitHub CLI の `gh attestation verify <file> --repo hjosugi/iroha-zip` で artifact attestation を確認する。
-4. 公式EXEが使用する`VCRUNTIME140.dll`がない場合は、対象architectureの[Microsoft公式Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)を導入する。第三者siteからDLL単体を取得しない。
-5. バックエンドは同梱されていない。設定画面から自分が信頼する libarchive / `bsdtar.exe` を取り込み、`doctor` が成功することを確認する。
+3. `gh release verify v0.6.2 --repo hjosugi/iroha-zip`で、tagと11 assetを固定するGitHub release attestationを確認する。
+4. `gh release verify-asset v0.6.2 <file> --repo hjosugi/iroha-zip`で、downloadしたfileがそのReleaseに含まれることを確認する。
+5. さらに、`gh attestation verify <file> --repo hjosugi/iroha-zip`でrelease workflowが発行したartifact attestationを確認する。
+6. 公式EXEが使用する`VCRUNTIME140.dll`がない場合は、対象architectureの[Microsoft公式Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)を導入する。第三者siteからDLL単体を取得しない。
+7. バックエンドは同梱されていない。設定画面から自分が信頼する libarchive / `bsdtar.exe` を取り込み、`doctor` が成功することを確認する。
 
 PowerShell で SHA-256 を表示する例:
 
@@ -25,9 +27,9 @@ buildを主張しません。依存crateのpanic位置には、一般的なGitHu
 source prefix（`C:\Users\runneradmin\.cargo\registry\src\...`）も残ります。6 EXEのASCII／UTF-16
 文字列検査では、repository workspace path、runner temporary-directory path、明白なsecret-value
 markerは検出されませんでしたが、build-path-independentとも主張しません。必ず公開Release自身の
-`SHA256SUMS.txt`とtag-ref attestationを確認してください。
+`SHA256SUMS.txt`、release attestation、tag-ref workflow attestationを確認してください。
 
-未署名であることは、ファイルが安全であることも危険であることも単独では証明しません。リポジトリ、ハッシュ、GitHub artifact attestation、公開ソースを組み合わせて出所を確認してください。
+未署名であることは、ファイルが安全であることも危険であることも単独では証明しません。リポジトリ、ハッシュ、GitHub release／workflow attestations、公開ソースを組み合わせて出所を確認してください。
 
 ## English
 
@@ -35,9 +37,11 @@ The current official iroha-zip Windows binaries are not Authenticode-signed. Win
 
 1. Confirm that the file came from `https://github.com/hjosugi/iroha-zip/releases`.
 2. Compare the file's SHA-256 digest with the release's `SHA256SUMS.txt`.
-3. When desired, verify the GitHub artifact attestation with `gh attestation verify <file> --repo hjosugi/iroha-zip`.
-4. If `VCRUNTIME140.dll`, which the official EXEs import, is absent, install the architecture-matching [official Microsoft Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Do not download an individual DLL from a third-party site.
-5. The archive backend is not bundled. Import a libarchive / `bsdtar.exe` bundle you trust in Settings and require `doctor` to pass.
+3. Verify the GitHub release attestation binding the tag and all 11 assets with `gh release verify v0.6.2 --repo hjosugi/iroha-zip`.
+4. Confirm that the downloaded file belongs to that Release with `gh release verify-asset v0.6.2 <file> --repo hjosugi/iroha-zip`.
+5. Also verify the artifact attestation issued by the release workflow with `gh attestation verify <file> --repo hjosugi/iroha-zip`.
+6. If `VCRUNTIME140.dll`, which the official EXEs import, is absent, install the architecture-matching [official Microsoft Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Do not download an individual DLL from a third-party site.
+7. The archive backend is not bundled. Import a libarchive / `bsdtar.exe` bundle you trust in Settings and require `doctor` to pass.
 
 Example SHA-256 check in PowerShell:
 
@@ -54,6 +58,7 @@ PDB GUIDs. Dependency panic locations also retain the generic GitHub-hosted runn
 source prefix (`C:\Users\runneradmin\.cargo\registry\src\...`). An ASCII/UTF-16 string scan of all
 six EXEs found no repository-workspace path, runner temporary-directory path, or obvious
 secret-value marker. Bit-reproducible or build-path-independent PE/PDB output is not currently
-claimed. Always verify the published Release's own `SHA256SUMS.txt` and tag-ref attestation.
+claimed. Always verify the published Release's own `SHA256SUMS.txt`, release attestation, and
+tag-ref workflow attestation.
 
-The absence of an Authenticode signature does not, by itself, prove that a file is safe or unsafe. Establish provenance by combining the repository URL, SHA-256 digest, GitHub artifact attestation, and published source.
+The absence of an Authenticode signature does not, by itself, prove that a file is safe or unsafe. Establish provenance by combining the repository URL, SHA-256 digest, GitHub release/workflow attestations, and published source.

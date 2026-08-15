@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "repository": "hjosugi/iroha-zip",
   "recorded_at": "2026-08-15",
   "tag": {
@@ -225,6 +225,21 @@
       "iroha-zip-shell-0.6.2-windows-x64.exe",
       "SHA256SUMS.txt"
     ]
+  },
+  "release_attestation": {
+    "verified": true,
+    "predicate_type": "https://in-toto.io/attestation/release/v0.2",
+    "repository": "hjosugi/iroha-zip",
+    "tag": "v0.6.2",
+    "release_id": 371015434,
+    "release_subject_uri": "pkg:github/hjosugi/iroha-zip@v0.6.2",
+    "release_subject_sha1": "d9fb686b830e24798c822b2d00e1a4d8bdbc8f37",
+    "asset_subject_count": 11,
+    "asset_digests_match_release_api": true,
+    "verified_downloaded_asset_count": 11,
+    "certificate_identity_regexp": "^https://dotcom\\.releases\\.github\\.com$",
+    "timestamp_authority": "timestamp.githubapp.com",
+    "timestamp": "2026-08-15T09:54:11Z"
   },
   "independent_verification": {
     "all_public_assets_downloaded": true,

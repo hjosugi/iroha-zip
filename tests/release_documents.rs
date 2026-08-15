@@ -206,6 +206,9 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
         assert!(page.contains("name=\"referrer\" content=\"strict-origin-when-cross-origin\""));
         assert!(page.contains("hreflang=\"x-default\""));
         assert!(page.contains("rel=\"icon\" href=\"../assets/favicon.svg\""));
+        assert!(page.contains("<code>gh release verify</code>"));
+        assert!(page.contains("<code>gh release verify-asset</code>"));
+        assert!(page.contains("<code>gh attestation verify</code>"));
 
         for section in ["how", "setup", "formats", "security", "usage", "status"] {
             assert_eq!(
@@ -255,9 +258,12 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
         "dependency-free Pages contract has a stale release tag"
     );
     assert!(site_script.contains("const stableTagPattern = /^v(\\d+\\.\\d+\\.\\d+)$/;"));
+    assert!(site_script.contains("const sha256DigestPattern = /^sha256:[0-9a-f]{64}$/;"));
     assert!(site_script.contains("release.immutable !== true"));
     assert!(site_script.contains("assets.length !== expectedAssetNames.length"));
     assert!(site_script.contains("asset?.state !== \"uploaded\""));
+    assert!(site_script.contains("!Number.isSafeInteger(asset.size)"));
+    assert!(site_script.contains("!sha256DigestPattern.test(asset.digest)"));
     assert!(site_script.contains("releases/download/${tag}/${name}"));
     assert_eq!(site_script.matches("expectedAssetNames").count(), 3);
     for expected in [
