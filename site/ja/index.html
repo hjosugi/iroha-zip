@@ -213,6 +213,7 @@ iroha-zip.exe create seven-zip .\folder .\folder.7z</code></pre>
               <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/THREAT_MODEL.md">脅威モデル</a></li>
               <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/WINDOWS_E2E.md">Windows E2E契約</a></li>
               <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/MALICIOUS_CORPUS.md">悪性書庫コーパス</a></li>
+              <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/ENCRYPTED_ARCHIVES.md">暗号化書庫の境界</a></li>
               <li><a href="https://github.com/hjosugi/iroha-zip/blob/main/docs/BACKEND_EVIDENCE.md">バックエンド証跡</a></li>
               <li><a href="https://github.com/hjosugi/iroha-zip/security">Security policy</a></li>
             </ul>
@@ -260,7 +261,7 @@ iroha-zip.exe create tar-gz `
               <li>Rust unit / integration testsとClippy</li>
               <li>Server 2022/2025の14形式＋暗号化ZIP schema-v5 E2E</li>
               <li>native ARM64の同一14形式／悪性corpus／日英UI</li>
-              <li>一回限りのConPTYと日英password dialog</li>
+              <li>一回限りの匿名pipe、isolated libarchive reader、日英password dialog</li>
               <li>5つのbounded fuzz target</li>
               <li>backend manifest / SBOM / license検証</li>
               <li>生成型の悪性書庫回帰テスト</li>
@@ -273,7 +274,7 @@ iroha-zip.exe create tar-gz `
               <li>Windows 10/11実機の全format matrix</li>
               <li>実験的LPACの互換性とdenial測定</li>
               <li>長時間fuzzingと独立セキュリティ監査</li>
-              <li>Windows 10/11実機でのpassword UI／ConPTY teardown</li>
+              <li>Windows 10/11実機でのpassword UI／匿名channel teardown</li>
               <li>複数のWindows ARM市販機での実機確認</li>
               <li>将来のAuthenticode署名</li>
             </ul>

@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-- Add a one-use, AppContainer-preserving ConPTY password channel for encrypted ZIP `preview` and
-  `extract`, with no password-value CLI option, environment/config/file storage, or unsandboxed
-  fallback.
+- Add a one-use, AppContainer-preserving anonymous-pipe password channel and sealed internal
+  libarchive extractor for encrypted ZIP `preview` and `extract`, with no password-value CLI option,
+  environment/config/file/log storage, or unsandboxed fallback.
 - Add a bounded bilingual native password dialog, non-`Clone` zeroizing UTF-16/UTF-8 secret
-  storage, exact one-prompt handling, post-prompt log suppression, and fail-closed retry, timeout,
-  overflow, crash, wrong-password, and cancellation paths.
+  storage, explicit inherited-handle allowlisting, child token self-verification, pre-creation entry
+  rejection, and fail-closed EOF, timeout, overflow, crash, wrong-password, and cancellation paths.
 - Expand Windows evidence to schema v5 with native-UI ZipCrypto, WinZip AES-128, and AES-256
   preview/extraction, complete tree comparison, public-sentinel output-absence checks, and
   wrong-password/cancel non-publication.

@@ -299,16 +299,18 @@ Existing destinations are never overwritten. Without `--output`, a collision-saf
 
 Add `--prompt-password` to `preview` or `extract` to enter one password in the native bilingual
 dialog. No path accepts the password value as a CLI option, environment variable, configuration
-field, or file. The verified backend starts in AppContainer, its token and zero capability count are
-checked, and only then does iroha-zip answer one pinned prompt through a hidden ConPTY. A wrong
-password, additional prompt, timeout, or cancellation publishes no destination.
+field, or file. A sealed internal extractor receives one value through an anonymous pipe admitted by
+an explicit handle list only after its AppContainer token and zero capability count are verified. It
+registers the value with a manifest-pinned libarchive DLL and rejects every entry except regular
+files and directories before creation. A wrong password, timeout, policy violation, or cancellation
+publishes no destination.
 
 ```powershell
 iroha-zip.exe preview .\encrypted.zip --prompt-password
 iroha-zip.exe extract .\encrypted.zip --prompt-password
 ```
 
-This path requires Windows 10 version 1809 or later and covers ZipCrypto/WinZip AES encrypted ZIPs
+This path requires Windows 10 or later and covers ZipCrypto/WinZip AES encrypted ZIPs
 that the imported libarchive build can read. Double-click does not prompt; encrypted creation,
 command-line password values, and unsandboxed password handling are not supported. See
 [Encrypted archives](docs/ENCRYPTED_ARCHIVES.md) for the secret lifetime, fail-closed behavior, and
