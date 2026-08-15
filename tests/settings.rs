@@ -139,7 +139,10 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
         "allFocusedControlsVisible = $true",
         "targetProcessVerifiedAfterEveryChord = $true",
         "foregroundWindowConfirmed = $foregroundWindowConfirmed",
-        "schemaVersion = 2",
+        "schemaVersion = 3",
+        "Invoke-AndCompleteFolderPicker -Process $process",
+        "safeFolderPickerCompletions = 1",
+        "safeFolderPickerCancellations = 2",
     ] {
         assert!(
             script.contains(marker),

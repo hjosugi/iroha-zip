@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Complete the production Settings Browse folder picker against an exact disposable long Japanese
+  folder through UI Automation, require the selected path to return to the form, retain safe
+  cancellation of both import pickers, and record the new completion/cancellation split in
+  schema-v3 Windows evidence.
 - Resolve MSYS2 backend runtime dependencies through bounded batches of at most 64 `ldd` inputs,
   deduplicate pending paths, reject unresolved payload dependencies and inventories larger than 256
   files, recognize only strict Windows virtual API-set names as OS-provided, and lock those

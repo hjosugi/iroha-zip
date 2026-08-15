@@ -102,17 +102,21 @@ preserved the process, and the exact saved value 301. Both hosted ARM64 language
 and explicitly false real-input, Enter-key, and Escape-key claims.
 
 It edits a path and numeric value through `ValuePattern`, toggles a checkbox through
-`TogglePattern`, verifies the dirty-title contract without writing the temporary configuration,
-and opens/cancels the backend Browse, arbitrary-bundle Import, and MSYS2 Import folder pickers. It
-then invokes Restore Defaults twice, requires accessible No/Yes confirmation paths, verifies both
-preserved edits and restored defaults, makes the form dirty again, and invokes the native Cancel
-button twice to verify both preservation and confirmed discard through the accessible dialog.
+`TogglePattern`, and verifies the dirty-title contract without writing the temporary configuration.
+The schema-v3 harness opens the production backend Browse picker at a disposable parent, discovers
+the exact long Japanese child by accessible name and `SelectionItemPattern`, selects it, invokes the
+enabled acceptance button, and requires the exact filesystem path to return to the Settings edit.
+It separately opens/cancels the arbitrary-bundle and MSYS2 Import folder pickers. It then invokes
+Restore Defaults twice, requires accessible No/Yes confirmation paths, verifies both preserved edits
+and restored defaults, makes the form dirty again, and invokes the native Cancel button twice to
+verify both preservation and confirmed discard through the accessible dialog.
 
 When supplied a verified backend and evidence path by the dedicated Windows E2E job, a second disposable English settings process also saves that backend path through the native Save button, dismisses the success dialog, invokes the settings-screen diagnosis, requires the real backend/AppContainer diagnostic success dialog, closes from a clean state, hashes the saved configuration and executable, records the exercised language, and writes a JSON report after removing the temporary tree. This does not exercise backend replacement, file associations, Default Apps, or folder-picker side effects.
 
-The smoke test cancels import before a source is selected, and deliberately does not invoke actual
-backend replacement, Default Apps, or the configuration-folder launch because those actions mutate
-or open external Windows state. Their ID-to-handler dispatch is covered by the exhaustive
+The smoke test completes only the side-effect-free Browse selection and cancels both imports before
+a source is selected. It deliberately does not invoke actual backend replacement, Default Apps, or
+the configuration-folder launch because those actions mutate or open external Windows state. Their
+ID-to-handler dispatch is covered by the exhaustive
 platform-neutral test. Their side effects and rollback must be exercised only on a disposable
 Windows worker.
 

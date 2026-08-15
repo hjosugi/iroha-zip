@@ -667,6 +667,73 @@ function Invoke-AndCancelFolderPicker {
     Wait-ForNoSecondaryWindow -Process $Process -MainWindow $MainWindow
 }
 
+function Invoke-AndCompleteFolderPicker {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [System.Windows.Automation.AutomationElement]$Control,
+        [System.Windows.Automation.AutomationElement]$PathControl,
+        [string]$InitialDirectory,
+        [string]$FolderName,
+        [string]$ExpectedPath
+    )
+    $pathPattern = [System.Windows.Automation.ValuePattern]$PathControl.GetCurrentPattern(
+        [System.Windows.Automation.ValuePattern]::Pattern
+    )
+    $pathPattern.SetValue($InitialDirectory)
+    Write-Host "Opening and completing folder picker for control $($Control.Current.AutomationId)."
+    Invoke-Control -MainWindow $MainWindow -Control $Control
+    $dialog = Wait-Until {
+        Find-SecondaryWindow -Process $Process -MainWindow $MainWindow
+    } -Description "folder picker completion for control $($Control.Current.AutomationId)"
+    if ($dialog.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
+        throw "Folder picker was not exposed as an accessible window."
+    }
+
+    $nameCondition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::NameProperty,
+        $FolderName
+    )
+    $selection = Wait-Until -TimeoutSeconds 30 -Condition {
+        $candidates = $dialog.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            $nameCondition
+        )
+        foreach ($candidate in $candidates) {
+            try {
+                $pattern = [System.Windows.Automation.SelectionItemPattern]$candidate.GetCurrentPattern(
+                    [System.Windows.Automation.SelectionItemPattern]::Pattern
+                )
+                return [pscustomobject]@{
+                    element = $candidate
+                    pattern = $pattern
+                }
+            }
+            catch {
+                continue
+            }
+        }
+        return $false
+    } -Description "selectable folder item '$FolderName'"
+    if ($selection.element.Current.Name -cne $FolderName) {
+        throw "Folder picker returned a different selectable item."
+    }
+    $selection.pattern.Select()
+
+    Wait-Until -TimeoutSeconds 10 -Condition {
+        $button = Find-ByAutomationId -Root $dialog -Id 1
+        if ($null -ne $button -and $button.Current.IsEnabled) {
+            return $button
+        }
+        return $false
+    } -Description "enabled folder-picker acceptance button" | Out-Null
+    Invoke-DialogButton -Dialog $dialog -Id 1
+    Wait-ForNoSecondaryWindow -Process $Process -MainWindow $MainWindow
+    Wait-Until -TimeoutSeconds 10 -Condition {
+        $pathPattern.Current.Value -ceq $ExpectedPath
+    } -Description "the completed folder-picker path to reach Settings" | Out-Null
+}
+
 function Test-SyntheticDpiTransition {
     param(
         [System.Windows.Automation.AutomationElement]$MainWindow,
@@ -969,14 +1036,23 @@ try {
 
     Test-SyntheticDpiTransition -MainWindow $window -Controls $controls
 
-    foreach ($id in @(1001, 1003, 1004)) {
+    $pathPattern = [System.Windows.Automation.ValuePattern]$controls[2001].GetCurrentPattern(
+        [System.Windows.Automation.ValuePattern]::Pattern
+    )
+    $pickerParent = Join-Path $testRoot "folder-picker-parent"
+    $pickerFolderName = "選択する folder-" + ("y" * 64)
+    $pickerExpectedPath = Join-Path $pickerParent $pickerFolderName
+    [System.IO.Directory]::CreateDirectory($pickerExpectedPath) | Out-Null
+    Invoke-AndCompleteFolderPicker -Process $process -MainWindow $window `
+        -Control $controls[1001] -PathControl $controls[2001] `
+        -InitialDirectory $pickerParent -FolderName $pickerFolderName `
+        -ExpectedPath $pickerExpectedPath
+
+    foreach ($id in @(1003, 1004)) {
         Invoke-AndCancelFolderPicker -Process $process -MainWindow $window `
             -Control $controls[$id]
     }
 
-    $pathPattern = [System.Windows.Automation.ValuePattern]$controls[2001].GetCurrentPattern(
-        [System.Windows.Automation.ValuePattern]::Pattern
-    )
     $pathPattern.SetValue($longDirectory)
     $timeoutPattern = [System.Windows.Automation.ValuePattern]$controls[2003].GetCurrentPattern(
         [System.Windows.Automation.ValuePattern]::Pattern
@@ -1118,7 +1194,7 @@ try {
         } -Description "the diagnosis result to close" | Out-Null
 
         $setupEvidence = [ordered]@{
-            schemaVersion = 2
+            schemaVersion = 3
             status = "passed"
             language = $Language
             generatedAtUtc = [DateTime]::UtcNow.ToString("o")
@@ -1127,7 +1203,8 @@ try {
             syntheticDpiTransitions = @(96, 144, 96)
             keyboardTraversal = $keyboardTraversal
             keyboardShortcuts = $shortcutEvidence
-            safeFolderPickerCancellations = 3
+            safeFolderPickerCompletions = 1
+            safeFolderPickerCancellations = 2
             restoreDefaultsCancelAndConfirm = $true
             cancelButtonDiscardCancelAndConfirm = $true
             longAndNonAsciiPathEdited = $true
