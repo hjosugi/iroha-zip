@@ -6,20 +6,20 @@ body:
   - type: markdown
     attributes:
       value: |
-        Do not attach weaponized archives or disclose an unpatched vulnerability here. Use GitHub Security Advisories as described in SECURITY.md.
+        Do not attach weaponized archives or disclose an unpatched vulnerability here. Read [SECURITY.md](https://github.com/hjosugi/iroha-zip/blob/main/SECURITY.md) and use a [private GitHub Security Advisory](https://github.com/hjosugi/iroha-zip/security/advisories/new).
 
-        悪用可能な書庫や未修正脆弱性の詳細をここへ添付しないでください。SECURITY.mdに従いGitHub Security Advisoriesから非公開で報告してください。
+        悪用可能な書庫や未修正脆弱性の詳細をここへ添付しないでください。[SECURITY.md](https://github.com/hjosugi/iroha-zip/blob/main/SECURITY.md)を読み、[GitHub Security Advisory](https://github.com/hjosugi/iroha-zip/security/advisories/new)から非公開で報告してください。
   - type: input
     id: version
     attributes:
       label: iroha-zip version / バージョン
-      placeholder: v0.6.0
+      placeholder: v0.6.2
     validations:
       required: true
   - type: input
     id: windows
     attributes:
-      label: Windows version and architecture / Windows版とarchitecture
+      label: Windows version and architecture / Windowsのバージョンとアーキテクチャ
       placeholder: Windows 11 24H2 x64
     validations:
       required: true
@@ -34,7 +34,7 @@ body:
     id: reproduce
     attributes:
       label: Reproduction steps / 再現手順
-      description: Use a harmless sample or describe the structure without sensitive payloads. / 無害なsampleを使うか、危険なpayloadを含めず構造だけを説明してください。
+      description: Use a harmless sample or describe the structure without sensitive payloads. / 無害なサンプルを使うか、危険な内容を含めず構造だけを説明してください。
     validations:
       required: true
   - type: textarea
