@@ -4,8 +4,8 @@ Updated: 2026-08-15
 
 This document defines the automated SAFE-001 evidence contract. The schema-v5 contract passed on
 both fixed-label x64 runners and the native `windows-11-arm` runner at exact `main` commit
-`1f8cce72c1730ae3026bf386988f62b32c0470c4` in
-[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). Independently
+`3ec61f665a3d50a046d3a28c178a8ced7f4276ed` in
+[Actions run 31867159915](https://github.com/hjosugi/iroha-zip/actions/runs/31867159915). Independently
 downloaded JSON from all three environments records one effective `AC\Temp` path, successful
 in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven
 explicitly removed AppContainer profiles/roots per environment, all 14 named additional read formats
@@ -13,7 +13,8 @@ and three raw-stream negative cases below, the generated malicious corpus, x64 E
 native ARM64 Japanese/English Settings, and the encrypted-ZIP/password assertions below. All 11
 reports were selected by exact artifact filename and mechanically checked for schema-v5 success,
 three encryption modes, non-publication failures, malicious-corpus rejection, Settings diagnosis,
-correct ARM64 PE identity, and complete cleanup. These results are evidence for the named disposable
+Per-Monitor V2 awareness with drift-free synthetic 96→144→96 transitions, correct ARM64 PE identity,
+and complete cleanup. These results are evidence for the named disposable
 Server and hosted Windows 11 ARM images, not Windows 10/11 x64 desktop certification or a security
 audit.
 
@@ -36,7 +37,7 @@ Each job builds the release executables, exports a current MSYS2 UCRT64 libarchi
   -EvidenceOutput $evidence
 ```
 
-It then runs the generated malicious archive corpus and `test-settings-ui.ps1` with the same verified backend. The three JSON reports are uploaded as `windows-e2e-windows-2022` or `windows-e2e-windows-2025` artifacts for 14 days. Generated hostile ZIP/TAR files are deleted and are never uploaded; see the [corpus contract](MALICIOUS_CORPUS.md).
+It then runs the generated malicious archive corpus and `test-settings-ui.ps1` with the same verified backend. The three JSON reports are uploaded as `windows-e2e-windows-2022` or `windows-e2e-windows-2025` artifacts for 90 days, [the maximum GitHub permits for a public repository](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-repository) and the maximum configured for this repository. Generated hostile ZIP/TAR files are deleted and are never uploaded; see the [corpus contract](MALICIOUS_CORPUS.md).
 
 The harness invokes verified `bsdtar.exe` directly only to generate BZ2/XZ/Zstandard/compress and encrypted-ZIP fixtures from deterministic, harness-owned data on the disposable runner. It generates both PAX-containing TAR filters and standalone GZ/BZ2/XZ/Zstandard/compress streams, plus ZipCrypto, WinZip AES-128, and WinZip AES-256 ZIPs. The deliberately public encrypted-fixture password is the only E2E use of generator-side `--passphrase`; product password handling never puts a secret on a command line. That value and the generator path are ASCII-only because the unmodified source binary has no iroha-zip UTF-8 process manifest and legacy argv conversion must not select the ciphertext password bytes. The native one-use-channel integration probe separately covers a Japanese password value. Trusted PowerShell then copies the generated result to a Japanese-named product input path. It also generates one single-file LZX CAB with the OS `System32\makecab.exe`, but only after requiring a valid Microsoft Authenticode signature; the report records the generator file hash, signer subject, compression setting, and output hash. All reads of those archives and every product create operation still pass through iroha-zip's AppContainer boundary. Direct generator execution is not a supported path for untrusted or user-owned input.
 
@@ -97,7 +98,7 @@ The automated Server matrix does not close SAFE-001. Still required:
 2. add further independently redistributable legacy and malformed-format fixtures through SAFE-002;
 3. record LPAC format and broader filesystem/registry/COM/LAN/Internet denial results;
 4. add concurrent reparse-race stress beyond the deterministic real-junction replacement regression, plus broader backend-specific crash/cancellation cases;
-5. preserve reviewed evidence outside the 14-day CI artifact window;
+5. preserve reviewed evidence beyond the rolling 90-day public-repository artifact maximum;
 6. complete visual DPI, keyboard-only, and screen-reader validation on desktop Windows.
 
 Do not describe the matrix as a sandbox audit, malware verdict, Windows 10/11 certification, or proof for formats that are not named in a passing report.
