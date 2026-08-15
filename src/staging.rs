@@ -259,7 +259,6 @@ pub(crate) fn stage_archive(
                         &output_dir,
                         encoding,
                         &config.limits,
-                        allow_unsandboxed,
                     ),
                     "sandboxed libarchive password extraction",
                 )
@@ -454,9 +453,8 @@ fn internal_password_extraction_arguments(
     output: &Path,
     encoding: FilenameEncoding,
     limits: &policy::Limits,
-    allow_unsandboxed: bool,
 ) -> Vec<OsString> {
-    let mut args = vec![
+    let args = vec![
         OsString::from("internal-password-archive-extraction"),
         backend_root.as_os_str().to_owned(),
         candidates.as_os_str().to_owned(),
@@ -477,9 +475,6 @@ fn internal_password_extraction_arguments(
         OsString::from("--max-path-bytes"),
         OsString::from(limits.max_path_bytes.to_string()),
     ];
-    if allow_unsandboxed {
-        args.push(OsString::from("--allow-unsandboxed"));
-    }
     args
 }
 

@@ -91,7 +91,6 @@ fn run_internal_archive_reader() -> Option<iroha_zip::error::Result<()>> {
                 max_single_file_bytes,
                 max_depth,
                 max_path_bytes,
-                allow_unsandboxed,
             } => iroha_zip::platform::extract_password_archive(
                 &backend_root,
                 &candidates,
@@ -107,7 +106,6 @@ fn run_internal_archive_reader() -> Option<iroha_zip::error::Result<()>> {
                     max_depth,
                     max_path_bytes,
                 },
-                allow_unsandboxed,
             ),
             Command::InternalRawArchive {
                 backend_root,

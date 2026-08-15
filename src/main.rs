@@ -227,7 +227,6 @@ fn run() -> Result<()> {
             max_single_file_bytes,
             max_depth,
             max_path_bytes,
-            allow_unsandboxed,
         } => {
             #[cfg(windows)]
             iroha_zip::platform::extract_password_archive(
@@ -245,7 +244,6 @@ fn run() -> Result<()> {
                     max_depth,
                     max_path_bytes,
                 },
-                allow_unsandboxed,
             )?;
             #[cfg(not(windows))]
             {
@@ -261,7 +259,6 @@ fn run() -> Result<()> {
                     max_single_file_bytes,
                     max_depth,
                     max_path_bytes,
-                    allow_unsandboxed,
                 );
                 return Err(iroha_zip::error::IrohaZipError::Unsupported(
                     "the internal password archive extractor is only available on Windows"

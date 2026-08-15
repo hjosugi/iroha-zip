@@ -207,9 +207,8 @@ pub fn extract_password_archive(
     output_directory: &Path,
     encoding: FilenameEncoding,
     limits: &policy::Limits,
-    allow_unsandboxed: bool,
 ) -> Result<()> {
-    require_current_process_appcontainer(allow_unsandboxed)?;
+    require_current_process_appcontainer(false)?;
     validate_password_extract_paths(archive_path, output_directory)?;
     let candidates = read_candidates(backend_root, candidate_file)?;
     validate_regular_file_security(archive_path)?;

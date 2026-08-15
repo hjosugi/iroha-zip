@@ -214,7 +214,6 @@ fn internal_failure_probes_are_hidden_but_parseable() {
             max_single_file_bytes: 8_589_934_592,
             max_depth: 64,
             max_path_bytes: 4_096,
-            allow_unsandboxed: false,
             ..
         }
     ));

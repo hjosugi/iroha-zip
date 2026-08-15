@@ -173,9 +173,6 @@ pub enum Command {
 
         #[arg(long)]
         max_path_bytes: usize,
-
-        #[arg(long)]
-        allow_unsandboxed: bool,
     },
 
     #[command(hide = true)]
