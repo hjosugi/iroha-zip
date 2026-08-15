@@ -8,6 +8,7 @@ use std::process::ExitCode;
 #[cfg(windows)]
 use clap::Parser as _;
 use iroha_zip::config::default_config_path;
+use iroha_zip::error::IrohaZipError;
 
 fn main() -> ExitCode {
     match run() {
@@ -16,7 +17,7 @@ fn main() -> ExitCode {
             if is_internal_archive_reader_invocation() {
                 eprintln!("iroha-zip: {error}");
             } else {
-                show_error(&error.to_string());
+                show_error(&user_facing_error(&error));
             }
             ExitCode::from(2)
         }
@@ -43,9 +44,61 @@ fn run() -> iroha_zip::error::Result<()> {
     let config = default_config_path()?;
     let result = iroha_zip::shell_extract_with_report(&archive, &config)?;
     if result.attachment_handoff.is_incomplete() {
-        show_warning(&result.attachment_handoff.message());
+        show_warning(&user_facing_handoff_warning(
+            &result.attachment_handoff.message(),
+        ));
     }
     Ok(())
+}
+
+fn user_facing_error(error: &IrohaZipError) -> String {
+    let (english, japanese) = match error {
+        IrohaZipError::Io { .. } => (
+            "A file or system operation failed.",
+            "ファイルまたはシステムの処理に失敗しました。",
+        ),
+        IrohaZipError::Config(_) => (
+            "The iroha-zip configuration is invalid.",
+            "iroha-zipの設定が正しくありません。",
+        ),
+        IrohaZipError::Backend(_) => (
+            "The archive backend could not be verified or used.",
+            "書庫バックエンドを検証または使用できませんでした。",
+        ),
+        IrohaZipError::Policy(_) => (
+            "The archive was rejected by the safety policy.",
+            "安全ポリシーにより書庫を拒否しました。",
+        ),
+        IrohaZipError::TrustHandoff(_) => (
+            "Windows trust handoff failed.",
+            "Windowsの信頼連携に失敗しました。",
+        ),
+        IrohaZipError::Sandbox(_) => (
+            "The isolated archive process failed.",
+            "分離された書庫処理に失敗しました。",
+        ),
+        IrohaZipError::Unsupported(_) => (
+            "This archive operation is not supported.",
+            "この書庫操作には対応していません。",
+        ),
+        IrohaZipError::Usage(_) => (
+            "The archive request is invalid.",
+            "書庫の操作指定が正しくありません。",
+        ),
+    };
+    bilingual_details(english, japanese, &error.to_string())
+}
+
+fn user_facing_handoff_warning(details: &str) -> String {
+    bilingual_details(
+        "Extraction completed, but Windows trust handoff was incomplete.",
+        "展開は完了しましたが、Windowsの信頼連携は完了しませんでした。",
+        details,
+    )
+}
+
+fn bilingual_details(english: &str, japanese: &str, details: &str) -> String {
+    format!("{english}\r\n{japanese}\r\n\r\nTechnical details / 技術情報:\r\n{details}")
 }
 
 #[cfg(windows)]
@@ -193,4 +246,84 @@ fn show_message(message: &str, icon: windows::Win32::UI::WindowsAndMessaging::ME
 #[cfg(not(windows))]
 fn show_error(message: &str) {
     eprintln!("iroha-zip-shell: {message}");
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use super::{user_facing_error, user_facing_handoff_warning};
+    use iroha_zip::error::IrohaZipError;
+
+    #[test]
+    fn every_shell_error_category_has_english_and_japanese_context() {
+        let cases = [
+            (
+                IrohaZipError::io("read archive", io::Error::other("test detail")),
+                "A file or system operation failed.",
+                "ファイルまたはシステムの処理に失敗しました。",
+                "read archive: test detail",
+            ),
+            (
+                IrohaZipError::Config("test detail".to_owned()),
+                "The iroha-zip configuration is invalid.",
+                "iroha-zipの設定が正しくありません。",
+                "configuration error: test detail",
+            ),
+            (
+                IrohaZipError::Backend("test detail".to_owned()),
+                "The archive backend could not be verified or used.",
+                "書庫バックエンドを検証または使用できませんでした。",
+                "backend error: test detail",
+            ),
+            (
+                IrohaZipError::Policy("test detail".to_owned()),
+                "The archive was rejected by the safety policy.",
+                "安全ポリシーにより書庫を拒否しました。",
+                "archive rejected: test detail",
+            ),
+            (
+                IrohaZipError::TrustHandoff("test detail".to_owned()),
+                "Windows trust handoff failed.",
+                "Windowsの信頼連携に失敗しました。",
+                "Windows trust handoff failed: test detail",
+            ),
+            (
+                IrohaZipError::Sandbox("test detail".to_owned()),
+                "The isolated archive process failed.",
+                "分離された書庫処理に失敗しました。",
+                "sandbox error: test detail",
+            ),
+            (
+                IrohaZipError::Unsupported("test detail".to_owned()),
+                "This archive operation is not supported.",
+                "この書庫操作には対応していません。",
+                "unsupported operation: test detail",
+            ),
+            (
+                IrohaZipError::Usage("test detail".to_owned()),
+                "The archive request is invalid.",
+                "書庫の操作指定が正しくありません。",
+                "usage error: test detail",
+            ),
+        ];
+
+        for (error, english, japanese, detail) in cases {
+            let message = user_facing_error(&error);
+            assert!(message.starts_with(&format!("{english}\r\n{japanese}\r\n")));
+            assert!(message.contains("Technical details / 技術情報:\r\n"));
+            assert!(message.ends_with(detail));
+        }
+    }
+
+    #[test]
+    fn trust_handoff_warning_is_bilingual_and_keeps_technical_details() {
+        let message = user_facing_handoff_warning("test handoff detail");
+        assert!(message.starts_with(
+            "Extraction completed, but Windows trust handoff was incomplete.\r\n\
+             展開は完了しましたが、Windowsの信頼連携は完了しませんでした。\r\n"
+        ));
+        assert!(message.contains("Technical details / 技術情報:\r\n"));
+        assert!(message.ends_with("test handoff detail"));
+    }
 }

@@ -233,6 +233,7 @@ Open Settings from the extracted package:
 ```
 
 Settings follows the Windows user UI language: Japanese systems use Japanese, and other UI languages use English. Support and automation can explicitly set the process environment variable `IROHA_ZIP_LANGUAGE=ja` or `en`; the override is not persisted in the configuration file.
+Warning and failure message boxes from the double-click shell include Japanese and English outcome summaries alongside the technical details.
 
 The application manages:
 
