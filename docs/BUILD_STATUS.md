@@ -51,8 +51,9 @@ Updated: 2026-08-15
 - Tag/version/main-commit release gates, native x64/ARM64 builds, architecture-separated ZIPs and six standalone PE assets, exact PE-machine checks inside and outside both ZIPs, SHA-256 inventories, pinned GitHub workflow attestations, exact 11-asset pre-publication/post-publication verification, and bounded post-publication verification of the GitHub release attestation plus all 11 assets
 - Future split build/sign/package boundary with strict three-EXE Authenticode publisher/EKU/timestamp verification retained for an owner-configured signing identity
 - Japanese and English static Pages rendered at desktop and mobile sizes, with all three public routes passing an automated WCAG 2 AA audit
+- All repository Markdown is UTF-8-readable; every relative file target and local heading anchor resolves with exact path casing on both case-sensitive and case-insensitive hosts
 
-The current Linux suite contains 114 passing default-feature tests, including password-transport,
+The current Linux suite contains 115 passing default-feature tests, including password-transport,
 package-version/document, and bilingual Pages version/topology contracts, plus one ignored
 system-libarchive compatibility test that is invoked explicitly when the dependency is available.
 The feature-gated minimized fuzz-regression gate adds one passing deterministic test to the normal
