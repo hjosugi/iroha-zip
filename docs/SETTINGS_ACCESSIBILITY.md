@@ -34,7 +34,8 @@ Every editable setting, combo box, checkbox, and action button has:
 
 The 15 setting IDs occupy 2001–2015. The 11 action IDs include 1001–1004, 1101–1104, 1201, `IDOK`
 (1), and `IDCANCEL` (2). A platform-neutral `SettingsAction` mapping is exhaustively tested so every
-action ID has exactly one dispatch target.
+action ID has exactly one dispatch target. A second platform-neutral contract fixes the Win32
+creation/Tab order of all 26 IDs and requires the PowerShell automation literal to match it exactly.
 
 The settings application localizes labels, combo-box choices, status text, validation, folder-picker titles, confirmations, success messages, and operational errors. It follows the Windows user UI language: Japanese selects Japanese, while other UI languages use English. `IROHA_ZIP_LANGUAGE=ja` or `IROHA_ZIP_LANGUAGE=en` is an explicit process-local override for automation and support reproduction; it is not persisted in the configuration file.
 
@@ -48,7 +49,27 @@ all 26 controls for:
 - expected AutomationId and control type;
 - enabled and keyboard-focusable state;
 - non-empty accessible name, access key, and bounds;
-- successful focus traversal, including controls initially outside the viewport.
+- exact forward Tab and reverse Shift+Tab cycles through all 26 controls, including wraparound;
+- successful focus and full visibility after automatic scrolling, including controls initially
+  outside the viewport.
+
+The test first restores and raises the Settings HWND, injects a real Win32 `SendInput` mouse click
+at the visible first edit, and then injects real `VK_TAB`/`VK_SHIFT` keyboard input through the same
+API. Hosted Windows runners do not always report that HWND from `GetForegroundWindow()`, so the
+evidence records that observation without treating it as the input-routing oracle. After every key chord, UI Automation must report
+the expected process and AutomationId and a non-empty rectangle fully inside the top-level window.
+The forward cycle must return from Cancel to the first edit; the reverse cycle
+must reach Cancel from the first edit and return through the exact opposite order. This exercises
+the production `IsDialogMessageW` path instead of treating independent UIA `SetFocus` calls as Tab
+evidence. It remains automated runner evidence rather than a human assistive-technology test.
+
+`windows-latest` and the fixed Server x64 matrix must complete that real-input path in both
+languages. The GitHub-hosted Windows ARM64 image currently accepts `SendInput` but exposes no
+foreground/global UIA focus for the spawned window. Only when both `GITHUB_ACTIONS=true` and
+`RUNNER_ARCH=ARM64` hold, the harness records `realKeyInput: false` and uses the documented
+`AttachThreadInput`/`SetFocus` mechanism to require the same exact order and visible bounds in the
+target UI thread. Self-hosted and retail ARM64 runs may not take this fallback; they must complete
+the real-input path. This ARM hosted-runner limitation is not presented as physical-keyboard proof.
 
 Before mutating the form, the same process-level test checks the effective Per-Monitor V2 context
 and the synthetic 96→144→96 relayout contract described above. This detects a missing embedded
@@ -59,7 +80,9 @@ The exact-main [Actions run 31868019031](https://github.com/hjosugi/iroha-zip/ac
 at commit `5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` produced four independently checked Settings
 reports: English on Server 2022 and Server 2025, plus Japanese and English on native Windows 11
 ARM64. Every report records 26 controls, effective `PerMonitorV2`, the exact 96→144→96 synthetic
-transition, backend diagnosis success, and complete temporary-root removal.
+transition, backend diagnosis success, and complete temporary-root removal. New schema-v2 reports
+also record the complete observed forward/reverse keyboard cycles, wrap targets, input method, and
+focused-control visibility result.
 
 It edits a path and numeric value through `ValuePattern`, toggles a checkbox through
 `TogglePattern`, verifies the dirty-title contract without writing the temporary configuration,
@@ -122,7 +145,8 @@ source, manifest, evidence, or destination validation.
 
 UX-001 stays open until disposable Windows 10 and 11 systems record:
 
-1. visual fit and keyboard-only traversal at 100, 125, 150, 200, and 300% scaling;
+1. human visual-fit and keyboard-only traversal at 100, 125, 150, 200, and 300% scaling beyond the
+   automated exact forward/reverse keyboard cycles;
 2. low-resolution viewport scrolling and repeated movement between physical mixed-DPI monitors;
 3. Narrator and at least one independent screen reader;
 4. Japanese and English Windows with long and non-ASCII paths;

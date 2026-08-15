@@ -110,6 +110,37 @@ pub mod control_id {
         CANCEL,
     ];
 
+    // Creation order is the Win32 dialog-manager Tab order. Keep the native UI automation
+    // contract synchronized so forward and reverse keyboard cycles cover every control.
+    pub const TAB_ORDER: [usize; 26] = [
+        BACKEND_DIRECTORY,
+        BACKEND_BROWSE,
+        BACKEND_DOCTOR,
+        BACKEND_IMPORT,
+        BACKEND_MSYS2,
+        ISOLATION,
+        TIMEOUT_SECONDS,
+        MEMORY_LIMIT_MIB,
+        MAX_ARCHIVE_BYTES,
+        MAX_FILES,
+        MAX_DIRECTORIES,
+        MAX_TOTAL_BYTES,
+        MAX_SINGLE_FILE_BYTES,
+        MAX_DEPTH,
+        MAX_PATH_BYTES,
+        PRESERVE_MOTW,
+        OPEN_AFTER_DOUBLE_CLICK,
+        ENCODING,
+        ATTACHMENT_HANDOFF,
+        REGISTER,
+        UNREGISTER,
+        DEFAULT_APPS,
+        CONFIG_FOLDER,
+        DEFAULTS,
+        SAVE,
+        CANCEL,
+    ];
+
     pub fn is_setting(value: usize) -> bool {
         SETTING_CONTROLS.contains(&value)
     }
