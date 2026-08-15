@@ -95,6 +95,8 @@ const _: () = assert!(
     MAX_PASSWORD_UTF8_BYTES < PASSWORD_PIPE_BUFFER_BYTES as usize,
     "the complete delimited password must fit in the pipe before child resume"
 );
+const APP_CONTAINER_PROFILE_DELETE_ATTEMPTS: usize = 20;
+const APP_CONTAINER_PROFILE_DELETE_RETRY_DELAY: Duration = Duration::from_millis(50);
 const CONFIG_SAVE_MUTEX_NAME: &str = r"Local\iroha-zip.ConfigSave.v1";
 const CONFIG_SAVE_MUTEX_TIMEOUT_MS: u32 = 30_000;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
@@ -810,9 +812,8 @@ impl Sandbox {
             Mode::AppContainer {
                 profile_name, sid, ..
             } => unsafe {
-                let name = wide_null(OsStr::new(&profile_name));
-                if let Err(error) = DeleteAppContainerProfile(PCWSTR(name.as_ptr())) {
-                    failure = Some(windows_error("DeleteAppContainerProfile", error));
+                if let Err(error) = delete_appcontainer_profile_with_retry(&profile_name) {
+                    failure = Some(error);
                 }
                 if let Err(error) = fs::remove_dir_all(&self.root)
                     && error.kind() != std::io::ErrorKind::NotFound
@@ -1295,10 +1296,8 @@ fn create_appcontainer() -> Result<(String, PSID, PathBuf)> {
         Ok(resolved_root) => Ok((profile_name, sid, resolved_root)),
         Err(error) => {
             let mut cleanup_errors = Vec::new();
-            unsafe {
-                if let Err(cleanup) = DeleteAppContainerProfile(PCWSTR(name.as_ptr())) {
-                    cleanup_errors.push(format!("DeleteAppContainerProfile failed: {cleanup}"));
-                }
+            if let Err(cleanup) = delete_appcontainer_profile_with_retry(&profile_name) {
+                cleanup_errors.push(cleanup.to_string());
             }
             if let Some(root) = cleanup_root
                 && let Err(cleanup) = fs::remove_dir_all(&root)
@@ -1322,6 +1321,32 @@ fn create_appcontainer() -> Result<(String, PSID, PathBuf)> {
             }
         }
     }
+}
+
+fn delete_appcontainer_profile_with_retry(profile_name: &str) -> Result<()> {
+    let name = wide_null(OsStr::new(profile_name));
+    retry_appcontainer_profile_delete(
+        || unsafe { DeleteAppContainerProfile(PCWSTR(name.as_ptr())) },
+        thread::sleep,
+    )
+    .map_err(|error| windows_error("DeleteAppContainerProfile", error))
+}
+
+fn retry_appcontainer_profile_delete(
+    mut delete: impl FnMut() -> windows::core::Result<()>,
+    mut delay: impl FnMut(Duration),
+) -> windows::core::Result<()> {
+    let mut last_error = None;
+    for attempt in 0..APP_CONTAINER_PROFILE_DELETE_ATTEMPTS {
+        match delete() {
+            Ok(()) => return Ok(()),
+            Err(error) => last_error = Some(error),
+        }
+        if attempt + 1 < APP_CONTAINER_PROFILE_DELETE_ATTEMPTS {
+            delay(APP_CONTAINER_PROFILE_DELETE_RETRY_DELAY);
+        }
+    }
+    Err(last_error.expect("profile deletion is attempted at least once"))
 }
 
 fn appcontainer_folder(sid: PSID) -> Result<PathBuf> {
@@ -2458,6 +2483,40 @@ mod tests {
         fn drop(&mut self) {
             FORCE_ISOLATION_VERIFICATION_FAILURE.store(false, std::sync::atomic::Ordering::SeqCst);
         }
+    }
+
+    #[test]
+    fn appcontainer_profile_deletion_retry_is_bounded_and_stops_on_success() {
+        let mut attempts = 0usize;
+        let mut delays = Vec::new();
+        retry_appcontainer_profile_delete(
+            || {
+                attempts += 1;
+                if attempts < 3 {
+                    Err(WindowsError::from_hresult(HRESULT::from_win32(32)))
+                } else {
+                    Ok(())
+                }
+            },
+            |delay| delays.push(delay),
+        )
+        .unwrap();
+        assert_eq!(attempts, 3);
+        assert_eq!(delays, vec![APP_CONTAINER_PROFILE_DELETE_RETRY_DELAY; 2]);
+
+        let mut attempts = 0usize;
+        let mut delay_count = 0usize;
+        let error = retry_appcontainer_profile_delete(
+            || {
+                attempts += 1;
+                Err(WindowsError::from_hresult(HRESULT::from_win32(32)))
+            },
+            |_| delay_count += 1,
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), HRESULT::from_win32(32));
+        assert_eq!(attempts, APP_CONTAINER_PROFILE_DELETE_ATTEMPTS);
+        assert_eq!(delay_count, APP_CONTAINER_PROFILE_DELETE_ATTEMPTS - 1);
     }
 
     #[test]

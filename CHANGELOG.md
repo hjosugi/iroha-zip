@@ -12,6 +12,8 @@
 - Deliver the bounded password into a dedicated 4 KiB pipe after external token verification while
   the child remains suspended, close-delimit it without a synchronous flush, and only then resume
   the child, preventing the reader/flush deadlock observed by native ARM64 E2E.
+- Follow the documented Windows profile-deletion recovery contract with a sub-second bounded retry;
+  persistent AppContainer cleanup failures remain fatal and are never reported as success.
 - Expand Windows evidence to schema v5 with native-UI ZipCrypto, WinZip AES-128, and AES-256
   preview/extraction, complete tree comparison, public-sentinel output-absence checks, and
   wrong-password/cancel non-publication.
