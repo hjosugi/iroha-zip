@@ -2,7 +2,20 @@
 
 Updated: 2026-08-15
 
-This document defines the automated SAFE-001 evidence contract. The expanded schema-v4 contract passed on both fixed-label GitHub runners and the native `windows-11-arm` runner in [Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604) from commit `27610e69f21bf85709f70a68695acc1113d22dca`; the native ARM64 path also passed independently on push in [Actions run 31778405711](https://github.com/hjosugi/iroha-zip/actions/runs/31778405711). The active schema-v5 harness retains that matrix and adds the encrypted-ZIP/password assertions below. Independently downloaded schema-v4 JSON records one effective `AC\Temp` path, successful in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven explicitly removed AppContainer profiles/roots per environment, all 14 named additional read formats and three raw-stream negative cases below, the generated malicious corpus, x64 English Settings, and native ARM64 Japanese/English Settings. These results are evidence for the named disposable Server and hosted Windows 11 ARM images, not Windows 10/11 x64 desktop certification or a security audit.
+This document defines the automated SAFE-001 evidence contract. The schema-v5 contract passed on
+both fixed-label x64 runners and the native `windows-11-arm` runner at exact `main` commit
+`1f8cce72c1730ae3026bf386988f62b32c0470c4` in
+[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). Independently
+downloaded JSON from all three environments records one effective `AC\Temp` path, successful
+in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven
+explicitly removed AppContainer profiles/roots per environment, all 14 named additional read formats
+and three raw-stream negative cases below, the generated malicious corpus, x64 English Settings,
+native ARM64 Japanese/English Settings, and the encrypted-ZIP/password assertions below. All 11
+reports were selected by exact artifact filename and mechanically checked for schema-v5 success,
+three encryption modes, non-publication failures, malicious-corpus rejection, Settings diagnosis,
+correct ARM64 PE identity, and complete cleanup. These results are evidence for the named disposable
+Server and hosted Windows 11 ARM images, not Windows 10/11 x64 desktop certification or a security
+audit.
 
 ## Automated matrix
 

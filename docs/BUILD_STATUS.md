@@ -1,13 +1,14 @@
 # Build and validation status
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 ## Completed locally
 
 - Rust 1.97.1 `cargo fmt --all -- --check`
 - Rust 1.97.1 `cargo test --all-targets --locked` on Linux
 - Rust 1.97.1 `cargo clippy --all-targets --locked` on Linux
-- `cargo check --all-targets --target x86_64-pc-windows-msvc --locked`
+- `cargo clippy --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings`
+- `cargo check --all-targets --target aarch64-pc-windows-msvc --locked`
 - Configuration serialization, backward compatibility, validation, rollback-safe replacement, and path-policy tests
 - Platform-neutral settings-form round trips, human-readable byte-unit parsing, and field-specific validation tests
 - Platform-neutral 100–300% layout scaling, stable 26-control IDs, exhaustive 11-action dispatch mapping, and concurrent-save tests
@@ -25,6 +26,11 @@ Updated: 2026-08-14
 - Handle-pinned, recursively sealed sandbox archive copies; post-listing/post-extraction fingerprint checks; and extraction-directory create-new only after the listing child has exited and its output passed policy
 - Windows raw-name listing through libarchive's UTF-8 pathname API in a dedicated child that loads only manifest-pinned DLL candidates after rechecking AppContainer/zero-capability isolation; fixed `asInvoker`/long-path/UTF-8 process manifests with byte-for-byte resource readback remain on disposable backend copies
 - Windows standalone GZ/BZ2/XZ/Zstandard/compress handling through libarchive's official raw reader in two fresh AppContainer passes; the outer extension fixes both the expected filter and safe output name, preflight drains the complete stream, extraction is create-new and bounded by the single-file limit, and mismatch/error cleanup removes partial output. Platform-neutral naming/CLI tests, x64/ARM64 cross-target checks, and a direct libarchive 3.8.9 five-filter API proof pass locally.
+- Encrypted-ZIP `preview`/`extract` through a value-free CLI flag, bilingual protected native dialog,
+  bounded zeroizing secret storage, a verified suspended AppContainer child, one-use 4 KiB anonymous
+  pipe with explicit handle allowlisting, manifest-pinned libarchive password reader, and fail-closed
+  entry/path/resource enforcement. Platform-neutral tests cover cancellation, EOF, overflow, timeout,
+  abnormal exit, cleanup, inherited-handle, and output-redaction boundaries.
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Safe UI Automation button paths for three folder-picker cancellations, Restore Defaults, and unsaved-change Cancel
@@ -46,7 +52,14 @@ Updated: 2026-08-14
 - Future split build/sign/package boundary with strict three-EXE Authenticode publisher/EKU/timestamp verification retained for an owner-configured signing identity
 - Japanese and English static Pages rendered at desktop and mobile sizes, with all three public routes passing an automated WCAG 2 AA audit
 
-The current Linux suite contains 108 passing default-feature tests, including the package-version/document and bilingual Pages version/topology contracts, plus one explicitly invoked system-libarchive compatibility test. The feature-gated minimized fuzz-regression gate adds one passing deterministic test to the normal all-target run. Windows CI additionally runs source-file and directory-handle sharing tests that verify open snapshots block writes and renames, a rejected-child-stays-suspended regression, two independent processes saving one configuration path, and a real per-user association round trip that preserves unrelated registry state and each protected `UserChoice` snapshot.
+The current Linux suite contains 114 passing default-feature tests, including password-transport,
+package-version/document, and bilingual Pages version/topology contracts, plus one ignored
+system-libarchive compatibility test that is invoked explicitly when the dependency is available.
+The feature-gated minimized fuzz-regression gate adds one passing deterministic test to the normal
+all-target run. Windows CI additionally runs source-file and directory-handle sharing tests that
+verify open snapshots block writes and renames, a rejected-child-stays-suspended regression, two
+independent processes saving one configuration path, and a real per-user association round trip that
+preserves unrelated registry state and each protected `UserChoice` snapshot.
 
 ## Performed by GitHub Actions
 
@@ -62,14 +75,59 @@ filesystem boundaries. The rule remains enabled for new flows. See the bilingual
 A later Pages behavior regression produced one `js/code-injection` alert (#234) at the test-only
 `vm.runInNewContext` boundary. Only checked-in `site/assets/site.js` reaches that VM, so the alert was
 dismissed as `used in tests` after review. The current three-language
-[CodeQL run 31791546414](https://github.com/hjosugi/iroha-zip/actions/runs/31791546414) passed, and the
-repository had zero open CodeQL, Dependabot, and secret-scanning alerts on 2026-08-14.
+[CodeQL run 31862434987](https://github.com/hjosugi/iroha-zip/actions/runs/31862434987) passed for
+Rust, Actions, and JavaScript/TypeScript on exact `main` commit
+`1f8cce72c1730ae3026bf386988f62b32c0470c4`. The repository had zero open CodeQL, Dependabot, and
+secret-scanning alerts on 2026-08-15.
 
-The fast CI matrix runs formatting, tests, and Clippy on both `ubuntu-latest` and `windows-latest`, then builds the Windows settings binary in the debug profile for its 26-control UI Automation contract and disposable association-state round trip. The matrix also injects backend-import failure immediately after the prior tree is renamed to backup and requires byte-identical restoration, zero transaction residue, and a subsequent successful import. These gates passed for the exact `v0.5.3` tag commit `7d5e60a907b7681c09aebff03d66f78c172d7c3e` on `main` in [Actions run 31791546897](https://github.com/hjosugi/iroha-zip/actions/runs/31791546897), including the Windows PowerShell 5.1 launcher regression and native ARM64 backend-export timeout boundary. All 28 external action uses are pinned to exact 40-hex commits, and the repository Actions policy rejects non-SHA references while retaining read-only default workflow permissions. Production-profile compilation and signed-MSYS2 backend work are intentionally kept out of the duplicate x64 matrix path.
+The fast CI matrix runs formatting, tests, and Clippy on both `ubuntu-latest` and `windows-latest`,
+then builds the Windows settings binary in the debug profile for its 26-control UI Automation
+contract and disposable association-state round trip. The matrix also injects backend-import failure
+immediately after the prior tree is renamed to backup and requires byte-identical restoration, zero
+transaction residue, and a subsequent successful import. These gates, the native ARM64 job, and the
+Windows PowerShell 5.1 launcher regression passed for exact `main` commit
+`1f8cce72c1730ae3026bf386988f62b32c0470c4` in
+[Actions run 31862435136](https://github.com/hjosugi/iroha-zip/actions/runs/31862435136). All external
+action uses are pinned to exact 40-hex commits, and the repository Actions policy rejects non-SHA
+references while retaining read-only default workflow permissions. Production-profile compilation
+and signed-MSYS2 backend work are intentionally kept out of the duplicate x64 matrix path.
 
-The native GitHub `windows-11-arm` job requires OS/process architecture `Arm64` and Rust host `aarch64-pc-windows-msvc`, verifies all three application PEs and all backend EXE/DLL payloads as machine `0xAA64`, and exports a signature-verified MSYS2 CLANGARM64 backend. It runs the complete create/read matrix, malicious corpus, shell, Japanese and English Settings, normal-AppContainer schema-v4 isolation, and exact LPAC fail-closed branch. All five downloaded JSON reports from commit `27610e69f21bf85709f70a68695acc1113d22dca` in [Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604), independently repeated on push in [run 31778405711](https://github.com/hjosugi/iroha-zip/actions/runs/31778405711), record the matrices as executed, normal AppContainer with zero capabilities, seven successful profile/root cleanups, four create formats, 14 exact read fixtures, three raw-stream rejection cases, one control plus 18 hostile rejects, standalone-raw shell dispatch, and complete temporary-root removal. The read set covers four filtered TARs, five standalone streams, Microsoft LZX CAB, and pinned official libarchive 3.8.9 RAR/RAR5/LHA/ZIPX fixtures. The LPAC query returned the exact `ERROR_INVALID_PARAMETER` class and did not fall back. See [the ARM64 boundary and setup](ARM64.md).
+The native GitHub `windows-11-arm` job requires OS/process architecture `Arm64` and Rust host
+`aarch64-pc-windows-msvc`, verifies all three application PEs and all backend EXE/DLL payloads as
+machine `0xAA64`, and exports a signature-verified MSYS2 CLANGARM64 backend. It runs the complete
+create/read matrix, malicious corpus, shell, Japanese and English Settings, normal-AppContainer
+isolation, and exact LPAC fail-closed branch. The schema-v5 password expansion passed at exact `main`
+commit `1f8cce72c1730ae3026bf386988f62b32c0470c4` in
+[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). All five reports
+were downloaded by exact filename and independently checked: ZipCrypto, WinZip AES-128, and AES-256
+each used the bilingual protected native control and one-use channel, exposed no password in output,
+and produced preview/extraction trees matching the controlled source. Wrong-password and cancel paths
+published no destination. The reports also record normal AppContainer with zero capabilities, seven
+successful profile/root cleanups, four create formats, 14 exact read fixtures, three raw-stream
+rejection cases, one control plus 18 hostile rejects, standalone-raw shell dispatch, both Settings
+languages, and complete temporary-root removal. The LPAC query returned the exact
+`ERROR_INVALID_PARAMETER` class and did not fall back. See [the ARM64 boundary and setup](ARM64.md).
 
-A separate fixed-label `windows-2022` / `windows-2025` x64 matrix builds the production release binaries once per supported Server image, exports the verified backend once per image, and produces machine-readable archive/isolation, malicious-corpus, and settings artifacts. The Server 2025 path reuses that backend to validate supported evidence, the explicit unsupported-bundle path, `--require-supported`, rollback, and evidence-tamper failures. The expanded schema-v4 matrix passed on both images from commit `27610e69f21bf85709f70a68695acc1113d22dca` in [Actions run 31778764604](https://github.com/hjosugi/iroha-zip/actions/runs/31778764604). Independently downloaded reports cover four created formats and the same 14 exact read fixtures as ARM64: four filtered TARs; standalone GZ/BZ2/XZ/Zstandard/compress streams; validly Microsoft-signed LZX CAB; and pinned official libarchive 3.8.9 RAR, RAR5, LHA level 3, and BZIP2-compressed ZIPX. They also record all three raw-stream rejection cases with non-publication, Japanese and long paths, normal and standalone-raw shell extraction, one benign plus 18 rejected generated archives, native hardlink/ADS/junction rejection, the 26-control English settings save/diagnosis path, and seven successful profile/root cleanups per image. LPAC requests on both images produced the exact classified unsupported token-query result and failed closed without backend-success output or residue. The Server matrix is not Windows 10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md), [LPAC evidence](LPAC_EVALUATION.md), and [corpus contract](MALICIOUS_CORPUS.md).
+A separate fixed-label `windows-2022` / `windows-2025` x64 matrix builds the production release
+binaries once per supported Server image, exports the verified backend once per image, and produces
+machine-readable archive/isolation, malicious-corpus, and settings artifacts. The Server 2025 path
+reuses that backend to validate supported evidence, the explicit unsupported-bundle path,
+`--require-supported`, rollback, and evidence-tamper failures. The schema-v5 matrix passed on both
+images at exact `main` commit `1f8cce72c1730ae3026bf386988f62b32c0470c4` in
+[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). All six reports
+were downloaded by exact artifact name and independently checked. Each OS passed ZipCrypto,
+AES-128, and AES-256 with the protected bilingual dialog, one-use channel, password output absence,
+source-identical preview/extraction trees, wrong-password/cancel non-publication, and complete
+cleanup. The same reports cover four created formats and 14 exact read fixtures: four filtered TARs;
+standalone GZ/BZ2/XZ/Zstandard/compress streams; validly Microsoft-signed LZX CAB; and pinned official
+libarchive 3.8.9 RAR, RAR5, LHA level 3, and BZIP2-compressed ZIPX. They also record all three
+raw-stream rejection cases with non-publication, Japanese and long paths, normal and standalone-raw
+shell extraction, one benign plus 18 rejected generated archives, native hardlink/ADS/junction
+rejection, the 26-control English settings save/diagnosis path, and seven successful profile/root
+cleanups per image. LPAC requests on both images produced the exact classified unsupported token-query
+result and failed closed without backend-success output or residue. The Server matrix is not Windows
+10/11 desktop evidence; see the [Windows E2E contract](WINDOWS_E2E.md),
+[LPAC evidence](LPAC_EVALUATION.md), and [corpus contract](MALICIOUS_CORPUS.md).
 
 A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` builds unsigned x64 and native ARM64 packages on separate native runners. It requires x64 `0x8664` and ARM64 `0xAA64` across build output, standalone assets, and expanded ZIPs; attests both ZIPs, all six EXEs, and the combined checksum inventory; and permits exactly 11 architecture-separated assets. Publication uses the immutable-release policy, creates a draft without overwriting an existing version, verifies exact name/length/digest before publishing, marks it latest, and requires immutable exact readback. The immutable stable [v0.5.3 release](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.3) passed that entire path in [Actions run 31792172328](https://github.com/hjosugi/iroha-zip/actions/runs/31792172328), after [non-publishing run 31791555768](https://github.com/hjosugi/iroha-zip/actions/runs/31791555768) passed the same package path. An independent public re-download matched all 11 API digests and byte lengths, eight checksum subjects, two sidecars, every direct and ZIP-contained PE identity, all ZIP-to-standalone bytes, both 90-link bilingual package trees, backend non-inclusion, annotated tag object `0973a3b9a12813f2fb0b94003a1be8187c987e3d`, exact commit `7d5e60a907b7681c09aebff03d66f78c172d7c3e`, and all nine hosted-runner-only tag-ref attestations; all six distinct executables had empty Authenticode Certificate Tables as disclosed. The public Japanese, English, project-root, and 404 Pages matched the deployed source byte-for-byte and returned zero W3C Nu errors or warnings. `v0.5.2` was the previous complete-contract release, `v0.4.1` was the first post-policy immutable release, and `v0.4.0` predates enforcement and remains mutable. The future Authenticode verification path remains available locally but is inactive until the owner configures and independently reviews a signing identity. See [release verification](RELEASE_VERIFICATION.md).
 
@@ -87,4 +145,4 @@ A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` bui
 - First successful reviewed Authenticode release after owner-managed signing identity validation, plus independent security review
 - Windows 10 ARM64 and multiple retail Windows 11 ARM devices beyond the passing hosted native runner
 
-Until those Windows integration checks are complete, treat the unsigned `v0.5.x` line as security-oriented software rather than an audited security product.
+Until those Windows integration checks are complete, treat the unsigned `v0.6.x` line as security-oriented software rather than an audited security product.

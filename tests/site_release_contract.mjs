@@ -3,7 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const repository = "hjosugi/iroha-zip";
-const tag = "v0.5.3";
+const tag = "v0.6.0";
 const version = tag.slice(1);
 const releasePage = `https://github.com/${repository}/releases/latest`;
 const script = fs.readFileSync(
@@ -126,7 +126,7 @@ const rejectedReleases = [
   { ...validRelease(), immutable: false },
   { ...validRelease(), draft: true },
   { ...validRelease(), prerelease: true },
-  { ...validRelease(), tag_name: "v0.5.3-rc.1" },
+  { ...validRelease(), tag_name: "v0.6.0-rc.1" },
   { ...validRelease(), assets: validRelease().assets.slice(1) },
   {
     ...validRelease(),
