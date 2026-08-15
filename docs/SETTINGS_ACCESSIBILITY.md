@@ -63,11 +63,13 @@ must reach Cancel from the first edit and return through the exact opposite orde
 the production `IsDialogMessageW` path instead of treating independent UIA `SetFocus` calls as Tab
 evidence. It remains automated runner evidence rather than a human assistive-technology test.
 
-After the traversal and confirmation-path test exits without saving, a fresh process changes the
-timeout, focuses that edit through real pointer input, sends `VK_RETURN`, requires the native saved
-message and `timeout_seconds = 301` on disk, then sends `VK_ESCAPE` and requires a clean process
-exit. This covers the production Enter-to-save and Escape-to-close mappings rather than inferring
-them from the `IDOK`/`IDCANCEL` control IDs.
+After the traversal reaches the unsaved-change confirmation and cancels that close, the same
+foreground process focuses the timeout edit through real pointer input, sends `VK_RETURN`, requires
+the native saved message and `timeout_seconds = 301` on disk, then sends `VK_ESCAPE` and requires a
+clean process exit. A fresh process then changes the value to 302, drives Cancel and confirms
+discard through UI Automation, and requires the saved 301 to remain unchanged. This covers the
+production Enter-to-save and Escape-to-close mappings without losing either unsaved-change decision
+or inferring shortcuts from the `IDOK`/`IDCANCEL` control IDs.
 
 `windows-latest` and the fixed Server x64 matrix must complete that real-input path in both
 languages. The GitHub-hosted Windows ARM64 image currently accepts `SendInput` but exposes no
