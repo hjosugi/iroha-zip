@@ -12,7 +12,7 @@ struct Snapshot {
     settings_schema: u64,
 }
 
-const SNAPSHOTS: [Snapshot; 2] = [
+const SNAPSHOTS: [Snapshot; 3] = [
     Snapshot {
         root: "evidence/windows/31868019031",
         run: "31868019031",
@@ -24,6 +24,12 @@ const SNAPSHOTS: [Snapshot; 2] = [
         run: "31875638650",
         commit: "9debd02e819899f8dbdfdd5281d3d0b2a68a89db",
         settings_schema: 2,
+    },
+    Snapshot {
+        root: "evidence/windows/31891960603",
+        run: "31891960603",
+        commit: "71f7b674745bc8446142f4f7dbf71534839ac9fa",
+        settings_schema: 3,
     },
 ];
 const REPORTS: [&str; 11] = [
@@ -310,7 +316,13 @@ fn validate_settings(value: &Value, report: &str, snapshot: Snapshot) {
         value["syntheticDpiTransitions"],
         serde_json::json!([96, 144, 96])
     );
-    assert_eq!(value["safeFolderPickerCancellations"], 3);
+    if snapshot.settings_schema >= 3 {
+        assert_eq!(value["safeFolderPickerCompletions"], 1);
+        assert_eq!(value["safeFolderPickerCancellations"], 2);
+    } else {
+        assert!(value["safeFolderPickerCompletions"].is_null());
+        assert_eq!(value["safeFolderPickerCancellations"], 3);
+    }
     for pointer in [
         "/restoreDefaultsCancelAndConfirm",
         "/cancelButtonDiscardCancelAndConfirm",

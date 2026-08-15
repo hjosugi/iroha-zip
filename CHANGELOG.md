@@ -6,6 +6,9 @@
   folder through UI Automation, require the selected path to return to the form, retain safe
   cancellation of both import pickers, and record the new completion/cancellation split in
   schema-v3 Windows evidence.
+- Preserve 11 independently reviewed schema-v3 Windows reports from exact `main` across native
+  Windows 11 ARM and fixed Windows Server 2022/2025, with source/canonical hashes, artifact API
+  digests, folder-picker completion assertions, and an ordinary multi-generation Rust regression.
 - Resolve MSYS2 backend runtime dependencies through bounded batches of at most 64 `ldd` inputs,
   deduplicate pending paths, reject unresolved payload dependencies and inventories larger than 256
   files, recognize only strict Windows virtual API-set names as OS-provided, and lock those

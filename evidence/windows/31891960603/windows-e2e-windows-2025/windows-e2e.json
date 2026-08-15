@@ -1,0 +1,552 @@
+{
+  "binaries": {
+    "backendManifestSha256": "77d839023d31bb5e303318a0ff4c529f3860cfa549228d925fbcae16a0d3f523",
+    "irohaZipSha256": "9629d6c81b2c06324eac0451f0808ec66a4c8e76da56612f0c52ad1deac29f10",
+    "shellSha256": "1a1062fac489c41ddcd1975bbf0ee6d096cb7e04eddf8960bc6f65b2b0e35b31"
+  },
+  "cleanup": {
+    "temporaryRootRemoved": true
+  },
+  "doctor": {
+    "backendEvidenceValidationMilliseconds": 72,
+    "elapsedMilliseconds": 449,
+    "outputSha256": "d0590967ed770be35f4ab1fb52acfabc22184822e3064923010baf1cbf3a5082"
+  },
+  "encryptedArchiveFailures": {
+    "cancelDestinationAbsent": true,
+    "cancelExitCode": 0,
+    "cancelOutputEmpty": true,
+    "explicitCleanupRequired": true,
+    "nativeBilingualDialog": true,
+    "passwordControlsProtected": true,
+    "wrongPasswordDestinationAbsent": true,
+    "wrongPasswordExitCode": 2,
+    "wrongPasswordRejected": true,
+    "wrongPasswordStderrSha256": "07dab6e24f9126bc4a335f0134799bab40c74b6b7154cc01aa1340303523cf00"
+  },
+  "encryptedArchives": [
+    {
+      "archiveBytes": 728,
+      "archiveSha256": "2b5da7c36d96533258d7fbdbd781c6ae77dc229dd7af12598fbb16f3c06d0e11",
+      "controlledFixtureGenerationMilliseconds": 29,
+      "controlledSourceManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c",
+      "encryption": "zipcrypt",
+      "explicitCleanupRequired": true,
+      "extractMilliseconds": 700,
+      "format": "zip",
+      "nativeBilingualDialog": true,
+      "oneUseChannel": true,
+      "passwordAbsentFromOutput": true,
+      "passwordControlProtected": true,
+      "previewMilliseconds": 1769,
+      "treeManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c"
+    },
+    {
+      "archiveBytes": 788,
+      "archiveSha256": "b64a0b8ab2fa27d472a3d076b2b14e601bf07e76b46b32dfbea08fe2457282e7",
+      "controlledFixtureGenerationMilliseconds": 30,
+      "controlledSourceManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c",
+      "encryption": "aes128",
+      "explicitCleanupRequired": true,
+      "extractMilliseconds": 686,
+      "format": "zip",
+      "nativeBilingualDialog": true,
+      "oneUseChannel": true,
+      "passwordAbsentFromOutput": true,
+      "passwordControlProtected": true,
+      "previewMilliseconds": 659,
+      "treeManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c"
+    },
+    {
+      "archiveBytes": 804,
+      "archiveSha256": "f3e585cabe36c5448cba7280103fc37ce43b13691c86b9c4ee0b3a16310fe8a3",
+      "controlledFixtureGenerationMilliseconds": 31,
+      "controlledSourceManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c",
+      "encryption": "aes256",
+      "explicitCleanupRequired": true,
+      "extractMilliseconds": 673,
+      "format": "zip",
+      "nativeBilingualDialog": true,
+      "oneUseChannel": true,
+      "passwordAbsentFromOutput": true,
+      "passwordControlProtected": true,
+      "previewMilliseconds": 665,
+      "treeManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c"
+    }
+  ],
+  "failure": null,
+  "formats": [
+    {
+      "archiveBytes": 5777,
+      "archiveSha256": "b345f3e3733f2ab3b293d1d77e6b2adee32a096a55d1e8f8010f221c138cc05b",
+      "createMilliseconds": 1030,
+      "explicitCleanupRequired": true,
+      "extension": "zip",
+      "extractMilliseconds": 608,
+      "format": "zip",
+      "previewMilliseconds": 515,
+      "previewOutputSha256": "4ffad8a8a95f1e439469cbe61a9c420020a05220263c74a14260d5cd63196b61",
+      "treeManifestSha256": "899149bfde99016a00480df18aaa9c28c0399af460c6829d9dd72bbb7168855f"
+    },
+    {
+      "archiveBytes": 652,
+      "archiveSha256": "58300c9cebbe59798c4134e70c41b482b1869c3845c86f107a710c72959a4f35",
+      "createMilliseconds": 1099,
+      "explicitCleanupRequired": true,
+      "extension": "7z",
+      "extractMilliseconds": 633,
+      "format": "seven-zip",
+      "previewMilliseconds": 631,
+      "previewOutputSha256": "4ffad8a8a95f1e439469cbe61a9c420020a05220263c74a14260d5cd63196b61",
+      "treeManifestSha256": "899149bfde99016a00480df18aaa9c28c0399af460c6829d9dd72bbb7168855f"
+    },
+    {
+      "archiveBytes": 26624,
+      "archiveSha256": "95da7adf7ce73f220b5aa13cbdf07631800cc007d52e9ccaf95e5a3c7a153f7d",
+      "createMilliseconds": 992,
+      "explicitCleanupRequired": true,
+      "extension": "tar",
+      "extractMilliseconds": 559,
+      "format": "tar",
+      "previewMilliseconds": 541,
+      "previewOutputSha256": "4ffad8a8a95f1e439469cbe61a9c420020a05220263c74a14260d5cd63196b61",
+      "treeManifestSha256": "899149bfde99016a00480df18aaa9c28c0399af460c6829d9dd72bbb7168855f"
+    },
+    {
+      "archiveBytes": 1166,
+      "archiveSha256": "a50e88d1c423aceb033fffc4f7ca9c3eb8da0d2ec7b20d1dd8e624fec4f752fa",
+      "createMilliseconds": 1065,
+      "explicitCleanupRequired": true,
+      "extension": "tar.gz",
+      "extractMilliseconds": 574,
+      "format": "tar-gz",
+      "previewMilliseconds": 536,
+      "previewOutputSha256": "4ffad8a8a95f1e439469cbe61a9c420020a05220263c74a14260d5cd63196b61",
+      "treeManifestSha256": "899149bfde99016a00480df18aaa9c28c0399af460c6829d9dd72bbb7168855f"
+    }
+  ],
+  "generatedAtUtc": "2026-08-15T15:13:33.2157786Z",
+  "invalidArchive": {
+    "destinationAbsent": true,
+    "exitCode": 2,
+    "explicitCleanupRequired": true,
+    "rejected": true,
+    "stderrSha256": "7507607596f9061df0827dba954485570bbe8d479bb2ff94baefe0da02fc0eb4"
+  },
+  "isolation": {
+    "cleanup": [
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.234018cc03547b07aca80",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.234018cc0354f980cc682",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.234018cc0355175f17944",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.234018cc03551ccbf9e06",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.234018cc0355303be3148",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.234018cc03553e9e6f1ca",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.234018cc0355440eac00c",
+        "temporaryRootRemoved": true
+      }
+    ],
+    "crash": {
+      "exitCode": -1073740791,
+      "terminatedWithoutSuccess": true
+    },
+    "loaderFailure": {
+      "createProcessRejected": true
+    },
+    "memory": {
+      "exitCode": 2,
+      "limitMib": 64,
+      "rejected": true,
+      "requestedMib": 256
+    },
+    "network": {
+      "denied": true,
+      "endpoint": "127.0.0.1:51879",
+      "errorKind": "TimedOut"
+    },
+    "probeSha256": "9629d6c81b2c06324eac0451f0808ec66a4c8e76da56612f0c52ad1deac29f10",
+    "processTemp": {
+      "deleteOnCloseSucceeded": true,
+      "resolvedPath": "\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Packages\\iroha-zip.job.234018cc03553e9e6f1ca\\AC\\Temp\\",
+      "rngSucceeded": true,
+      "schemaVersion": 1,
+      "tempEnvironment": "\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Packages\\iroha-zip.job.234018cc03553e9e6f1ca\\AC\\Temp",
+      "tmpEnvironment": "\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Packages\\iroha-zip.job.234018cc03553e9e6f1ca\\AC\\Temp"
+    },
+    "requestedMode": "appcontainer",
+    "schemaVersion": 4,
+    "stagingWriteSeal": {
+      "aclApplied": true,
+      "deniedOperations": [
+        "overwrite-existing-file",
+        "append-existing-file",
+        "create-root-file",
+        "create-parent-file",
+        "create-root-directory",
+        "overwrite-nested-file",
+        "create-nested-file",
+        "rename-file",
+        "delete-file",
+        "change-file-attributes",
+        "open-dacl-for-write",
+        "open-owner-for-write"
+      ],
+      "readablePaths": [
+        "root-file",
+        "nested-file",
+        "parent-directory",
+        "root-directory",
+        "nested-directory",
+        "current-directory"
+      ]
+    },
+    "timeout": {
+      "error": "archive backend exceeded 250ms",
+      "limitMilliseconds": 250,
+      "rejected": true,
+      "requestedSleepMilliseconds": 5000
+    },
+    "token": {
+      "capabilityCount": 0,
+      "isAppContainer": true,
+      "isLessPrivilegedAppContainer": false
+    }
+  },
+  "lpac": {
+    "doctor": {
+      "backendExecutionReported": false,
+      "elapsedMilliseconds": 374,
+      "exitCode": 2,
+      "stderrSha256": "461fe7abfd014265954ae951cad98794dd33f19b457f98e18aaea4c36e105282",
+      "stdoutSha256": "39009f98ef275fb89cff6f09eddd543c0aa4420964c409cd6d0aacaf25ef2e4d"
+    },
+    "failClosed": true,
+    "failureClass": "token-query-invalid-parameter",
+    "isolation": {
+      "elapsedMilliseconds": 88,
+      "exitCode": 2,
+      "stderrSha256": "461fe7abfd014265954ae951cad98794dd33f19b457f98e18aaea4c36e105282",
+      "stdoutEmpty": true
+    },
+    "supported": false
+  },
+  "pinnedFixtureDecoderSelfTest": {
+    "passed": true,
+    "rejectionCases": [
+      "encoded-hash-drift",
+      "decoded-length-drift",
+      "decoded-hash-drift"
+    ]
+  },
+  "rawStreamNegative": {
+    "actualFilter": "gzip",
+    "allDestinationsAbsent": true,
+    "byteLimit": 32,
+    "byteLimitExitCode": 2,
+    "byteLimitRejected": true,
+    "byteLimitStderrSha256": "19e686979302e832cfd98aeaeb260a1d49ca86304d9e0da5275264f9366403a2",
+    "compressedPayloadCorruptionExitCode": 2,
+    "compressedPayloadCorruptionRejected": true,
+    "compressedPayloadCorruptionStderrSha256": "541d307e9009813eb1a5a58139e350e18dd7527a496c01c9e3ebec2937585efd",
+    "expectedFilter": "xz",
+    "explicitCleanupRequired": true,
+    "filterMismatchExitCode": 2,
+    "filterMismatchRejected": true,
+    "filterMismatchStderrSha256": "6f7d7a1ece17ddf7018ca33bd3362804448c75f69f0a4b1d2f095ea3f1082766"
+  },
+  "readFixtures": [
+    {
+      "archiveBytes": 393,
+      "archiveSha256": "18414b720a67c5f79068e87bcbc4b08828759f22cdc9664210832cbd430ea37c",
+      "controlledFixtureGenerationMilliseconds": 20,
+      "controlledSourceManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c",
+      "explicitCleanupRequired": true,
+      "extension": "tar.bz2",
+      "extractMilliseconds": 578,
+      "format": "tar-bz2",
+      "previewMilliseconds": 562,
+      "treeManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c"
+    },
+    {
+      "archiveBytes": 396,
+      "archiveSha256": "35e9998e61b0c30ee7d7e001725a94e32e087523dae1e532f819e4d519350571",
+      "controlledFixtureGenerationMilliseconds": 23,
+      "controlledSourceManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c",
+      "explicitCleanupRequired": true,
+      "extension": "tar.xz",
+      "extractMilliseconds": 540,
+      "format": "tar-xz",
+      "previewMilliseconds": 497,
+      "treeManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c"
+    },
+    {
+      "archiveBytes": 376,
+      "archiveSha256": "cd93bca78c7122e3594acd323d034e334f47f4eb49def1fac8f8734f000b7a12",
+      "controlledFixtureGenerationMilliseconds": 19,
+      "controlledSourceManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c",
+      "explicitCleanupRequired": true,
+      "extension": "tar.zst",
+      "extractMilliseconds": 512,
+      "format": "tar-zstd",
+      "previewMilliseconds": 491,
+      "treeManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c"
+    },
+    {
+      "archiveBytes": 703,
+      "archiveSha256": "564d48bf3b2dc62fe3d6f8995095d76e3bdeb22819b16e67275a8b301e6324b7",
+      "controlledFixtureGenerationMilliseconds": 20,
+      "controlledSourceManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c",
+      "explicitCleanupRequired": true,
+      "extension": "tar.Z",
+      "extractMilliseconds": 505,
+      "format": "tar-compress",
+      "previewMilliseconds": 547,
+      "treeManifestSha256": "f483ef8c49949b6ccfe0b78f5d0f6d1938a7dda0ae77a9b39246cd521e06300c"
+    },
+    {
+      "archiveBytes": 59,
+      "archiveSha256": "42cd958998989bd72673eaa4249976e9d0c2f27b7dae5cefbefd755f77dfc961",
+      "controlledFixtureGenerationMilliseconds": 22,
+      "controlledSourceBytes": 41,
+      "controlledSourceSha256": "851cd816d8f59047896c1c31515ba0c164c149477263cd79451150d730be783a",
+      "expectedFilterChecked": true,
+      "explicitCleanupRequired": true,
+      "extension": "gz",
+      "extractMilliseconds": 575,
+      "format": "raw-gzip",
+      "outputName": "読取-raw-gzip.txt",
+      "previewMilliseconds": 544,
+      "previewOutputSha256": "d153d5196a59ca82221dc593449171c95eae992a866bdd6fc5c4987cddea3f70",
+      "treeManifestSha256": "f8da027e243f367181ecad69a3d77ab8b498f4931b7a649680e68d01d6509733"
+    },
+    {
+      "archiveBytes": 76,
+      "archiveSha256": "6f5436cdc57df8c333d7533989463658317c96a2d9110f55c645f56befb10f0b",
+      "controlledFixtureGenerationMilliseconds": 18,
+      "controlledSourceBytes": 41,
+      "controlledSourceSha256": "851cd816d8f59047896c1c31515ba0c164c149477263cd79451150d730be783a",
+      "expectedFilterChecked": true,
+      "explicitCleanupRequired": true,
+      "extension": "bz2",
+      "extractMilliseconds": 589,
+      "format": "raw-bzip2",
+      "outputName": "読取-raw-bzip2.txt",
+      "previewMilliseconds": 520,
+      "previewOutputSha256": "ad533301ce2f92dca8823fd9cbb80c3209cea74e48b8ae0661a26120c0626431",
+      "treeManifestSha256": "94d59834fcc75d93327c35c0daed52890ef179ed252032865722e230daa34817"
+    },
+    {
+      "archiveBytes": 100,
+      "archiveSha256": "ee54bb84324bc7463f91149167af34e2b22d4ef9484be6b5b3689d4aae3bd214",
+      "controlledFixtureGenerationMilliseconds": 19,
+      "controlledSourceBytes": 41,
+      "controlledSourceSha256": "851cd816d8f59047896c1c31515ba0c164c149477263cd79451150d730be783a",
+      "expectedFilterChecked": true,
+      "explicitCleanupRequired": true,
+      "extension": "xz",
+      "extractMilliseconds": 643,
+      "format": "raw-xz",
+      "outputName": "読取-raw-xz.txt",
+      "previewMilliseconds": 498,
+      "previewOutputSha256": "7cbe7a7909ba7f8625988d310c83e24f3a4327e6730553fb2f8a6fb3a630a37b",
+      "treeManifestSha256": "f839659b7426045cfc056b27734d47063103114c061f0ef80a96d93dd5bce99b"
+    },
+    {
+      "archiveBytes": 54,
+      "archiveSha256": "a9241c818c5a3e6dde577d5218a3a325d431f6aef2c08f9307e5adf1ddedd8a9",
+      "controlledFixtureGenerationMilliseconds": 21,
+      "controlledSourceBytes": 41,
+      "controlledSourceSha256": "851cd816d8f59047896c1c31515ba0c164c149477263cd79451150d730be783a",
+      "expectedFilterChecked": true,
+      "explicitCleanupRequired": true,
+      "extension": "zst",
+      "extractMilliseconds": 499,
+      "format": "raw-zstd",
+      "outputName": "読取-raw-zstd.txt",
+      "previewMilliseconds": 515,
+      "previewOutputSha256": "0821e7391be4e569f318913f957b92ba2abd083b3dbf274d85e97b4d39c98e1d",
+      "treeManifestSha256": "3e0b1a23bd658e9cfd3b11832610350e39fb6bd4cfc767409a5546cfc55fb5b7"
+    },
+    {
+      "archiveBytes": 45,
+      "archiveSha256": "d1c1732965fc70554aef33df4700d26b67f130943b4008cf400a58de82a0a5ba",
+      "controlledFixtureGenerationMilliseconds": 18,
+      "controlledSourceBytes": 41,
+      "controlledSourceSha256": "851cd816d8f59047896c1c31515ba0c164c149477263cd79451150d730be783a",
+      "expectedFilterChecked": true,
+      "explicitCleanupRequired": true,
+      "extension": "Z",
+      "extractMilliseconds": 498,
+      "format": "raw-compress",
+      "outputName": "読取-raw-compress.txt",
+      "previewMilliseconds": 502,
+      "previewOutputSha256": "fd9d465a253bfa067b78cdd69e59dcef6e4a96893c490c7ef0425cb639ce76e4",
+      "treeManifestSha256": "b73df15d743dfe300e22a6c3c0731b6c374fbc845ce9e176ee45b0eaa1211829"
+    },
+    {
+      "archiveBytes": 146,
+      "archiveSha256": "83866339be25ac4757ddc4f3737823d7d6e85e07e3dbde40fbedab2763a41632",
+      "controlledFixtureGenerationMilliseconds": 28,
+      "controlledSourceManifestSha256": "8976654fba60b88cf263c9204e90fdd6d70673072630727928d8acb6d9a1010c",
+      "explicitCleanupRequired": true,
+      "extension": "cab",
+      "extractMilliseconds": 545,
+      "format": "cab-lzx",
+      "generator": {
+        "authenticodeStatus": "Valid",
+        "compression": "LZX:21",
+        "fileName": "makecab.exe",
+        "fileSha256": "070a98b4f7c03f99048a10f490d5916a9a98417e0d0de2c414c76b3dd00cb35e",
+        "signerSubject": "CN=Microsoft Windows, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+      },
+      "previewMilliseconds": 526,
+      "treeManifestSha256": "8976654fba60b88cf263c9204e90fdd6d70673072630727928d8acb6d9a1010c"
+    },
+    {
+      "archiveBytes": 814,
+      "archiveSha256": "8d689455e9ecd92c19426604e2360b5ef8eb023890fe46aabbe2864260b70fc9",
+      "explicitCleanupRequired": true,
+      "extension": "rar",
+      "extractMilliseconds": 552,
+      "fixtureDecodeMilliseconds": 17,
+      "format": "rar",
+      "pinnedSource": {
+        "commit": "27cbc7827172698143e440801fc0ba39ccb4f1f5",
+        "license": "BSD-2-Clause",
+        "project": "libarchive",
+        "tagObject": "f1f785cc218bb05876c54680f10d3d4e54575ea2",
+        "uuBytes": 1175,
+        "uuFile": "test_read_format_rar_windows.rar.uu",
+        "uuSha256": "d934dc7895212d468a2d44111e77d95536d79c3c9eae56690667d483ae9419d7",
+        "version": "3.8.9"
+      },
+      "previewMilliseconds": 592,
+      "previewOutputSha256": "d1cb068ed50303426a5858b7e9d13bfdf73e57eae8e181f5785f2dc893caffde",
+      "treeManifestSha256": "cc0fea07742641d8a5638f9e4898dc9e675c8ae981e387a42cce2bc4bdb7998d"
+    },
+    {
+      "archiveBytes": 109,
+      "archiveSha256": "35d75e315d164d2e329afc28f7d844f013271b4fcffd4ddd78efcdd114a383a7",
+      "explicitCleanupRequired": true,
+      "extension": "rar",
+      "extractMilliseconds": 495,
+      "fixtureDecodeMilliseconds": 1,
+      "format": "rar5",
+      "pinnedSource": {
+        "commit": "27cbc7827172698143e440801fc0ba39ccb4f1f5",
+        "license": "BSD-2-Clause",
+        "project": "libarchive",
+        "tagObject": "f1f785cc218bb05876c54680f10d3d4e54575ea2",
+        "uuBytes": 203,
+        "uuFile": "test_read_format_rar5_stored.rar.uu",
+        "uuSha256": "ec73ba623a8e8eee4909dcdf45f0526ff9adc1d856d054ce742e6c1ba1fb5fa8",
+        "version": "3.8.9"
+      },
+      "previewMilliseconds": 504,
+      "previewOutputSha256": "28fc0d98f9a43d4fc8ac80e1b4d6b5af6d33a013d1ee753787a580f689028586",
+      "treeManifestSha256": "de118e935cc350c020bb8cbdb6c610d6b969645f036b72a653ecc60b3b520c15"
+    },
+    {
+      "archiveBytes": 548,
+      "archiveSha256": "d36f9beaf7d1aa482315e810c8cfca327975ffd31a05082004102327310e419d",
+      "explicitCleanupRequired": true,
+      "extension": "lzh",
+      "extractMilliseconds": 648,
+      "fixtureDecodeMilliseconds": 2,
+      "format": "lha-level3",
+      "pinnedSource": {
+        "commit": "27cbc7827172698143e440801fc0ba39ccb4f1f5",
+        "license": "BSD-2-Clause",
+        "project": "libarchive",
+        "tagObject": "f1f785cc218bb05876c54680f10d3d4e54575ea2",
+        "uuBytes": 807,
+        "uuFile": "test_read_format_lha_header3.lzh.uu",
+        "uuSha256": "4bcbe7e493bca4d79eb21d1c2dc8031190b1b41fb487fc61e71c757d3232b33f",
+        "version": "3.8.9"
+      },
+      "previewMilliseconds": 524,
+      "previewOutputSha256": "540cfa2697bc2f70744570e5ae5917f626e4a30975a4d6cf07fd5d7545caf49b",
+      "treeManifestSha256": "06e754849699a19490a2197ac07d412efbc48ec5637b935391565ce58ae1d1b1"
+    },
+    {
+      "archiveBytes": 708,
+      "archiveSha256": "373ec637744c762bb6c69c2c4f6cc2d9dad85ed5d4662b0ffb9373077dbf01a5",
+      "explicitCleanupRequired": true,
+      "extension": "zipx",
+      "extractMilliseconds": 512,
+      "fixtureDecodeMilliseconds": 2,
+      "format": "zipx-bzip2",
+      "pinnedSource": {
+        "commit": "27cbc7827172698143e440801fc0ba39ccb4f1f5",
+        "license": "BSD-2-Clause",
+        "project": "libarchive",
+        "tagObject": "f1f785cc218bb05876c54680f10d3d4e54575ea2",
+        "uuBytes": 1024,
+        "uuFile": "test_read_format_zip_bzip2.zipx.uu",
+        "uuSha256": "7baa771d86ac20a4d1ed079be94088c1628d8a513843981f353bda27ba36d359",
+        "version": "3.8.9"
+      },
+      "previewMilliseconds": 533,
+      "previewOutputSha256": "741f43ce2fd44003183896b9c7ebbdec8a5cae070ff300df56c976a99a3a566c",
+      "treeManifestSha256": "424f097cd3fb3081bf2907164790e3ef46f0390ee25c4a2608de8ad87a406565"
+    }
+  ],
+  "runner": {
+    "imageOs": "win25-vs2026",
+    "imageVersion": "20260810.198.2",
+    "osArchitecture": "X64",
+    "osDescription": "Microsoft Windows 10.0.26100",
+    "processArchitecture": "X64",
+    "runnerName": "GitHub Actions 1000036523"
+  },
+  "schemaVersion": 5,
+  "shell": {
+    "defaultConfigPathUsed": true,
+    "destinationCreated": true,
+    "elapsedMilliseconds": 589,
+    "explicitCleanupRequired": true,
+    "rawStream": {
+      "destinationCreated": true,
+      "elapsedMilliseconds": 538,
+      "internalReaderDispatchedWithoutUi": true,
+      "outputNameDerivedFromOuterArchive": true,
+      "treeManifestSha256": "a92179409b7f54c5c6cf38ab6a69a4375d077f64fc1bf515ed6c2755656ace1b"
+    },
+    "treeManifestSha256": "899149bfde99016a00480df18aaa9c28c0399af460c6829d9dd72bbb7168855f"
+  },
+  "sourceTree": {
+    "entryCount": 12,
+    "fileCount": 3,
+    "includesEmptyDirectory": true,
+    "includesJapaneseNames": true,
+    "longestRelativePathCharacters": 318.0,
+    "manifestSha256": "899149bfde99016a00480df18aaa9c28c0399af460c6829d9dd72bbb7168855f",
+    "totalBytes": 8236.0
+  },
+  "status": "passed"
+}
