@@ -107,11 +107,14 @@ function Export-ArchiveEntry([string]$Archive, [string]$Entry, [string]$Destinat
     }
 }
 
-function Invoke-Ldd([string]$UnixPath) {
-    # Pass the path as bash $1 instead of interpolating it into shell syntax.
+function Invoke-Ldd([string[]]$UnixPaths) {
+    if ($UnixPaths.Count -eq 0) {
+        throw "Invoke-Ldd requires at least one runtime path."
+    }
+    # Pass every path as data instead of interpolating it into shell syntax.
     return Invoke-Msys2 `
-        'environment="$1"; PATH="$environment/bin:/usr/bin" ldd "$2"' `
-        @($environmentUnix, $UnixPath)
+        'environment="$1"; shift; PATH="$environment/bin:/usr/bin" ldd "$@"' `
+        (@($environmentUnix) + $UnixPaths)
 }
 
 function Convert-EnvironmentPath([string]$UnixPath) {
@@ -124,16 +127,28 @@ function Convert-EnvironmentPath([string]$UnixPath) {
 
 $pending = [System.Collections.Generic.Queue[string]]::new()
 $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$maximumRuntimeFiles = 256
+$lddBatchSize = 64
 $pending.Enqueue("${environmentBinUnix}bsdtar.exe")
 
 Write-Host "Resolving $([string]$environmentContract.displayName) runtime dependencies..."
 while ($pending.Count -gt 0) {
-    $current = $pending.Dequeue()
-    if (-not $seen.Add($current)) {
+    $batch = [System.Collections.Generic.List[string]]::new()
+    while ($pending.Count -gt 0 -and $batch.Count -lt $lddBatchSize) {
+        $current = $pending.Dequeue()
+        if (-not $seen.Add($current)) {
+            continue
+        }
+        if ($seen.Count -gt $maximumRuntimeFiles) {
+            throw "MSYS2 runtime dependency inventory exceeds the $maximumRuntimeFiles-file limit."
+        }
+        $batch.Add($current)
+    }
+    if ($batch.Count -eq 0) {
         continue
     }
 
-    foreach ($lineObject in (Invoke-Ldd $current)) {
+    foreach ($lineObject in (Invoke-Ldd $batch.ToArray())) {
         $line = [string]$lineObject
         $dependency = $null
         if ($line -match '=>\s+(/[^\s]+)' -and

@@ -26,6 +26,20 @@ if ($exporterSource -notmatch '\. \(Join-Path \$PSScriptRoot "msys2-command\.ps1
 if ($exporterSource -match '(?m)^\s*&\s+\$bsdtar\b') {
     throw "The backend exporter invokes bsdtar outside the tested bounded launcher."
 }
+foreach ($marker in @(
+    'function Invoke-Ldd([string[]]$UnixPaths)',
+    'ldd "$@"',
+    '$maximumRuntimeFiles = 256',
+    '$lddBatchSize = 64',
+    'Invoke-Ldd $batch.ToArray()'
+)) {
+    if (-not $exporterSource.Contains($marker)) {
+        throw "The backend exporter is missing the bounded batched ldd contract: $marker"
+    }
+}
+if ($exporterSource -match 'Invoke-Ldd\s+\$current\b') {
+    throw "The backend exporter invokes one ldd process per runtime file."
+}
 $packagerSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot "build-release.ps1") -Raw
 if ($packagerSource -notmatch '"msys2-command\.ps1"') {
     throw "Release packages do not include the backend exporter's bounded launcher."
