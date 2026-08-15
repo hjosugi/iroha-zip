@@ -52,8 +52,9 @@ Updated: 2026-08-15
 - Future split build/sign/package boundary with strict three-EXE Authenticode publisher/EKU/timestamp verification retained for an owner-configured signing identity
 - Japanese and English static Pages rendered at desktop and mobile sizes, with all three public routes passing an automated WCAG 2 AA audit
 - All repository Markdown is UTF-8-readable; every relative file target and local heading anchor resolves with exact path casing on both case-sensitive and case-insensitive hosts
+- Bilingual bug, feature, and pull-request templates point sensitive reports to the private advisory route and keep their displayed release version under an ordinary Rust regression
 
-The current Linux suite contains 115 passing default-feature tests, including password-transport,
+The current Linux suite contains 116 passing default-feature tests, including password-transport,
 package-version/document, and bilingual Pages version/topology contracts, plus one ignored
 system-libarchive compatibility test that is invoked explicitly when the dependency is available.
 The feature-gated minimized fuzz-regression gate adds one passing deterministic test to the normal

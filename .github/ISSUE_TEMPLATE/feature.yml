@@ -1,8 +1,14 @@
 name: Feature request / 機能提案
-description: Propose an improvement and its tradeoffs. / 改善案とtradeoffを提案します。
+description: Propose an improvement and its tradeoffs. / 改善案とトレードオフを提案します。
 title: "[Feature] "
 labels: ["enhancement", "needs-triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not disclose an unpatched vulnerability in a feature request. Read [SECURITY.md](https://github.com/hjosugi/iroha-zip/blob/main/SECURITY.md) and use a [private GitHub Security Advisory](https://github.com/hjosugi/iroha-zip/security/advisories/new) instead.
+
+        機能提案に未修正脆弱性を記載しないでください。[SECURITY.md](https://github.com/hjosugi/iroha-zip/blob/main/SECURITY.md)を読み、[GitHub Security Advisory](https://github.com/hjosugi/iroha-zip/security/advisories/new)から非公開で報告してください。
   - type: textarea
     id: problem
     attributes:
@@ -20,7 +26,7 @@ body:
     id: security
     attributes:
       label: Security and compatibility impact / セキュリティと互換性への影響
-      description: Identify new inputs, permissions, processes, network access, or trust assumptions. / 新しい入力・権限・process・network access・信頼前提を書いてください。
+      description: Identify new inputs, permissions, processes, network access, or trust assumptions. / 新しい入力・権限・プロセス・ネットワークアクセス・信頼前提を書いてください。
     validations:
       required: true
   - type: textarea
