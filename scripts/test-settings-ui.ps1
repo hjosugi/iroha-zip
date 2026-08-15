@@ -254,15 +254,12 @@ function Test-KeyboardTabOrder {
 
     $windowHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
     [void][IrohaZipUiAutomationNative]::SetForegroundWindow($windowHandle)
-    Wait-Until -TimeoutSeconds 5 `
-        -Description "the settings window to become the keyboard foreground window" `
-        -Condition {
-            [IrohaZipUiAutomationNative]::GetForegroundWindow() -eq $windowHandle
-        } | Out-Null
 
     $firstId = [int]$TabOrder[0]
     $Controls[$firstId].SetFocus()
     Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
+    $foregroundWindowConfirmed =
+        [IrohaZipUiAutomationNative]::GetForegroundWindow() -eq $windowHandle
 
     $forwardObserved = @($firstId)
     $forwardExpected = @($TabOrder[1..($TabOrder.Count - 1)]) + @($firstId)
@@ -295,6 +292,8 @@ function Test-KeyboardTabOrder {
         forwardWrapTarget = $firstId
         reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]
         allFocusedControlsVisible = $true
+        targetProcessVerifiedAfterEveryChord = $true
+        foregroundWindowConfirmed = $foregroundWindowConfirmed
     }
 }
 

@@ -122,6 +122,8 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
         "forwardWrapTarget = $firstId",
         "reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]",
         "allFocusedControlsVisible = $true",
+        "targetProcessVerifiedAfterEveryChord = $true",
+        "foregroundWindowConfirmed = $foregroundWindowConfirmed",
         "schemaVersion = 2",
     ] {
         assert!(
@@ -129,6 +131,10 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
             "native UI keyboard contract is missing {marker:?}"
         );
     }
+    assert!(
+        !script.contains("the settings window to become the keyboard foreground window"),
+        "hosted Windows runners must verify the focused target rather than require a matching foreground HWND"
+    );
 }
 
 #[test]
