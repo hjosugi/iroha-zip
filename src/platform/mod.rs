@@ -10,13 +10,14 @@ pub struct FileIdentity {
     pub index: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ProcessSpec {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub current_dir: PathBuf,
     pub temp_dir: Option<PathBuf>,
     pub stdin_file: Option<PathBuf>,
+    pub interactive_password: Option<crate::password::ArchivePassword>,
     pub stdout_log: PathBuf,
     pub stderr_log: PathBuf,
     pub timeout: Duration,
@@ -56,9 +57,13 @@ pub struct ProcessTempObservation {
 #[cfg(windows)]
 mod libarchive_windows;
 #[cfg(windows)]
+mod password_windows;
+#[cfg(windows)]
 mod windows_impl;
 #[cfg(windows)]
 pub use libarchive_windows::{process_raw_archive, write_utf8_archive_listing};
+#[cfg(windows)]
+pub use password_windows::prompt_archive_password;
 #[cfg(windows)]
 pub use windows_impl::{
     AttachmentHandoffSession, ConfigSaveGuard, DirectorySnapshot, Sandbox, create_snapshot_target,
@@ -75,8 +80,8 @@ mod generic;
 pub use generic::{
     AttachmentHandoffSession, ConfigSaveGuard, DirectorySnapshot, Sandbox, create_snapshot_target,
     file_identity, file_identity_from_handle, lock_config_save, open_folder, open_snapshot_source,
-    prepare_backend_executable, probe_staging_security_write_denials, read_mark_of_the_web,
-    validate_directory_security, validate_extracted_entry_security, validate_open_snapshot_source,
-    validate_post_handoff_entry_security, validate_regular_file_security, verify_mark_of_the_web,
-    write_mark_of_the_web,
+    prepare_backend_executable, probe_staging_security_write_denials, prompt_archive_password,
+    read_mark_of_the_web, validate_directory_security, validate_extracted_entry_security,
+    validate_open_snapshot_source, validate_post_handoff_entry_security,
+    validate_regular_file_security, verify_mark_of_the_web, write_mark_of_the_web,
 };

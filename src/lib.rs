@@ -9,6 +9,7 @@ pub mod error;
 pub mod extract;
 pub mod isolation;
 pub mod monitor;
+pub mod password;
 mod pax;
 pub mod platform;
 pub mod policy;
@@ -56,6 +57,7 @@ pub fn shell_extract_with_report(archive: &Path, config_path: &Path) -> Result<E
         output: None,
         encoding: config.behavior.default_filename_encoding,
         selections: &[],
+        password: None,
         open: config.behavior.open_after_double_click,
         allow_unsandboxed: false,
     })

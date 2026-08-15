@@ -13,15 +13,15 @@ use std::time::Duration;
 use clap::Parser;
 use iroha_zip::backend::BackendBundle;
 use iroha_zip::backend_evidence::BackendEvidence;
-use iroha_zip::cli::{Cli, Command};
+use iroha_zip::cli::{Cli, Command, PasswordProbeMode};
 #[cfg(windows)]
 use iroha_zip::config::AttachmentHandoffPolicy;
 use iroha_zip::config::{Config, default_config_path};
 use iroha_zip::create;
-#[cfg(windows)]
 use iroha_zip::error::IrohaZipError;
 use iroha_zip::error::Result;
 use iroha_zip::extract::{self, ExtractRequest};
+use iroha_zip::password::{PasswordPreparation, prepare_password};
 #[cfg(windows)]
 use iroha_zip::platform::{AttachmentHandoffSession, ProcessIsolation, ProcessSpec, Sandbox};
 use iroha_zip::preview::{self, PreviewRequest};
@@ -155,6 +155,9 @@ fn run() -> Result<()> {
         Command::InternalCrashProbe => {
             std::process::abort();
         }
+        Command::InternalPasswordProbe { mode } => {
+            run_password_probe(mode)?;
+        }
         Command::InternalProcessTempProbe => {
             let report = iroha_zip::isolation::process_temp_probe()?;
             println!(
@@ -253,16 +256,24 @@ fn run() -> Result<()> {
         Command::Preview {
             archive,
             encoding,
+            prompt_password,
             allow_unsandboxed,
         } => {
             let config = Config::load(&config_path)?;
             let backend = BackendBundle::verify(&config.backend_directory()?)?;
             let encoding = encoding.unwrap_or(config.behavior.default_filename_encoding);
+            let password = match prepare_password(prompt_password, || {
+                iroha_zip::platform::prompt_archive_password(&archive)
+            })? {
+                PasswordPreparation::Ready(password) => password,
+                PasswordPreparation::Cancelled => return Ok(()),
+            };
             let result = preview::preview(PreviewRequest {
                 backend: &backend,
                 config: &config,
                 archive: &archive,
                 encoding,
+                password,
                 allow_unsandboxed,
             })?;
             for entry in &result.entries {
@@ -283,12 +294,19 @@ fn run() -> Result<()> {
             output,
             encoding,
             select,
+            prompt_password,
             open,
             allow_unsandboxed,
         } => {
             let config = Config::load(&config_path)?;
             let backend = BackendBundle::verify(&config.backend_directory()?)?;
             let encoding = encoding.unwrap_or(config.behavior.default_filename_encoding);
+            let password = match prepare_password(prompt_password, || {
+                iroha_zip::platform::prompt_archive_password(&archive)
+            })? {
+                PasswordPreparation::Ready(password) => password,
+                PasswordPreparation::Cancelled => return Ok(()),
+            };
             let result = extract::extract(ExtractRequest {
                 backend: &backend,
                 config: &config,
@@ -296,6 +314,7 @@ fn run() -> Result<()> {
                 output: output.as_deref(),
                 encoding,
                 selections: &select,
+                password,
                 open,
                 allow_unsandboxed,
             })?;
@@ -322,6 +341,65 @@ fn run() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
+    use std::io::Write as _;
+
+    const EXPECTED: &str = "日本語-password-probe";
+
+    if mode == PasswordProbeMode::Overflow {
+        let block = vec![b'X'; 64 * 1024];
+        let mut output = std::io::stdout().lock();
+        for _ in 0..18 {
+            output.write_all(&block).map_err(|error| {
+                iroha_zip::error::IrohaZipError::io("password probe output", error)
+            })?;
+        }
+        output.flush().map_err(|error| {
+            iroha_zip::error::IrohaZipError::io("flush password probe output", error)
+        })?;
+    }
+
+    print!("Enter passphrase:");
+    std::io::stdout().flush().map_err(|error| {
+        iroha_zip::error::IrohaZipError::io("flush password probe prompt", error)
+    })?;
+    let mut input = zeroize::Zeroizing::new(String::new());
+    std::io::stdin()
+        .read_line(&mut input)
+        .map_err(|error| iroha_zip::error::IrohaZipError::io("read password probe input", error))?;
+    let matches = input.trim_end_matches(['\r', '\n']) == EXPECTED;
+
+    match mode {
+        PasswordProbeMode::Accept if matches => Ok(()),
+        PasswordProbeMode::Accept => Err(IrohaZipError::Backend(
+            "password probe received the wrong one-use value".to_owned(),
+        )),
+        PasswordProbeMode::Repeat => {
+            print!("Enter passphrase:");
+            std::io::stdout().flush().map_err(|error| {
+                iroha_zip::error::IrohaZipError::io("flush repeated password probe prompt", error)
+            })?;
+            let mut forbidden_retry = zeroize::Zeroizing::new(String::new());
+            std::io::stdin()
+                .read_line(&mut forbidden_retry)
+                .map_err(|error| {
+                    iroha_zip::error::IrohaZipError::io(
+                        "read forbidden password probe retry",
+                        error,
+                    )
+                })?;
+            Err(IrohaZipError::Backend(
+                "password probe unexpectedly received a retry".to_owned(),
+            ))
+        }
+        PasswordProbeMode::Sleep | PasswordProbeMode::Overflow => {
+            std::thread::sleep(std::time::Duration::from_mins(1));
+            Ok(())
+        }
+        PasswordProbeMode::Crash => std::process::abort(),
+    }
 }
 
 fn print_evidence(evidence: &BackendEvidence) {
@@ -438,6 +516,7 @@ fn probe_backend_in_sandbox(
             current_dir: sandbox.root().to_path_buf(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 30)),

@@ -1,5 +1,5 @@
 use clap::{CommandFactory, Parser};
-use iroha_zip::cli::{Cli, Command, FilenameEncoding, RawFilter};
+use iroha_zip::cli::{Cli, Command, FilenameEncoding, PasswordProbeMode, RawFilter};
 
 #[test]
 fn command_name_matches_the_application_name() {
@@ -10,13 +10,17 @@ fn command_name_matches_the_application_name() {
 fn extraction_uses_configuration_encoding_when_not_overridden() {
     let cli = Cli::try_parse_from(["iroha-zip", "extract", "archive.zip"]).unwrap();
     let Command::Extract {
-        encoding, select, ..
+        encoding,
+        select,
+        prompt_password,
+        ..
     } = cli.command
     else {
         panic!("expected extract command");
     };
     assert_eq!(encoding, None);
     assert!(select.is_empty());
+    assert!(!prompt_password);
 }
 
 #[test]
@@ -51,6 +55,33 @@ fn extraction_accepts_an_explicit_encoding_override() {
         panic!("expected extract command");
     };
     assert_eq!(encoding, Some(FilenameEncoding::Cp932));
+}
+
+#[test]
+fn password_is_requested_only_by_a_boolean_flag() {
+    let cli =
+        Cli::try_parse_from(["iroha-zip", "extract", "archive.zip", "--prompt-password"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Extract {
+            prompt_password: true,
+            ..
+        }
+    ));
+
+    let error = Cli::try_parse_from([
+        "iroha-zip",
+        "extract",
+        "archive.zip",
+        "--password",
+        "must-not-be-accepted",
+    ])
+    .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("unexpected argument '--password'")
+    );
 }
 
 #[test]
@@ -103,6 +134,14 @@ fn internal_failure_probes_are_hidden_but_parseable() {
 
     let crash = Cli::try_parse_from(["iroha-zip", "internal-crash-probe"]).unwrap();
     assert!(matches!(crash.command, Command::InternalCrashProbe));
+
+    let password = Cli::try_parse_from(["iroha-zip", "internal-password-probe", "repeat"]).unwrap();
+    assert!(matches!(
+        password.command,
+        Command::InternalPasswordProbe {
+            mode: PasswordProbeMode::Repeat
+        }
+    ));
 
     let staging =
         Cli::try_parse_from(["iroha-zip", "internal-staging-write-probe", "source"]).unwrap();
@@ -186,6 +225,7 @@ fn preview_uses_the_same_encoding_and_isolation_controls_as_extract() {
     let Command::Preview {
         archive,
         encoding,
+        prompt_password,
         allow_unsandboxed,
     } = cli.command
     else {
@@ -193,5 +233,6 @@ fn preview_uses_the_same_encoding_and_isolation_controls_as_extract() {
     };
     assert_eq!(archive, std::path::Path::new("archive.lzh"));
     assert_eq!(encoding, Some(FilenameEncoding::Cp932));
+    assert!(!prompt_password);
     assert!(allow_unsandboxed);
 }

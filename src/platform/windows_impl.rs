@@ -6,11 +6,12 @@ use std::io::{Read, Write};
 use std::mem::{size_of, size_of_val};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::ptr::null_mut;
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -53,33 +54,38 @@ use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
     CoTaskMemFree, CoUninitialize,
 };
+use windows::Win32::System::Console::{COORD, HPCON};
 use windows::Win32::System::JobObjects::{
     CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
 };
 use windows::Win32::System::LibraryLoader::{
-    BeginUpdateResourceW, EndUpdateResourceW, FindResourceW, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE,
-    LOAD_LIBRARY_AS_IMAGE_RESOURCE, LoadLibraryExW, LoadResource, LockResource, SizeofResource,
-    UpdateResourceW,
+    BeginUpdateResourceW, EndUpdateResourceW, FindResourceW, GetModuleHandleW, GetProcAddress,
+    LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE, LOAD_LIBRARY_AS_IMAGE_RESOURCE, LoadLibraryExW,
+    LoadResource, LockResource, SizeofResource, UpdateResourceW,
 };
+use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateMutexW, CreateProcessW,
     DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
     GetExitCodeProcess, InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
     PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
-    PROCESS_INFORMATION, ReleaseMutex, ResumeThread, STARTF_USESTDHANDLES, STARTUPINFOEXW,
-    UpdateProcThreadAttribute, WaitForSingleObject,
+    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+    PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, PROCESS_INFORMATION, ReleaseMutex, ResumeThread,
+    STARTF_USESTDHANDLES, STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 use windows::Win32::System::WindowsProgramming::PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
 use windows::Win32::UI::Shell::{AttachmentServices, IAttachmentExecute};
 use windows::Win32::UI::WindowsAndMessaging::RT_MANIFEST;
-use windows::core::{Error as WindowsError, GUID, HRESULT, PCWSTR, PWSTR};
+use windows::core::{Error as WindowsError, GUID, HRESULT, PCSTR, PCWSTR, PWSTR};
 
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
+use crate::password::{
+    ArchivePassword, PasswordOutputEvent, PasswordOutputMonitor, PasswordTransport,
+};
 use crate::platform::{
     FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec, ProcessTempObservation,
 };
@@ -89,6 +95,8 @@ use crate::windows_command_line;
 const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
 const CONFIG_SAVE_MUTEX_NAME: &str = r"Local\iroha-zip.ConfigSave.v1";
 const CONFIG_SAVE_MUTEX_TIMEOUT_MS: u32 = 30_000;
+const PASSWORD_CONPTY_OUTPUT_LIMIT: usize = 1024 * 1024;
+const PASSWORD_CONPTY_WAIT_MILLISECONDS: u32 = 50;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
 #[cfg(test)]
 static FORCE_ISOLATION_VERIFICATION_FAILURE: std::sync::atomic::AtomicBool =
@@ -1339,8 +1347,18 @@ fn run_in_appcontainer(
     isolation: IsolationMode,
     memory_limit_bytes: usize,
     sandbox_root: &Path,
-    spec: ProcessSpec,
+    mut spec: ProcessSpec,
 ) -> Result<ProcessResult> {
+    if let Some(password) = spec.interactive_password.take() {
+        return run_in_appcontainer_with_password(
+            sid,
+            isolation,
+            memory_limit_bytes,
+            sandbox_root,
+            spec,
+            password,
+        );
+    }
     let stdout = File::create(&spec.stdout_log).map_err(|error| {
         IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
     })?;
@@ -1531,6 +1549,433 @@ fn run_in_appcontainer(
     wait_for_process(&process, &job, &spec, isolation_evidence)
 }
 
+#[derive(Debug)]
+enum ConptyDrainEvent {
+    Password(PasswordOutputEvent),
+    Failed(String),
+    Finished,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ConptyDrainSummary {
+    prompt_count: u8,
+    output_limit_exceeded: bool,
+}
+
+#[allow(clippy::too_many_lines)]
+fn run_in_appcontainer_with_password(
+    sid: PSID,
+    isolation: IsolationMode,
+    memory_limit_bytes: usize,
+    sandbox_root: &Path,
+    spec: ProcessSpec,
+    password: ArchivePassword,
+) -> Result<ProcessResult> {
+    if spec.stdin_file.is_some() {
+        return Err(IrohaZipError::Sandbox(
+            "interactive password input cannot be combined with a stdin file".to_owned(),
+        ));
+    }
+
+    let stdout = File::create(&spec.stdout_log).map_err(|error| {
+        IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
+    })?;
+    drop(stdout);
+    let merged_log = File::create(&spec.stderr_log).map_err(|error| {
+        IrohaZipError::io_path(
+            "cannot create sanitized pseudoconsole log",
+            &spec.stderr_log,
+            error,
+        )
+    })?;
+
+    let (conpty_input_read, controller_input_write) = create_noninheritable_pipe()?;
+    let (controller_output_read, conpty_output_write) = create_noninheritable_pipe()?;
+    let pseudoconsole =
+        PseudoConsole::new(conpty_input_read.handle(), conpty_output_write.handle())?;
+    drop(conpty_input_read);
+    drop(conpty_output_write);
+
+    let mut controller_input = Some(controller_input_write.into_file());
+    let controller_output = controller_output_read.into_file();
+
+    let job = OwnedHandle::new(
+        unsafe { CreateJobObjectW(None, PCWSTR::null()) }
+            .map_err(|error| windows_error("CreateJobObjectW", error))?,
+    );
+    let mut job_limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    job_limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        | JOB_OBJECT_LIMIT_JOB_MEMORY
+        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+    job_limits.BasicLimitInformation.ActiveProcessLimit = 1;
+    job_limits.JobMemoryLimit = memory_limit_bytes;
+    let job_limits_size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
+        .map_err(|_| IrohaZipError::Sandbox("job limits structure is too large".to_owned()))?;
+    unsafe {
+        SetInformationJobObject(
+            job.handle(),
+            JobObjectExtendedLimitInformation,
+            (&raw const job_limits).cast::<c_void>(),
+            job_limits_size,
+        )
+    }
+    .map_err(|error| windows_error("SetInformationJobObject", error))?;
+
+    let attribute_count = if isolation.is_lpac() { 4 } else { 3 };
+    let attributes = AttributeList::new(attribute_count)?;
+    let capabilities = SECURITY_CAPABILITIES {
+        AppContainerSid: sid,
+        Capabilities: null_mut(),
+        CapabilityCount: 0,
+        Reserved: 0,
+    };
+    unsafe {
+        UpdateProcThreadAttribute(
+            attributes.list,
+            0,
+            PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES as usize,
+            Some((&raw const capabilities).cast::<c_void>()),
+            size_of::<SECURITY_CAPABILITIES>(),
+            None,
+            None,
+        )
+    }
+    .map_err(|error| windows_error("set AppContainer process attribute", error))?;
+
+    let all_application_packages_policy = PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
+    if isolation.is_lpac() {
+        unsafe {
+            UpdateProcThreadAttribute(
+                attributes.list,
+                0,
+                PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY as usize,
+                Some(
+                    (&raw const all_application_packages_policy)
+                        .cast::<c_void>()
+                        .cast_mut(),
+                ),
+                size_of_val(&all_application_packages_policy),
+                None,
+                None,
+            )
+        }
+        .map_err(|error| windows_error("set LPAC process attribute", error))?;
+    }
+
+    let jobs = [job.handle()];
+    unsafe {
+        UpdateProcThreadAttribute(
+            attributes.list,
+            0,
+            PROC_THREAD_ATTRIBUTE_JOB_LIST as usize,
+            Some(jobs.as_ptr().cast::<c_void>()),
+            size_of_val(&jobs),
+            None,
+            None,
+        )
+    }
+    .map_err(|error| windows_error("set job-list process attribute", error))?;
+
+    unsafe {
+        UpdateProcThreadAttribute(
+            attributes.list,
+            0,
+            PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE as usize,
+            Some(pseudoconsole.attribute_value()),
+            size_of::<HPCON>(),
+            None,
+            None,
+        )
+    }
+    .map_err(|error| windows_error("set pseudoconsole process attribute", error))?;
+
+    let mut startup = STARTUPINFOEXW::default();
+    startup.StartupInfo.cb = u32::try_from(size_of::<STARTUPINFOEXW>())
+        .map_err(|_| IrohaZipError::Sandbox("startup structure is too large".to_owned()))?;
+    startup.lpAttributeList = attributes.list;
+
+    let application = wide_null(spec.program.as_os_str());
+    let current_directory = wide_null(spec.current_dir.as_os_str());
+    let program_units: Vec<u16> = spec.program.as_os_str().encode_wide().collect();
+    let argument_units: Vec<Vec<u16>> = spec
+        .args
+        .iter()
+        .map(|argument| argument.encode_wide().collect())
+        .collect();
+    let mut command_line = windows_command_line::encode(&program_units, &argument_units)
+        .map_err(|error| IrohaZipError::Sandbox(format!("cannot encode command line: {error}")))?;
+    let environment = minimal_appcontainer_environment(&spec.program, sandbox_root)?;
+    let mut process_info = PROCESS_INFORMATION::default();
+
+    unsafe {
+        CreateProcessW(
+            PCWSTR(application.as_ptr()),
+            Some(PWSTR(command_line.as_mut_ptr())),
+            None,
+            None,
+            false,
+            EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED,
+            Some(environment.as_ptr().cast::<c_void>()),
+            PCWSTR(current_directory.as_ptr()),
+            &raw const startup.StartupInfo,
+            &raw mut process_info,
+        )
+    }
+    .map_err(|error| windows_error("CreateProcessW(ConPTY)", error))?;
+
+    let process = OwnedHandle::new(process_info.hProcess);
+    let thread_handle = OwnedHandle::new(process_info.hThread);
+    let (event_sender, event_receiver) = mpsc::channel();
+    let drain = thread::Builder::new()
+        .name("iroha-zip-conpty-drain".to_owned())
+        .spawn(move || drain_conpty_output(controller_output, merged_log, &event_sender))
+        .map_err(|error| {
+            terminate_interactive_process(&job, &process, 0xE000_0013);
+            IrohaZipError::io("cannot start pseudoconsole drain thread", error)
+        })?;
+    let isolation_evidence = match verify_process_isolation(process.handle(), isolation) {
+        Ok(evidence) => evidence,
+        Err(error) => {
+            terminate_interactive_process(&job, &process, 0xE000_0014);
+            drop(controller_input.take());
+            drop(pseudoconsole);
+            let _ = drain.join();
+            return Err(error);
+        }
+    };
+
+    let previous_suspend_count = unsafe { ResumeThread(thread_handle.handle()) };
+    if previous_suspend_count == u32::MAX {
+        let error = windows_error("ResumeThread(ConPTY)", WindowsError::from_thread());
+        terminate_interactive_process(&job, &process, 0xE000_0015);
+        drop(controller_input.take());
+        drop(pseudoconsole);
+        let _ = drain.join();
+        return Err(error);
+    }
+    if previous_suspend_count != 1 {
+        let error = IrohaZipError::Sandbox(format!(
+            "unexpected initial ConPTY process suspend count: {previous_suspend_count}"
+        ));
+        terminate_interactive_process(&job, &process, 0xE000_0016);
+        drop(controller_input.take());
+        drop(pseudoconsole);
+        let _ = drain.join();
+        return Err(error);
+    }
+    drop(thread_handle);
+
+    let process_result = wait_for_interactive_process(
+        &process,
+        &job,
+        &spec,
+        isolation_evidence,
+        &event_receiver,
+        &mut controller_input,
+        password,
+    );
+    drop(controller_input.take());
+    drop(pseudoconsole);
+    let drain_result = drain
+        .join()
+        .map_err(|_| IrohaZipError::Sandbox("pseudoconsole drain thread panicked".to_owned()))?;
+
+    let result = process_result?;
+    let summary = drain_result?;
+    if summary.output_limit_exceeded {
+        return Err(IrohaZipError::Sandbox(format!(
+            "pseudoconsole output exceeded {PASSWORD_CONPTY_OUTPUT_LIMIT} bytes"
+        )));
+    }
+    if summary.prompt_count > 1 {
+        return Err(IrohaZipError::Backend(
+            "archive backend requested another password; automatic retries are forbidden"
+                .to_owned(),
+        ));
+    }
+    Ok(result)
+}
+
+fn create_noninheritable_pipe() -> Result<(OwnedHandle, OwnedHandle)> {
+    let mut read = HANDLE::default();
+    let mut write = HANDLE::default();
+    unsafe { CreatePipe(&raw mut read, &raw mut write, None, 0) }
+        .map_err(|error| windows_error("CreatePipe(ConPTY)", error))?;
+    let read = OwnedHandle::new(read);
+    let write = OwnedHandle::new(write);
+    for handle in [read.handle(), write.handle()] {
+        unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)) }
+            .map_err(|error| windows_error("clear ConPTY pipe inheritance", error))?;
+    }
+    Ok((read, write))
+}
+
+fn drain_conpty_output(
+    mut output: File,
+    mut log: File,
+    sender: &Sender<ConptyDrainEvent>,
+) -> Result<ConptyDrainSummary> {
+    let mut monitor = PasswordOutputMonitor::new(PASSWORD_CONPTY_OUTPUT_LIMIT);
+    let mut raw = [0u8; 8192];
+    loop {
+        let read = match output.read(&mut raw) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(error) => {
+                let message = format!("cannot read pseudoconsole output: {error}");
+                let _ = sender.send(ConptyDrainEvent::Failed(message.clone()));
+                return Err(IrohaZipError::Sandbox(message));
+            }
+        };
+        let mut sanitized = Vec::with_capacity(read);
+        let mut events = Vec::new();
+        monitor.consume(&raw[..read], &mut sanitized, &mut events);
+        if !sanitized.is_empty()
+            && let Err(error) = log.write_all(&sanitized)
+        {
+            let message = format!("cannot write sanitized pseudoconsole output: {error}");
+            let _ = sender.send(ConptyDrainEvent::Failed(message.clone()));
+            return Err(IrohaZipError::Sandbox(message));
+        }
+        for event in events {
+            let _ = sender.send(ConptyDrainEvent::Password(event));
+        }
+    }
+    log.sync_all()
+        .map_err(|error| IrohaZipError::io("cannot flush sanitized pseudoconsole output", error))?;
+    let summary = ConptyDrainSummary {
+        prompt_count: monitor.prompt_count(),
+        output_limit_exceeded: monitor.output_limit_exceeded(),
+    };
+    let _ = sender.send(ConptyDrainEvent::Finished);
+    Ok(summary)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn wait_for_interactive_process(
+    process: &OwnedHandle,
+    job: &OwnedHandle,
+    spec: &ProcessSpec,
+    isolation: ProcessIsolation,
+    receiver: &Receiver<ConptyDrainEvent>,
+    controller_input: &mut Option<File>,
+    password: ArchivePassword,
+) -> Result<ProcessResult> {
+    let started = Instant::now();
+    let mut password = Some(password);
+    let mut prompt_seen = false;
+    loop {
+        loop {
+            match receiver.try_recv() {
+                Ok(ConptyDrainEvent::Password(PasswordOutputEvent::Prompt)) => {
+                    if prompt_seen {
+                        let error = IrohaZipError::Backend(
+                            "archive backend repeated its password prompt".to_owned(),
+                        );
+                        terminate_interactive_process(job, process, 0xE000_0021);
+                        return Err(error);
+                    }
+                    prompt_seen = true;
+                    let Some(secret) = password.take() else {
+                        terminate_interactive_process(job, process, 0xE000_0022);
+                        return Err(IrohaZipError::Sandbox(
+                            "password was unavailable at the first backend prompt".to_owned(),
+                        ));
+                    };
+                    let mut transport: PasswordTransport = match secret.into_transport() {
+                        Ok(transport) => transport,
+                        Err(error) => {
+                            terminate_interactive_process(job, process, 0xE000_0023);
+                            return Err(error);
+                        }
+                    };
+                    let write_result = controller_input.as_mut().map_or_else(
+                        || {
+                            Err(IrohaZipError::Sandbox(
+                                "pseudoconsole input closed before the password prompt".to_owned(),
+                            ))
+                        },
+                        |input| {
+                            input
+                                .write_all(transport.line())
+                                .and_then(|()| input.flush())
+                                .map_err(|error| {
+                                    IrohaZipError::io(
+                                        "cannot write the one-use password channel",
+                                        error,
+                                    )
+                                })
+                        },
+                    );
+                    drop(controller_input.take());
+                    if let Err(error) = write_result {
+                        terminate_interactive_process(job, process, 0xE000_0024);
+                        return Err(error);
+                    }
+                }
+                Ok(ConptyDrainEvent::Password(PasswordOutputEvent::AdditionalPrompt)) => {
+                    terminate_interactive_process(job, process, 0xE000_0025);
+                    return Err(IrohaZipError::Backend(
+                        "archive backend requested another password; automatic retries are forbidden"
+                            .to_owned(),
+                    ));
+                }
+                Ok(ConptyDrainEvent::Password(PasswordOutputEvent::OutputLimitExceeded)) => {
+                    terminate_interactive_process(job, process, 0xE000_0026);
+                    return Err(IrohaZipError::Sandbox(format!(
+                        "pseudoconsole output exceeded {PASSWORD_CONPTY_OUTPUT_LIMIT} bytes"
+                    )));
+                }
+                Ok(ConptyDrainEvent::Failed(message)) => {
+                    terminate_interactive_process(job, process, 0xE000_0027);
+                    return Err(IrohaZipError::Sandbox(message));
+                }
+                Ok(ConptyDrainEvent::Finished) => {}
+                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+            }
+        }
+
+        let wait =
+            unsafe { WaitForSingleObject(process.handle(), PASSWORD_CONPTY_WAIT_MILLISECONDS) };
+        if wait == WAIT_OBJECT_0 {
+            let mut exit_code = 0u32;
+            unsafe { GetExitCodeProcess(process.handle(), &raw mut exit_code) }
+                .map_err(|error| windows_error("GetExitCodeProcess(ConPTY)", error))?;
+            if let Some(root) = &spec.monitor_root {
+                monitor::check_resource_limits(root, &spec.limits)?;
+            }
+            return Ok(ProcessResult {
+                exit_code: exit_code.cast_signed(),
+                isolation,
+            });
+        }
+        if wait != WAIT_TIMEOUT {
+            terminate_interactive_process(job, process, 0xE000_0028);
+            return Err(IrohaZipError::Sandbox(format!(
+                "ConPTY WaitForSingleObject returned unexpected status {wait:?}"
+            )));
+        }
+        if started.elapsed() >= spec.timeout {
+            terminate_interactive_process(job, process, 0xE000_0029);
+            return Err(IrohaZipError::Sandbox(format!(
+                "archive backend exceeded {:?} while awaiting password processing",
+                spec.timeout
+            )));
+        }
+        if let Some(root) = &spec.monitor_root
+            && let Err(error) = monitor::check_resource_limits(root, &spec.limits)
+        {
+            terminate_interactive_process(job, process, 0xE000_002A);
+            return Err(error);
+        }
+    }
+}
+
+fn terminate_interactive_process(job: &OwnedHandle, process: &OwnedHandle, code: u32) {
+    let _ = unsafe { TerminateJobObject(job.handle(), code) };
+    let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
+}
+
 fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result<ProcessIsolation> {
     #[cfg(test)]
     if FORCE_ISOLATION_VERIFICATION_FAILURE.load(std::sync::atomic::Ordering::SeqCst) {
@@ -1672,6 +2117,11 @@ fn query_token_flag(
 }
 
 fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
+    if spec.interactive_password.is_some() {
+        return Err(IrohaZipError::Unsupported(
+            "secure archive-password input refuses the unsandboxed fallback".to_owned(),
+        ));
+    }
     let stdout = File::create(&spec.stdout_log).map_err(|error| {
         IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
     })?;
@@ -1793,6 +2243,61 @@ fn wait_for_process(
     }
 }
 
+type CreatePseudoConsoleFunction =
+    unsafe extern "system" fn(COORD, HANDLE, HANDLE, u32, *mut HPCON) -> HRESULT;
+type ClosePseudoConsoleFunction = unsafe extern "system" fn(HPCON);
+
+struct PseudoConsole {
+    handle: HPCON,
+    close: ClosePseudoConsoleFunction,
+}
+
+impl PseudoConsole {
+    fn new(input: HANDLE, output: HANDLE) -> Result<Self> {
+        let kernel_name = wide_null(OsStr::new("kernel32.dll"));
+        let kernel = unsafe { GetModuleHandleW(PCWSTR(kernel_name.as_ptr())) }
+            .map_err(|error| windows_error("GetModuleHandleW(kernel32.dll)", error))?;
+        let create: CreatePseudoConsoleFunction =
+            unsafe { load_system_function(kernel, c"CreatePseudoConsole", "CreatePseudoConsole")? };
+        let close: ClosePseudoConsoleFunction =
+            unsafe { load_system_function(kernel, c"ClosePseudoConsole", "ClosePseudoConsole")? };
+        let mut handle = HPCON::default();
+        let status = unsafe { create(COORD { X: 120, Y: 30 }, input, output, 0, &raw mut handle) };
+        status
+            .ok()
+            .map_err(|error| windows_error("CreatePseudoConsole", error))?;
+        Ok(Self { handle, close })
+    }
+
+    fn attribute_value(&self) -> *const c_void {
+        self.handle.0 as *const c_void
+    }
+}
+
+impl Drop for PseudoConsole {
+    fn drop(&mut self) {
+        unsafe { (self.close)(self.handle) };
+    }
+}
+
+unsafe fn load_system_function<T: Copy>(
+    module: windows::Win32::Foundation::HMODULE,
+    name: &'static std::ffi::CStr,
+    display_name: &str,
+) -> Result<T> {
+    if size_of::<T>() != size_of::<windows::Win32::Foundation::FARPROC>() {
+        return Err(IrohaZipError::Sandbox(format!(
+            "invalid {display_name} function-pointer declaration"
+        )));
+    }
+    let function = unsafe { GetProcAddress(module, PCSTR(name.as_ptr().cast())) }.ok_or_else(|| {
+        IrohaZipError::Unsupported(format!(
+            "{display_name} is unavailable; secure password input requires Windows 10 version 1809 or newer"
+        ))
+    })?;
+    Ok(unsafe { std::mem::transmute_copy(&function) })
+}
+
 struct OwnedHandle(HANDLE);
 
 impl OwnedHandle {
@@ -1802,6 +2307,12 @@ impl OwnedHandle {
 
     fn handle(&self) -> HANDLE {
         self.0
+    }
+
+    fn into_file(mut self) -> File {
+        let raw = self.0.0 as RawHandle;
+        self.0 = HANDLE::default();
+        unsafe { File::from_raw_handle(raw) }
     }
 }
 
@@ -2398,6 +2909,7 @@ mod tests {
             current_dir: root.clone(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: None,
             stdout_log: stdout.clone(),
             stderr_log: stderr,
             timeout: Duration::from_secs(5),

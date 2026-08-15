@@ -32,6 +32,10 @@ pub enum Command {
         #[arg(long, value_enum)]
         encoding: Option<FilenameEncoding>,
 
+        /// Ask for one archive password in a native, non-persistent dialog.
+        #[arg(long)]
+        prompt_password: bool,
+
         /// Explicitly permit preview without `AppContainer` isolation.
         /// This is required on non-Windows platforms and is intentionally noisy.
         #[arg(long)]
@@ -54,6 +58,10 @@ pub enum Command {
         /// Publish only this preview-relative file or directory. Repeat for multiple paths.
         #[arg(long = "select", value_name = "PATH")]
         select: Vec<PathBuf>,
+
+        /// Ask for one archive password in a native, non-persistent dialog.
+        #[arg(long)]
+        prompt_password: bool,
 
         /// Open the destination in Explorer after successful extraction.
         #[arg(long)]
@@ -109,6 +117,9 @@ pub enum Command {
 
     #[command(hide = true)]
     InternalCrashProbe,
+
+    #[command(hide = true)]
+    InternalPasswordProbe { mode: PasswordProbeMode },
 
     #[command(hide = true)]
     InternalProcessTempProbe,
@@ -182,6 +193,15 @@ pub enum RawFilter {
     Xz,
     Zstd,
     Compress,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum PasswordProbeMode {
+    Accept,
+    Repeat,
+    Sleep,
+    Overflow,
+    Crash,
 }
 
 impl RawFilter {

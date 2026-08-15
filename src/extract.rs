@@ -4,6 +4,7 @@ use crate::backend::BackendBundle;
 use crate::cli::FilenameEncoding;
 use crate::config::Config;
 use crate::error::{IrohaZipError, Result};
+use crate::password::ArchivePassword;
 use crate::{policy, selection, staging, transfer, util};
 
 pub struct ExtractResult {
@@ -18,6 +19,7 @@ pub struct ExtractRequest<'a> {
     pub output: Option<&'a Path>,
     pub encoding: FilenameEncoding,
     pub selections: &'a [PathBuf],
+    pub password: Option<ArchivePassword>,
     pub open: bool,
     pub allow_unsandboxed: bool,
 }
@@ -48,6 +50,7 @@ pub fn extract(request: ExtractRequest<'_>) -> Result<ExtractResult> {
         archive_snapshot,
         request.encoding,
         staging::ListingPolicy::External,
+        request.password,
         request.allow_unsandboxed,
     )?;
     let selected_root = staged.workspace_root().join("selected");

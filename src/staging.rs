@@ -8,6 +8,7 @@ use crate::backend::BackendBundle;
 use crate::cli::RawFilter;
 use crate::config::{Config, FilenameEncoding};
 use crate::error::{IrohaZipError, Result};
+use crate::password::ArchivePassword;
 use crate::platform::{ProcessSpec, Sandbox};
 use crate::policy::AuditSummary;
 use crate::snapshot::AuditedFile;
@@ -69,6 +70,7 @@ pub(crate) fn stage_archive(
     mut archive_snapshot: AuditedFile,
     encoding: FilenameEncoding,
     listing_policy: ListingPolicy,
+    mut password: Option<ArchivePassword>,
     allow_unsandboxed: bool,
 ) -> Result<StagedArchive> {
     let archive = archive_snapshot.path().to_path_buf();
@@ -82,6 +84,12 @@ pub(crate) fn stage_archive(
             "raw-stream output name exceeds {} UTF-8 bytes: {:?}",
             config.limits.max_path_bytes, contract.output_name
         )));
+    }
+    #[cfg(windows)]
+    if raw_stream.is_some() && password.is_some() {
+        return Err(IrohaZipError::Usage(
+            "raw compressed streams do not support archive passwords".to_owned(),
+        ));
     }
     let sandbox = Sandbox::new(
         config.sandbox.memory_limit_mib,
@@ -167,6 +175,7 @@ pub(crate) fn stage_archive(
             current_dir: workspace_root.clone(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds),
@@ -284,6 +293,7 @@ pub(crate) fn stage_archive(
             current_dir: workspace_root.clone(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: password.take(),
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds),
