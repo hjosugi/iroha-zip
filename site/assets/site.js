@@ -28,7 +28,7 @@
   }
 
   const locale = document.documentElement.lang === "ja" ? "ja-JP" : "en-US";
-  const fallbackVersion = "v0.6.1";
+  const fallbackVersion = "v0.6.2";
   const stableTagPattern = /^v(\d+\.\d+\.\d+)$/;
 
   const setText = (selector, value) => {
