@@ -25,7 +25,10 @@ supported package set for the wrong executable architecture.
 
 The exporter:
 
-1. resolves `bsdtar.exe` and its transitive same-environment DLLs with `ldd`;
+1. resolves `bsdtar.exe` and its transitive same-environment DLLs with `ldd`, in batches of at most
+   64 paths, deduplicates the pending inventory, rejects unresolved payload DLLs while recognizing
+   only strict Windows `api-ms-win-*`/`ext-ms-win-*` virtual API-set names, and rejects an inventory
+   larger than 256 runtime files;
 2. identifies the installed package owning every selected file with `pacman -Qqo`;
 3. creates an isolated pacman database configured with `SigLevel = Required TrustedOnly` and
    refreshes its signed `msys` plus selected `ucrt64` or `clangarm64` database;
@@ -41,8 +44,8 @@ This follows the documented MSYS2 package ownership and license queries and pacm
 
 The exporter fails rather than silently treating a stale installed version, another repository, an unsigned package, a weak signature policy, an archive digest mismatch, or installed/archive byte drift as supported provenance.
 
-Every bash-hosted exporter child, including `ldd`, pacman, and the `bsdtar` package/license inventory,
-is launched through MSYS2 coreutils `timeout`. The default per-command limit is 180 seconds;
+Every bash-hosted exporter child, including batched `ldd`, pacman, and the `bsdtar` package/license
+inventory, is launched through MSYS2 coreutils `timeout`. The default per-command limit is 180 seconds;
 automation may set `-CommandTimeoutSeconds` from 30 through 1800 seconds when a deliberately slow
 managed mirror requires it. Exit 124/137 is reported as a timeout, the temporary evidence tree is
 removed, and no destination bundle is installed. Named progress boundaries identify dependency
