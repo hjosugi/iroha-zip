@@ -206,6 +206,9 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
         assert!(page.contains("name=\"referrer\" content=\"strict-origin-when-cross-origin\""));
         assert!(page.contains("hreflang=\"x-default\""));
         assert!(page.contains("rel=\"icon\" href=\"../assets/favicon.svg\""));
+        assert!(page.contains("<code>gh release verify</code>"));
+        assert!(page.contains("<code>gh release verify-asset</code>"));
+        assert!(page.contains("<code>gh attestation verify</code>"));
 
         for section in ["how", "setup", "formats", "security", "usage", "status"] {
             assert_eq!(

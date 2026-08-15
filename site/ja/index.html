@@ -75,7 +75,7 @@
               <ul class="release-list">
                 <li>x64／ARM64の2 ZIPと6個別EXE</li>
                 <li>SHA-256一覧</li>
-                <li>GitHub artifact attestation</li>
+                <li>GitHub release／workflow attestation</li>
                 <li>日本語・英語ガイド／設定画面</li>
               </ul>
             </div>
@@ -88,7 +88,7 @@
           <span class="notice-icon" aria-hidden="true">!</span>
           <div>
             <strong>現在の公式バイナリはAuthenticode未署名です。</strong>
-            <p>SmartScreenの警告を無効化せず、SHA-256とGitHub artifact attestationを確認してください。libarchive / bsdtarは同梱していません。</p>
+            <p>SmartScreenの警告を無効化せず、SHA-256とGitHub release／workflow attestationを確認してください。libarchive / bsdtarは同梱していません。</p>
             <p><code>v0.5.x</code>以前を利用中の場合は、暗号化ZIPのpasswordをargv／環境／file／logへ置かない一回限りchannelを持つ最新の<code>v0.6.2</code>へ置き換えてください。</p>
           </div>
         </div>
@@ -144,7 +144,7 @@
           <article class="card">
             <span class="card-number">02</span>
             <h3>ハッシュ確認</h3>
-            <p><code>SHA256SUMS.txt</code>と<code>Get-FileHash</code>の値を比較します。必要に応じてGitHub attestationも確認します。</p>
+            <p><code>SHA256SUMS.txt</code>と<code>Get-FileHash</code>の値を比較します。<code>gh release verify</code>と<code>gh release verify-asset</code>でRelease証明を、<code>gh attestation verify</code>でworkflow証明を確認します。</p>
           </article>
           <article class="card">
             <span class="card-number">03</span>
