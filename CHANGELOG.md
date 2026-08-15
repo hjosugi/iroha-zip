@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Correct the detailed preview and Attachment Services documents to mark their completed GitHub
+  issues closed while keeping graphical-browser and real-provider interoperability work explicitly
+  unclaimed; add a regression that rejects those stale open-state statements.
 - Exercise the native Settings keyboard path with real Win32 input in Japanese and English: require
   exact forward Tab and reverse Shift+Tab traversal across all 26 controls, both wrap boundaries,
   expected process/AutomationId focus, and automatic scrolling that keeps every focused control
