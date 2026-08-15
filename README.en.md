@@ -6,7 +6,7 @@ iroha-zip is a Rust wrapper for extracting untrusted archives on Windows with mi
 
 It does not attempt to reimplement every archive format in Rust. It runs a current libarchive / `bsdtar.exe` backend as a separate process inside an ephemeral AppContainer, then inspects inputs and outputs in Rust. Neither extraction nor creation runs `bsdtar.exe` directly with the user's normal privileges.
 
-This is not a security-audited product. Version `v0.6.2` is a practical stable build whose design and real-world behavior are still being validated.
+This is not a security-audited product. Version `v0.6.3` is a practical stable build whose design and real-world behavior are still being validated.
 
 ## Download
 
@@ -208,7 +208,7 @@ Successful output is written to:
 
 ```text
 dist\iroha-zip\
-dist\iroha-zip-0.6.2-windows-x64.zip
+dist\iroha-zip-0.6.3-windows-x64.zip
 ```
 
 The normal invocation creates the x64 package; pass `-Target aarch64-pc-windows-msvc` for a local ARM64 build. The tag-driven workflow builds both packages independently on native x64 and ARM64 runners. Official releases attach two ZIPs, six standalone executables, two ZIP sidecars, one combined SHA-256 inventory, and GitHub release/workflow attestations. See [About unsigned releases](docs/UNSIGNED_RELEASE.md) for SmartScreen and independent verification guidance. The strict verification path required for future Authenticode-signed releases remains documented in the [release verification specification](docs/RELEASE_VERIFICATION.md), while the latest independently verified publication is fixed in the [v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2).
@@ -345,7 +345,7 @@ This validates configuration, every backend hash, `bsdtar --version`, and AppCon
 - It cannot guarantee protection from unknown vulnerabilities in AppContainer, the Windows kernel, or libarchive.
 - Normal AppContainer is the default. Experimental LPAC must be selected explicitly and used only after `doctor` succeeds with the chosen backend. There is no silent compatibility downgrade.
 - It cannot fully eliminate races against an attacker who already controls the same user account.
-- `v0.6.2` distributes Windows x64 and native ARM64 as separate assets. [ARM64 status](docs/ARM64.md) records the measured boundary and untested device scope.
+- `v0.6.3` distributes Windows x64 and native ARM64 as separate assets. [ARM64 status](docs/ARM64.md) records the measured boundary and untested device scope.
 - CodeQL `extended` analysis is enabled for Rust, GitHub Actions, and JavaScript. [CodeQL baseline](docs/CODEQL.md) records the initial 233 sink/source reviews and the later test-only alert #234 decision. Open alerts were zero as of 2026-08-15.
 - The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. Schema-v5 E2E passed the 14 additional read formats, generated malicious corpus, and ZipCrypto/AES-128/AES-256 encrypted-ZIP matrix across native Windows 11 ARM and Windows Server 2022/2025 x64 in [Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650). Server 2022/2025 also passed real-key forward/reverse Tab traversal of all 26 controls, Enter save, and Escape close request; the hosted ARM64 evidence explicitly identifies its bounded non-key fallback. All 11 JSON reports are preserved with raw/canonical SHA-256 and artifact API digests in the [durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650). This is not a substitute for Windows 10/11 x64 desktop-device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
 

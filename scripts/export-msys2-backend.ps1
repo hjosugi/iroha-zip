@@ -358,8 +358,11 @@ Include = /etc/pacman.d/mirrorlist.mingw
 
         $packageExtract = Join-Path $packageExtractRoot ([string]$package.id)
         New-Item -ItemType Directory -Path $packageExtract | Out-Null
+        $archiveUnix = Convert-ToMsysPath $archive
         $licenseEntries = @(
-            & $bsdtar -tf $archive 2>&1 |
+            Invoke-Msys2 `
+                'environment="$1"; PATH="$environment/bin:/usr/bin" "$environment/bin/bsdtar.exe" -tf "$2"' `
+                @($environmentUnix, $archiveUnix) |
                 ForEach-Object { [string]$_ } |
                 Where-Object {
                     $_ -match $licenseEntryPattern -and
@@ -369,9 +372,6 @@ Include = /etc/pacman.d/mirrorlist.mingw
                 } |
                 Sort-Object -Unique
         )
-        if ($LASTEXITCODE -ne 0) {
-            throw "Cannot list verified package archive: $archive"
-        }
         foreach ($entry in $licenseEntries) {
             $licenseRelative = $entry.Substring($licenseEntryPrefix.Length)
             $licenseDestination = Join-Path (Join-Path $licenseRoot ([string]$package.id)) $licenseRelative.Replace('/', '\')
