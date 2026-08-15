@@ -158,6 +158,23 @@ public static class IrohaZipUiAutomationNative {
         ) == (uint)inputs.Length;
     }
 
+    public static bool SendKey(ushort virtualKey) {
+        if (IntPtr.Size != 8) {
+            throw new PlatformNotSupportedException(
+                "The iroha-zip Settings keyboard test requires a 64-bit Windows process."
+            );
+        }
+        IrohaZipInput[] inputs = new IrohaZipInput[] {
+            Key(virtualKey, 0),
+            Key(virtualKey, KeyEventKeyUp)
+        };
+        return SendInput(
+            (uint)inputs.Length,
+            inputs,
+            Marshal.SizeOf(typeof(IrohaZipInput))
+        ) == (uint)inputs.Length;
+    }
+
     public static bool ActivateAndClick(IntPtr window, int screenX, int screenY) {
         if (IntPtr.Size != 8) {
             throw new PlatformNotSupportedException(
@@ -381,6 +398,27 @@ function Wait-ForVisibleControl {
                 return $false
             }
         } | Out-Null
+}
+
+function Focus-ControlForRealInput {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [System.Windows.Automation.AutomationElement]$Control,
+        [int]$Id
+    )
+    $windowHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
+    $bounds = $Control.Current.BoundingRectangle
+    $centerX = [int][Math]::Round($bounds.Left + ($bounds.Width / 2))
+    $centerY = [int][Math]::Round($bounds.Top + ($bounds.Height / 2))
+    if (-not [IrohaZipUiAutomationNative]::ActivateAndClick(
+        $windowHandle,
+        $centerX,
+        $centerY
+    )) {
+        throw "SendInput could not activate Settings control $Id (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+    }
+    Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $Id | Out-Null
 }
 
 function Test-KeyboardTabOrder {
@@ -787,6 +825,7 @@ $env:IROHA_ZIP_LANGUAGE = $Language
 
 $process = $null
 $setupEvidence = $null
+$shortcutEvidence = $null
 try {
     $process = Start-Process -FilePath $executablePath `
         -ArgumentList @("--config", $configPath) -PassThru
@@ -941,6 +980,82 @@ try {
 
     Write-Host "Settings UI Automation contract passed for exact forward/reverse 26-control keyboard traversal, 96/144/96-DPI relayout, and safe button paths."
 
+    $process = Start-Process -FilePath $executablePath `
+        -ArgumentList @("--config", $configPath) -PassThru
+    $window = Wait-ForProcessWindow -Process $process
+    $shortcutTimeout = Require-Control -Window $window -Id 2003 `
+        -Type ([System.Windows.Automation.ControlType]::Edit)
+    $shortcutTimeoutPattern = [System.Windows.Automation.ValuePattern]$shortcutTimeout.GetCurrentPattern(
+        [System.Windows.Automation.ValuePattern]::Pattern
+    )
+    $shortcutTimeoutPattern.SetValue("301")
+    Wait-Until {
+        $window.Current.Name -match '\s\*$'
+    } -Description "the shortcut-test form to become dirty" | Out-Null
+
+    $shortcutRealKeyInput = [bool]$keyboardTraversal.realKeyInput
+    if ($shortcutRealKeyInput) {
+        Focus-ControlForRealInput -Process $process -MainWindow $window `
+            -Control $shortcutTimeout -Id 2003
+        if (-not [IrohaZipUiAutomationNative]::SendKey([ushort]0x0D)) {
+            throw "SendInput could not deliver Enter (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+        }
+    }
+    else {
+        $shortcutSave = Require-Control -Window $window -Id 1 `
+            -Type ([System.Windows.Automation.ControlType]::Button)
+        Invoke-Control -MainWindow $window -Control $shortcutSave
+    }
+    $shortcutSavedMessage = Wait-Until {
+        Find-SecondaryWindow -Process $process -MainWindow $window
+    } -Description "the shortcut-test configuration-saved message"
+    Dismiss-Message $shortcutSavedMessage
+    Wait-ForNoSecondaryWindow -Process $process -MainWindow $window
+    Wait-Until { Test-Path -LiteralPath $configPath -PathType Leaf } `
+        -Description "the shortcut-test saved configuration" | Out-Null
+    $shortcutConfig = [System.IO.File]::ReadAllText($configPath)
+    if ($shortcutConfig -notmatch '(?m)^timeout_seconds = 301\r?$') {
+        throw "The shortcut-test configuration did not persist timeout_seconds = 301."
+    }
+    Wait-Until {
+        $window.Current.Name -notmatch '\s\*$'
+    } -Description "the shortcut-test form to become clean" | Out-Null
+
+    if ($shortcutRealKeyInput) {
+        Focus-ControlForRealInput -Process $process -MainWindow $window `
+            -Control $shortcutTimeout -Id 2003
+        if (-not [IrohaZipUiAutomationNative]::SendKey([ushort]0x1B)) {
+            throw "SendInput could not deliver Escape (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+        }
+    }
+    else {
+        $shortcutWindowPattern = [System.Windows.Automation.WindowPattern]$window.GetCurrentPattern(
+            [System.Windows.Automation.WindowPattern]::Pattern
+        )
+        $shortcutWindowPattern.Close()
+    }
+    if (-not $process.WaitForExit(15000)) {
+        throw "Settings did not exit after the shortcut-test clean close."
+    }
+    $shortcutMethod = if ($shortcutRealKeyInput) { "SendInput" } else { "UIAutomationFallback" }
+    $shortcutFallbackReason = if ($shortcutRealKeyInput) {
+        $null
+    }
+    else {
+        $keyboardTraversal.fallbackReason
+    }
+    $shortcutEvidence = [ordered]@{
+        method = $shortcutMethod
+        realKeyInput = $shortcutRealKeyInput
+        enterKeyVerified = $shortcutRealKeyInput
+        escapeKeyVerified = $shortcutRealKeyInput
+        saveActionCompleted = $true
+        closeActionCompleted = $true
+        savedTimeoutSeconds = 301
+        fallbackReason = $shortcutFallbackReason
+    }
+    Write-Host "Settings keyboard shortcut contract passed with method $shortcutMethod."
+
     if ($null -ne $backendPath) {
         $process = Start-Process -FilePath $executablePath `
             -ArgumentList @("--config", $configPath) -PassThru
@@ -1009,6 +1124,7 @@ try {
             dpiAwareness = "PerMonitorV2"
             syntheticDpiTransitions = @(96, 144, 96)
             keyboardTraversal = $keyboardTraversal
+            keyboardShortcuts = $shortcutEvidence
             safeFolderPickerCancellations = 3
             restoreDefaultsCancelAndConfirm = $true
             cancelButtonDiscardCancelAndConfirm = $true

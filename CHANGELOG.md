@@ -5,8 +5,9 @@
 - Exercise the native Settings keyboard path with real Win32 input in Japanese and English: require
   exact forward Tab and reverse Shift+Tab traversal across all 26 controls, both wrap boundaries,
   expected process/AutomationId focus, and automatic scrolling that keeps every focused control
-  visible. Lock the PowerShell order to a platform-neutral Rust contract and record schema-v2
-  machine-readable traversal evidence. Keep real key input mandatory on x64 and non-hosted ARM64;
+  visible. In a fresh process, require real Enter-to-save and clean Escape-to-close behavior plus
+  the exact saved value. Lock the PowerShell order to a platform-neutral Rust contract and record
+  schema-v2 machine-readable traversal and shortcut evidence. Keep real key input mandatory on x64 and non-hosted ARM64;
   record an explicit non-key `AttachThreadInput` focus fallback only for the GitHub-hosted ARM64
   runner, whose spawned window exposes no foreground/global UIA focus.
 - Preserve the independently verified `v0.6.1` publication as a bilingual, machine-readable release
