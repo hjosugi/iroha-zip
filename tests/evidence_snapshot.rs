@@ -39,6 +39,11 @@ const REPORTS: [&str; 11] = [
     "windows-e2e-windows-2025/settings-e2e.json",
     "windows-e2e-windows-2025/windows-e2e.json",
 ];
+const REPORT_DIRECTORIES: [&str; 3] = [
+    "windows-arm64-native",
+    "windows-e2e-windows-2022",
+    "windows-e2e-windows-2025",
+];
 
 fn snapshot_root(snapshot: Snapshot) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(snapshot.root)
@@ -88,33 +93,68 @@ fn lowercase_sha256(bytes: &[u8]) -> String {
 }
 
 fn json_inventory(root: &Path) -> BTreeSet<String> {
-    let mut pending = vec![root.to_owned()];
     let mut reports = BTreeSet::new();
-    while let Some(directory) = pending.pop() {
-        for entry in fs::read_dir(&directory)
-            .unwrap_or_else(|error| panic!("cannot enumerate {}: {error}", directory.display()))
+    let root_files = BTreeSet::from(["README.md", "SHA256SUMS.txt", "SOURCE_SHA256SUMS.txt"]);
+    for entry in fs::read_dir(root)
+        .unwrap_or_else(|error| panic!("cannot enumerate {}: {error}", root.display()))
+    {
+        let entry = entry.expect("snapshot root entry must be readable");
+        let name = entry
+            .file_name()
+            .into_string()
+            .expect("snapshot root names must be UTF-8");
+        let file_type = entry
+            .file_type()
+            .expect("snapshot root entry type must be readable");
+        assert!(
+            !file_type.is_symlink(),
+            "snapshot root contains a link: {name}"
+        );
+        if file_type.is_dir() {
+            assert!(
+                REPORT_DIRECTORIES.contains(&name.as_str()),
+                "snapshot root contains an unexpected directory: {name}"
+            );
+        } else {
+            assert!(
+                file_type.is_file() && root_files.contains(name.as_str()),
+                "snapshot root contains an unexpected file: {name}"
+            );
+        }
+    }
+
+    for directory in REPORT_DIRECTORIES {
+        let fixed_directory = root.join(directory);
+        let metadata = fs::symlink_metadata(&fixed_directory)
+            .unwrap_or_else(|error| panic!("cannot inspect {directory}: {error}"));
+        assert!(
+            metadata.file_type().is_dir() && !metadata.file_type().is_symlink(),
+            "snapshot report directory is not a real directory: {directory}"
+        );
+        for entry in fs::read_dir(&fixed_directory)
+            .unwrap_or_else(|error| panic!("cannot enumerate {directory}: {error}"))
         {
-            let path = entry
-                .expect("snapshot directory entry must be readable")
-                .path();
-            if path.is_dir() {
-                pending.push(path);
-            } else if path
-                .extension()
-                .is_some_and(|extension| extension == "json")
-            {
-                let relative = path
-                    .strip_prefix(root)
-                    .expect("snapshot report must remain beneath its root")
-                    .components()
-                    .map(|component| component.as_os_str().to_string_lossy())
-                    .collect::<Vec<_>>()
-                    .join("/");
-                assert!(
-                    reports.insert(relative.clone()),
-                    "duplicate snapshot report path: {relative}"
-                );
-            }
+            let entry = entry.expect("snapshot report entry must be readable");
+            let name = entry
+                .file_name()
+                .into_string()
+                .expect("snapshot report names must be UTF-8");
+            let file_type = entry
+                .file_type()
+                .expect("snapshot report entry type must be readable");
+            assert!(
+                file_type.is_file()
+                    && !file_type.is_symlink()
+                    && Path::new(&name)
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("json")),
+                "snapshot report directory contains an unexpected entry: {directory}/{name}"
+            );
+            let relative = format!("{directory}/{name}");
+            assert!(
+                reports.insert(relative.clone()),
+                "duplicate snapshot report path: {relative}"
+            );
         }
     }
     reports
