@@ -5,12 +5,12 @@ Updated / 更新: 2026-08-15
 ## Status / 対応状況
 
 iroha-zip supports one-use password input for encrypted ZIP preview and extraction on Windows 10
-version 1809 and later. Use the boolean `--prompt-password` flag; a native bilingual password
-dialog obtains the secret before the sandbox is created. No CLI option accepts the password value.
+and later. Add the boolean `--prompt-password` flag to open a native bilingual password dialog.
+There is no CLI option that accepts a password value.
 
-iroha-zipは、Windows 10 version 1809以降で暗号化ZIPのpreviewと展開に使う一回限りの
-パスワード入力に対応します。boolean flagの`--prompt-password`を指定すると、sandbox作成前に
-日英併記のnative password dialogを表示します。パスワード値を受け取るCLI optionはありません。
+iroha-zipは、Windows 10以降で暗号化ZIPのpreviewと展開に使う一回限りのパスワード入力に対応します。
+boolean flagの`--prompt-password`を付けると、日英併記のnative password dialogを表示します。
+パスワード値を受け取るCLI optionはありません。
 
 ```powershell
 iroha-zip.exe preview .\encrypted.zip --prompt-password
@@ -18,167 +18,151 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
 iroha-zip.exe extract .\encrypted.zip --output D:\Extracted\archive --prompt-password
 ```
 
-The pinned libarchive 3.8.9 interface supports ZIP encryption only. The Windows E2E contract
-generates and exercises ZipCrypto, WinZip AES-128, and WinZip AES-256 archives with a verified MSYS2
-backend. Backend build capabilities still control actual compatibility. Double-click extraction does
-not open a password prompt, encrypted archive creation is not exposed, and the explicitly dangerous
-`--allow-unsandboxed` path rejects password transport.
+The pinned libarchive 3.8.9 interface supports ZIP encryption only. The Windows E2E contract covers
+ZipCrypto, WinZip AES-128, and WinZip AES-256 using a verified MSYS2 backend. Actual compatibility
+still depends on the imported backend build. Double-click extraction does not prompt, encrypted
+archive creation is not exposed, and the explicitly dangerous `--allow-unsandboxed` path refuses
+password transport.
 
 固定対象のlibarchive 3.8.9 interfaceで暗号化に対応する形式はZIPだけです。Windows E2E契約は、
-検証済みMSYS2 backendでZipCrypto、WinZip AES-128、WinZip AES-256を生成して検査します。実際の
-互換性は取り込んだbackend buildにも依存します。ダブルクリック展開ではパスワード画面を出さず、
-暗号化書庫の作成も公開していません。危険な例外である`--allow-unsandboxed`経路はパスワード転送を
-拒否します。
+検証済みMSYS2 backendでZipCrypto、WinZip AES-128、WinZip AES-256を検査します。実際の互換性は
+取り込んだbackend buildにも依存します。ダブルクリック展開ではパスワード画面を出さず、暗号化書庫の
+作成も公開していません。危険な例外である`--allow-unsandboxed`経路はパスワード転送を拒否します。
 
-## Why a normal pipe is not enough / 通常pipeを使わない理由
+## Why iroha-zip does not invoke bsdtar / bsdtarを起動しない理由
 
-The libarchive bsdtar manual documents `--passphrase <passphrase>`, but explicitly warns that it is
-insecure. The value becomes process-command-line data, so iroha-zip never uses that option for user
-secrets. Without the option, stock Windows bsdtar installs a callback that requires console input and
-temporarily disables console echo. A redirected anonymous pipe is not a compatible console handle.
+The bsdtar manual defines `--passphrase <passphrase>` and warns that it is insecure. The value would
+become process-command-line data, so iroha-zip never uses it for a user secret. Without that option,
+stock Windows bsdtar requires a console handle. A redirected pipe is not such a handle, and ConPTY
+does not provide a compatible input handle to this callback inside the zero-capability AppContainer
+on the tested Windows runner.
 
-libarchiveのbsdtar manualは`--passphrase <passphrase>`を定義していますが、安全でないことも
-明記しています。値がprocess command lineに残るため、iroha-zipは利用者の秘密にこのoptionを
-使いません。optionを省略したstock Windows bsdtarは、console inputを要求して一時的にechoを
-無効化するcallbackを使います。redirectした通常の匿名pipeは互換console handleではありません。
+bsdtar manualは`--passphrase <passphrase>`を定義していますが、安全でないことも明記しています。
+値がprocess command lineに残るため、iroha-zipは利用者の秘密にこのoptionを使いません。optionを
+省略したstock Windows bsdtarはconsole handleを要求します。redirectしたpipeはconsole handleではなく、
+検証したWindows runnerでは、ConPTYもcapability 0件のAppContainer内にあるcallbackへ互換input handleを
+提供しませんでした。
+
+Password operations therefore run a byte-identical, sealed copy of iroha-zip as the isolated child.
+That child loads only manifest-pinned libarchive DLL candidates, registers the one supplied value
+with `archive_read_add_passphrase`, and extracts through the libarchive read API. It accepts only
+regular-file and directory entries, validates every UTF-8 path before creation, creates files with
+create-new and open-reparse-point semantics, and enforces file, directory, per-file, total-size,
+depth, and path-length limits while reading. The existing independent post-extraction tree audit and
+atomic publication path still run afterward.
+
+そのためpassword操作では、iroha-zip自身のbyte-identicalかつ封印済みcopyをisolated childとして
+実行します。childはmanifest固定済みlibarchive DLL候補だけをloadし、受け取った1値を
+`archive_read_add_passphrase`へ登録してlibarchive read APIで展開します。通常fileとdirectory以外を
+作成前に拒否し、全UTF-8 pathを検証し、create-new／open-reparse-pointでfileを作り、読取中にも
+file数、directory数、単一／合計容量、深さ、path長を制限します。その後も既存の独立した展開後tree
+監査とatomic publicationを必ず実行します。
 
 Primary references / 一次資料:
 
 - [libarchive 3.8.9 `bsdtar(1)` encryption and passphrase contract](https://github.com/libarchive/libarchive/blob/v3.8.9/tar/bsdtar.1)
-- [bsdtar reader installs the passphrase callback](https://github.com/libarchive/libarchive/blob/v3.8.9/tar/read.c)
+- [libarchive 3.8.9 password API](https://github.com/libarchive/libarchive/blob/v3.8.9/libarchive/archive_read_add_passphrase.3)
+- [libarchive 3.8.9 password-copy implementation](https://github.com/libarchive/libarchive/blob/v3.8.9/libarchive/archive_read_add_passphrase.c)
 - [bsdtar Windows passphrase implementation](https://github.com/libarchive/libarchive/blob/v3.8.9/libarchive_fe/passphrase.c)
-- [Windows `CreatePseudoConsole`](https://learn.microsoft.com/en-us/windows/console/createpseudoconsole)
-- [Microsoft pseudoconsole session lifecycle](https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session)
+- [Windows process handle inheritance](https://learn.microsoft.com/en-us/windows/win32/procthread/inheritance)
 - [Anonymous pipe security](https://learn.microsoft.com/en-us/windows/win32/ipc/anonymous-pipe-security-and-access-rights)
 - [Job Object unhandled-exception behavior](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_limit_information)
 
-## One-use ConPTY channel / 一回限りのConPTY channel
+## One-use anonymous channel / 一回限りの匿名channel
 
-The password path creates a hidden pseudoconsole dynamically. The host gives only the
-pseudoconsole-facing synchronous pipe ends to `CreatePseudoConsole`; controller ends have handle
-inheritance explicitly disabled. The child receives `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` together
-with the existing zero-capability `SECURITY_CAPABILITIES` and Job Object attributes. As with every
-normal backend launch, it starts suspended and is resumed only after AppContainer/LPAC mode and a
-zero capability count are positively verified.
+The parent creates an anonymous pipe with both ends initially non-inheritable. It marks only the
+child read end inheritable and passes only stdin/stdout/stderr in an explicit
+`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`. The controller write end remains non-inheritable and is checked
+at runtime. The child is created suspended with the existing zero-capability
+`SECURITY_CAPABILITIES` and Job Object attributes. The parent writes nothing until the requested
+AppContainer/LPAC mode and zero capabilities have been positively verified.
 
-パスワード経路はhidden pseudoconsoleを動的に作成します。hostはpseudoconsole側の同期pipe endだけを
-`CreatePseudoConsole`へ渡し、controller endのhandle継承を明示的に無効化します。childには既存の
-capability 0件の`SECURITY_CAPABILITIES`、Job Objectとともに
-`PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE`を渡します。通常backend起動と同様にsuspendedで作成し、
-AppContainer／LPAC modeとcapability 0件を肯定確認した後だけresumeします。
+親は両endを最初から非継承にした匿名pipeを作成します。child側read endだけを継承可能にし、明示的な
+`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`にはstdin／stdout／stderrだけを渡します。controller側write endは
+非継承のままで、runtimeにも確認します。childは既存のcapability 0件`SECURITY_CAPABILITIES`とJob
+Object属性を使ってsuspendedで作成します。要求したAppContainer／LPAC modeとcapability 0件を肯定確認
+するまで、親は秘密を書きません。
 
-A dedicated thread drains the merged terminal output concurrently. Its incremental monitor:
+After verification, the parent converts the bounded value to UTF-8, writes exactly one delimited
+value, flushes, closes the controller end, and zeroizes its transport buffer. The child accepts one
+bounded non-empty UTF-8 value and reads to EOF. The password never becomes an argument, environment
+value, file, named object, configuration field, or diagnostic value. `JOB_OBJECT_LIMIT_ACTIVE_PROCESS`
+keeps the child-process count at one, and `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`, timeout,
+memory, and live filesystem limits remain active.
 
-- caps raw pseudoconsole output at 1 MiB;
-- removes ANSI CSI/OSC sequences and escapes other control bytes before logging;
-- recognizes only the pinned `Enter passphrase:` prompt at the start of a logical line;
-- accepts exactly one prompt and treats every additional prompt as fatal;
-- suppresses every log byte after the prompt, including any unexpected terminal echo;
-- terminates the Job on output overflow, retry, timeout, monitor failure, or backend failure.
-- applies `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION` so an unhandled child fault does not enter
-  the normal interactive Windows fault-reporting path.
+検証後、親は上限付きvalueをUTF-8へ変換し、delimiter付きの1値だけを書いてflushし、controller endを
+閉じ、transport bufferをzeroizeします。childは上限内の空でないUTF-8 1値だけをEOFまで読みます。
+パスワードをargument、environment value、file、named object、configuration field、diagnostic value
+として保存しません。`JOB_OBJECT_LIMIT_ACTIVE_PROCESS`でchild process数を1に保ち、
+`JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`、timeout、memory、live filesystem上限も維持します。
 
-専用threadが統合terminal outputを並行してdrainします。incremental monitorは次を必須にします。
-
-- raw pseudoconsole outputを1 MiBで制限する
-- logへ出す前にANSI CSI／OSCを除去し、その他のcontrol byteをescapeする
-- logical line先頭の固定文字列`Enter passphrase:`だけをpromptとして認識する
-- promptは1回だけ許し、追加promptをfatal errorにする
-- 予期しないterminal echoを含め、prompt以後の全byteをlogへ出さない
-- output超過、retry、timeout、monitor失敗、backend失敗時はJobを終了する
-- `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`を適用し、childのunhandled faultを通常の対話的な
-  Windows fault-reporting経路へ進めない
-
-After the first exact prompt, the controller converts the bounded secret to UTF-8, writes one line,
-closes the input controller, and zeroizes the transport buffer. The password never becomes an
-argument, environment value, file, named object, configuration field, or diagnostic value.
-
-最初の正確なpromptを受け取ると、controllerは上限付きsecretをUTF-8へ変換し、1行だけ書き、input
-controllerを閉じてtransport bufferをzeroizeします。パスワードをargument、environment value、
-file、named object、configuration field、diagnostic valueとして保存しません。
-
-## Secret lifetime and UI / secretの寿命とUI
+## Secret lifetime and failure behavior / secretの寿命と失敗時動作
 
 The native edit control uses the Windows password style, is limited to 1,022 UTF-16 units, and is
-cleared before the dialog is destroyed. Empty strings, NUL, line breaks, invalid UTF-16, more than
-1,022 UTF-16 units, or more than 1,022 UTF-8 bytes are rejected. The owning Rust type is not
-`Clone`, always redacts `Debug` and `Display`, and stores both UI and transport buffers in zeroizing
-containers. Cancellation returns successfully without constructing a sandbox or child process.
+cleared before destruction. Empty strings, NUL, line breaks, invalid UTF-16, more than 1,022 UTF-16
+units, or more than 1,022 UTF-8 bytes are rejected. The owning Rust type is not `Clone`, always
+redacts `Debug` and `Display`, and keeps UI and transport storage in zeroizing containers.
 
-native edit controlはWindows password styleを使い、1,022 UTF-16 unitに制限し、dialog破棄前に
-内容を消去します。空文字、NUL、改行、不正UTF-16、1,022 UTF-16 unit超過、1,022 UTF-8 byte超過を
-拒否します。所有するRust typeは`Clone`を実装せず、`Debug`／`Display`を常にredactし、UI bufferと
-transport bufferをzeroizing containerに保持します。cancelはsandboxもchild processも作らず正常終了
-します。
+native edit controlはWindows password styleを使い、1,022 UTF-16 unitに制限し、破棄前に内容を消去
+します。空文字、NUL、改行、不正UTF-16、1,022 UTF-16 unit超過、1,022 UTF-8 byte超過を拒否します。
+所有するRust typeは`Clone`を実装せず、`Debug`／`Display`を常にredactし、UIとtransportのstorageを
+zeroizing containerに保持します。
 
-Automatic retries are forbidden. A wrong password or second prompt terminates the one-use channel,
-cleans the sandbox, and publishes no destination. The user may explicitly start a new operation and
-enter a new secret.
+Cancellation returns without creating a sandbox or child. A wrong password, malformed channel,
+unsupported entry, timeout, resource overflow, loader failure, or child crash cleans the sandbox and
+publishes no destination. There is no automatic retry; the user must explicitly start a new
+operation. The explicitly unsandboxed path and raw compressed streams fail closed before transport.
 
-自動retryは禁止です。wrong passwordまたは2回目のpromptでは一回限りのchannelを終了し、sandboxを
-cleanupしてdestinationを公開しません。利用者が明示的に新しい操作とsecret入力を開始できます。
-
-## Fail-closed state machine / fail-closed状態遷移
+cancelはsandboxもchildも作らず終了します。wrong password、不正channel、未対応entry、timeout、resource
+超過、loader失敗、child crashではsandboxをcleanupし、destinationを公開しません。自動retryはなく、
+利用者が明示的に新しい操作を開始します。unsandboxed経路とraw compressed streamはtransport前に
+fail closedになります。
 
 ```text
 NoSecret
-  ├─ user cancels ───────────────> Cancelled (no sandbox/process)
-  └─ confirmed bounded secret ───> SecretReady
+  ├─ cancel ─────────────────────> Cancelled (no sandbox/process)
+  └─ bounded secret ─────────────> SecretReady
 SecretReady
-  ├─ ConPTY setup/spawn fails ───> Failed + zeroize + cleanup
-  └─ child token verified ───────> AwaitingPrompt
-AwaitingPrompt
-  ├─ unexpected/multiple prompt ─> terminate + zeroize + cleanup
-  ├─ timeout/output overflow ────> terminate + zeroize + cleanup
-  └─ expected prompt ────────────> write once + close input + zeroize
+  ├─ pipe/spawn/isolation failure > Failed + zeroize + cleanup
+  └─ verified suspended child ───> write once + close + zeroize
 ChildRunning
-  ├─ nonzero/wrong password ─────> no retry + cleanup + no publication
-  └─ success ────────────────────> existing tree audit/publication path
+  ├─ parse/decrypt/policy failure > no retry + cleanup + no publication
+  └─ success ────────────────────> independent audit + atomic publication
 ```
-
-`CreatePseudoConsole` and `ClosePseudoConsole` are resolved dynamically so Windows versions without
-ConPTY can still launch iroha-zip for ordinary unencrypted operations. A requested password operation
-fails closed when ConPTY is unavailable; it never falls back to command-line input, an ordinary pipe,
-or an unsandboxed child.
-
-`CreatePseudoConsole`／`ClosePseudoConsole`は動的に解決するため、ConPTYがないWindowsでも通常の
-非暗号化操作ではiroha-zipを起動できます。パスワード操作を要求してConPTYがない場合はfail closedに
-なり、command line入力、通常pipe、unsandboxed childへfallbackしません。
 
 ## Verification contract / 検証契約
 
-Platform-neutral regressions cover redaction, bounded UTF-16/UTF-8 conversion, invalid input,
-cancellation, fragmented and spoofed prompts, retry rejection, control-sequence filtering, output
-limits, and suppression after the prompt. Windows integration tests run the one-use transport inside
-a real zero-capability AppContainer and cover a correct Japanese secret, retry, timeout, output
-overflow, backend abort, log absence, and explicit cleanup.
+Platform-neutral tests cover boolean-only CLI input, redaction, bounded conversion, invalid input,
+cancellation, and command-line/environment absence. Windows integration tests run the anonymous
+transport inside a real zero-capability AppContainer and cover a Japanese value, EOF after one
+value, timeout, large output, child abort, log absence, and cleanup.
 
-platform-neutral regressionはredaction、UTF-16／UTF-8上限、不正入力、cancel、分割prompt、spoof prompt、
-retry拒否、control sequence除去、output上限、prompt後のlog抑止を検査します。Windows integration testは
-実際のcapability 0件AppContainer内でone-use transportを実行し、正しい日本語secret、retry、timeout、
-output overflow、backend abort、log非露出、明示cleanupを検査します。
+platform-neutral testはboolean-only CLI、redaction、変換上限、不正入力、cancel、command line／environment
+非露出を検査します。Windows integration testは実際のcapability 0件AppContainerで匿名transportを
+実行し、日本語value、1値後のEOF、timeout、大量output、child abort、log非露出、cleanupを検査します。
 
-The schema-v5 Windows E2E harness additionally creates ZipCrypto, AES-128, and AES-256 ZIPs from
-deterministic public fixture data. It drives the native bilingual dialog through UI Automation,
-previews and extracts every variant, compares the complete SHA-256 tree, rejects a wrong password,
-cancels before spawn, requires no destination on either failure path, and asserts that its public
-sentinel password is absent from stdout/stderr. The generator uses `--passphrase` only with a
-deliberately public test sentinel; product handling never does so.
+The schema-v5 Windows E2E harness generates deterministic ZipCrypto, AES-128, and AES-256 ZIPs,
+drives the bilingual dialog through UI Automation, previews and extracts every variant, compares the
+complete SHA-256 tree, rejects a wrong password, cancels before spawn, requires no destination on
+either failure, and checks that its deliberately public sentinel is absent from stdout/stderr. Only
+fixture generation uses generator-side `--passphrase`; the product path never does.
 
-schema-v5 Windows E2E harnessは決定的な公開fixtureからZipCrypto、AES-128、AES-256 ZIPも作成します。
-UI Automationで日英native dialogを操作し、全variantをpreview／extractして完全SHA-256 treeを比較し、
-wrong passwordを拒否し、spawn前cancelを検査し、両failureでdestinationがなく、公開sentinel passwordが
-stdout／stderrにないことを要求します。generatorは意図的に公開したtest sentinelに限り
-`--passphrase`を使用し、製品の処理経路では使用しません。
+schema-v5 Windows E2E harnessは決定的なZipCrypto、AES-128、AES-256 ZIPを生成し、UI Automationで
+日英dialogを操作し、全variantのpreview／extractと完全SHA-256 treeを比較します。wrong password拒否、
+spawn前cancel、両失敗時のdestination不存在、意図的に公開したsentinelのstdout／stderr非露出も検査
+します。generator側`--passphrase`はfixture生成だけで使い、製品経路では使いません。
 
 ## Residual risks / 残るrisk
 
-Zeroization reduces ordinary lifetime but cannot promise removal from CPU copies, operating-system
-paging, hibernation, privileged debuggers, or crash/minidump capture outside iroha-zip's control.
-ConPTY and libarchive remain trusted platform/backend boundaries. The hosted Server and Windows 11
-ARM evidence is not a Windows 10/11 x64 desktop certification or an independent security audit.
+libarchive copies a registered passphrase into its reader allocation and frees it when the reader is
+destroyed, but upstream does not promise overwriting that allocation first. Zeroization reduces the
+lifetime of iroha-zip-owned buffers but cannot promise removal from allocator reuse, CPU copies, OS
+paging, hibernation, privileged debugging, or external crash/minidump capture. The imported
+libarchive DLL and Windows kernel remain trust boundaries. CI evidence is not desktop certification
+or an independent security audit.
 
-zeroizationは通常の保持時間を減らしますが、CPU copy、OS paging、hibernation、privileged debugger、
-iroha-zipの管理外にあるcrash／minidumpからの消去は保証できません。ConPTYとlibarchiveも信頼境界に
-残ります。hosted ServerとWindows 11 ARMの証跡はWindows 10/11 x64 desktop認証や独立security auditの
-代替ではありません。
+libarchiveは登録passphraseをreader allocationへcopyしてreader破棄時にfreeしますが、upstreamはfree前の
+上書きを保証していません。zeroizationはiroha-zip所有bufferの寿命を減らしますが、allocator再利用、
+CPU copy、OS paging、hibernation、privileged debug、外部crash／minidumpからの消去は保証できません。
+取り込んだlibarchive DLLとWindows kernelは信頼境界に残ります。CI証跡はdesktop認証や独立security
+auditの代替ではありません。

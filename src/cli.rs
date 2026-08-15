@@ -147,6 +147,38 @@ pub enum Command {
     },
 
     #[command(hide = true)]
+    InternalPasswordArchiveExtraction {
+        backend_root: PathBuf,
+        candidates: PathBuf,
+        archive: PathBuf,
+        output: PathBuf,
+
+        #[arg(long, value_enum)]
+        encoding: FilenameEncoding,
+
+        #[arg(long)]
+        max_files: u64,
+
+        #[arg(long)]
+        max_directories: u64,
+
+        #[arg(long)]
+        max_total_bytes: u64,
+
+        #[arg(long)]
+        max_single_file_bytes: u64,
+
+        #[arg(long)]
+        max_depth: usize,
+
+        #[arg(long)]
+        max_path_bytes: usize,
+
+        #[arg(long)]
+        allow_unsandboxed: bool,
+    },
+
+    #[command(hide = true)]
     InternalRawArchive {
         backend_root: PathBuf,
         candidates: PathBuf,

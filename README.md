@@ -300,16 +300,17 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
 
 `preview`と`extract`に`--prompt-password`を付けると、日英併記のnative dialogで一回だけ
 パスワードを入力できます。パスワード値をCLI option、環境変数、設定、fileへ渡す経路はありません。
-backendは検証済みAppContainer内で起動し、tokenとcapability 0件を確認した後、hidden ConPTYの
-固定promptへ一回だけ応答します。wrong password、追加prompt、timeout、cancelはいずれも出力先を
-公開しません。
+封印済みの内部抽出子は、検証済みAppContainer内でtokenとcapability 0件を確認した後だけ、明示的な
+handle listに含めた匿名pipeから1値を受け取ります。manifest固定済みlibarchive DLLへ値を登録し、
+通常file／directory以外を作成前に拒否して展開します。wrong password、timeout、policy違反、cancelは
+いずれも出力先を公開しません。
 
 ```powershell
 iroha-zip.exe preview .\encrypted.zip --prompt-password
 iroha-zip.exe extract .\encrypted.zip --prompt-password
 ```
 
-対象はWindows 10 version 1809以降と、取り込んだlibarchive buildが読めるZipCrypto／WinZip AESの
+対象はWindows 10以降と、取り込んだlibarchive buildが読めるZipCrypto／WinZip AESの
 暗号化ZIPです。ダブルクリックではパスワード画面を出さず、暗号化書庫の作成、password valueの
 command-line指定、unsandboxed password処理には対応しません。詳細なsecret lifetime、fail-closed条件、
 検証範囲は[暗号化書庫](docs/ENCRYPTED_ARCHIVES.md)を参照してください。

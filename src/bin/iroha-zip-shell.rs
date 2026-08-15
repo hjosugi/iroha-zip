@@ -79,6 +79,36 @@ fn run_internal_archive_reader() -> Option<iroha_zip::error::Result<()>> {
                 max_path_bytes,
                 allow_unsandboxed,
             ),
+            Command::InternalPasswordArchiveExtraction {
+                backend_root,
+                candidates,
+                archive,
+                output,
+                encoding,
+                max_files,
+                max_directories,
+                max_total_bytes,
+                max_single_file_bytes,
+                max_depth,
+                max_path_bytes,
+                allow_unsandboxed,
+            } => iroha_zip::platform::extract_password_archive(
+                &backend_root,
+                &candidates,
+                &archive,
+                &output,
+                encoding,
+                &iroha_zip::policy::Limits {
+                    max_archive_bytes: u64::MAX,
+                    max_files,
+                    max_directories,
+                    max_total_bytes,
+                    max_single_file_bytes,
+                    max_depth,
+                    max_path_bytes,
+                },
+                allow_unsandboxed,
+            ),
             Command::InternalRawArchive {
                 backend_root,
                 candidates,
@@ -111,6 +141,7 @@ fn is_internal_archive_reader_invocation() -> bool {
 
     std::env::args_os().nth(1).is_some_and(|argument| {
         argument == OsStr::new("internal-archive-listing")
+            || argument == OsStr::new("internal-password-archive-extraction")
             || argument == OsStr::new("internal-raw-archive")
     })
 }

@@ -162,22 +162,26 @@ child file／directoryを開く操作自体はWin32 path APIを使うため、�
 暗号化ZIPのCLI `preview`／`extract`は、boolean flagの`--prompt-password`を指定した場合だけnative
 password dialogを表示します。秘密値を受け取るCLI option、environment variable、永続config、fileは
 ありません。bsdtarの`--passphrase`は秘密をprocess argumentsへ残すため製品経路では使用しません。
-Windows版bsdtarの対話callbackがconsole handleを要求するため、通常の匿名pipeでも代用しません。
+Windows版bsdtarの対話callbackはconsole handleを要求し、capability 0件AppContainer内のConPTYでは
+互換handleを得られないことを実機CIで確認したため、password経路ではstock bsdtarを起動しません。
 
-実装は一回限りのhidden ConPTY input、明示的に非継承にしたcontroller handle、専用threadでの統合
-output drain、1 MiB output上限、固定promptのline-start照合、prompt後の完全log抑止、native password
-dialog、zeroizing UTF-16／UTF-8 bufferを組み合わせます。childは既存のsuspended AppContainer launchを
-維持し、要求modeとcapability 0件を肯定確認した後だけresumeします。最初の正確なpromptへ1行だけ
-書いてinputを閉じ、追加prompt、wrong password、timeout、output超過、backend crashはJobを終了して
-partial outputと秘密channelを破棄します。全Jobへ`JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`を
-適用し、unhandled child faultを通常の対話的Windows fault-reporting経路へ進めません。cancelはsandboxも
-childも作りません。
+実装は一回限りの匿名pipe、明示的に非継承にしたcontroller write handle、native password dialog、
+zeroizing UTF-16／UTF-8 bufferを組み合わせます。byte-identicalかつ封印済みの内部抽出子は、既存の
+suspended AppContainer launchを維持し、要求modeとcapability 0件を肯定確認した後だけresumeします。
+child側read handleだけを明示的handle listへ含め、親は検証後に1値だけを書いてwrite endを閉じます。
+内部抽出子はmanifest固定済みDLL候補だけをloadし、libarchive password APIへ1値を登録します。
+通常file／directory以外を作成前に拒否し、UTF-8 path、重複alias、file／directory数、単一／合計容量、
+深さ、path長を再検証しながらcreate-new fileへ書きます。wrong password、timeout、policy違反、backend
+crashはJobを終了してpartial outputと秘密channelを破棄します。全Jobへ
+`JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`を適用し、unhandled child faultを通常の対話的Windows
+fault-reporting経路へ進めません。cancelはsandboxもchildも作りません。
 
-ConPTY APIは動的に解決します。Windows 10 version 1809未満などAPIがない環境、明示的unsandboxed経路、
-raw compressed streamのpassword要求では、安全でないtransportへfallbackせずfail closedになります。
+明示的unsandboxed経路とraw compressed streamのpassword要求では、安全でないtransportへfallbackせず
+fail closedになります。
 zeroizationはbest effortであり、paging、hibernation、privileged debugger、OS管理のcrash dumpから秘密が
-消える保証ではありません。ダブルクリック、暗号化書庫の作成、ZIP以外の暗号化形式、自動retryは
-未対応です。詳細は[`ENCRYPTED_ARCHIVES.md`](ENCRYPTED_ARCHIVES.md)で固定します。
+消える保証はありません。libarchive自身がreader allocationへcopyしたpassphraseはreader破棄時にfree
+されますが、free前の上書きはupstream契約にありません。ダブルクリック、暗号化書庫の作成、ZIP以外の
+暗号化形式、自動retryは未対応です。詳細は[`ENCRYPTED_ARCHIVES.md`](ENCRYPTED_ARCHIVES.md)で固定します。
 
 ## 7. 将来の強化候補
 

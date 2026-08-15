@@ -218,7 +218,8 @@ impl Sandbox {
     pub fn run(&self, mut spec: ProcessSpec) -> Result<ProcessResult> {
         if spec.interactive_password.is_some() {
             return Err(IrohaZipError::Unsupported(
-                "secure archive-password input requires Windows AppContainer and ConPTY".to_owned(),
+                "secure archive-password input requires the Windows AppContainer one-use channel"
+                    .to_owned(),
             ));
         }
         if let Some(temp_dir) = spec.temp_dir.as_deref() {

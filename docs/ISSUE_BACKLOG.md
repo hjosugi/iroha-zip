@@ -62,18 +62,18 @@ Support passwords without command-line, environment, log, crash-report, or persi
 
 Acceptance: use a protected anonymous channel or equivalent one-use mechanism, zero sensitive buffers where practical, prevent inherited handles, and test cancellation/wrong-password paths.
 
-Progress (2026-08-15): the product path now implements a one-use ConPTY channel without
-`--passphrase`, inheritable controller handles, environment/config/file storage, or post-prompt log
-output. The backend remains suspended until its AppContainer/LPAC token and zero capabilities are
-verified. A non-`Clone`, always-redacted secret owns bounded zeroizing UTF-16/UTF-8 buffers; the
-native bilingual password control is cleared before destruction. Exact line-start prompt matching,
-one write, a 1 MiB terminal-output cap, a concurrent drain, and Job termination cover additional
-prompts, timeout, output overflow, monitor failure, and backend abort. Platform-neutral tests and a
-real-AppContainer transport probe cover Japanese input, cancellation, spoofed/fragmented prompts,
-retry, timeout, overflow, crash, cleanup, and log absence. The schema-v5 backend matrix additionally
-generates ZipCrypto/AES-128/AES-256 ZIPs from public deterministic data, drives the native UI,
-compares preview/extracted trees, and requires wrong-password/cancel non-publication. Hosted
-real-backend evidence and review remain the final acceptance gate for this branch.
+Progress (2026-08-15): the product path now uses a one-use anonymous pipe without `--passphrase`,
+inheritable controller handles, or environment/config/file/log storage. A byte-identical sealed
+internal child remains suspended until its AppContainer/LPAC token and zero capabilities are
+verified; only its stdin read handle is admitted through the explicit handle list. It loads only
+manifest-pinned libarchive DLL candidates, registers the one bounded value through the public
+libarchive password API, rejects non-file/directory entries before creation, and re-enforces path and
+resource limits while reading. A non-`Clone`, always-redacted secret owns zeroizing UTF-16/UTF-8
+buffers, and the bilingual password control is cleared before destruction. Platform-neutral tests
+and a real-AppContainer probe cover Japanese input, cancellation, EOF after one value, timeout,
+large output, crash, cleanup, and log absence. The schema-v5 matrix generates
+ZipCrypto/AES-128/AES-256 ZIPs, drives the native UI, compares preview/extracted trees, and requires
+wrong-password/cancel non-publication. Hosted real-backend evidence and review remain the final gate.
 
 ### [SAFE-008: Defender/antimalware handoff](https://github.com/hjosugi/iroha-zip/issues/10)
 

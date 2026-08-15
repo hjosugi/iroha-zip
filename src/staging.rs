@@ -249,6 +249,20 @@ pub(crate) fn stage_archive(
                     ),
                     "sandboxed libarchive raw-stream extraction",
                 )
+            } else if password.is_some() {
+                (
+                    listing_program,
+                    internal_password_extraction_arguments(
+                        &backend_dir,
+                        &listing_candidates,
+                        &sandbox_archive,
+                        &output_dir,
+                        encoding,
+                        &config.limits,
+                        allow_unsandboxed,
+                    ),
+                    "sandboxed libarchive password extraction",
+                )
             } else {
                 (sandbox_backend, bsdtar_args, "bsdtar extraction")
             };
@@ -426,6 +440,43 @@ fn internal_raw_arguments(
         args.push(OsString::from("--output"));
         args.push(output.as_os_str().to_owned());
     }
+    if allow_unsandboxed {
+        args.push(OsString::from("--allow-unsandboxed"));
+    }
+    args
+}
+
+#[cfg(windows)]
+fn internal_password_extraction_arguments(
+    backend_root: &Path,
+    candidates: &Path,
+    archive: &Path,
+    output: &Path,
+    encoding: FilenameEncoding,
+    limits: &policy::Limits,
+    allow_unsandboxed: bool,
+) -> Vec<OsString> {
+    let mut args = vec![
+        OsString::from("internal-password-archive-extraction"),
+        backend_root.as_os_str().to_owned(),
+        candidates.as_os_str().to_owned(),
+        archive.as_os_str().to_owned(),
+        output.as_os_str().to_owned(),
+        OsString::from("--encoding"),
+        OsString::from(encoding.cli_name()),
+        OsString::from("--max-files"),
+        OsString::from(limits.max_files.to_string()),
+        OsString::from("--max-directories"),
+        OsString::from(limits.max_directories.to_string()),
+        OsString::from("--max-total-bytes"),
+        OsString::from(limits.max_total_bytes.to_string()),
+        OsString::from("--max-single-file-bytes"),
+        OsString::from(limits.max_single_file_bytes.to_string()),
+        OsString::from("--max-depth"),
+        OsString::from(limits.max_depth.to_string()),
+        OsString::from("--max-path-bytes"),
+        OsString::from(limits.max_path_bytes.to_string()),
+    ];
     if allow_unsandboxed {
         args.push(OsString::from("--allow-unsandboxed"));
     }

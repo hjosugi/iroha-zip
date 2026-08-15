@@ -75,22 +75,22 @@ fn assert_secret_absent(outcome: &ProbeOutcome, secret: &str) {
 }
 
 #[test]
-fn conpty_delivers_one_non_ascii_password_without_logging_it() {
+fn anonymous_pipe_delivers_one_non_ascii_password_without_logging_it() {
     let outcome = run_probe("accept", EXPECTED_PASSWORD, Duration::from_secs(10));
     let result = outcome.result.as_ref().unwrap();
     assert_eq!(result.exit_code, 0);
     assert!(result.isolation.is_app_container);
     assert_eq!(result.isolation.capability_count, 0);
-    assert!(outcome.stdout.is_empty());
-    assert_eq!(outcome.stderr, b"Enter passphrase:");
+    assert_eq!(outcome.stdout, b"Enter passphrase:");
+    assert!(outcome.stderr.is_empty());
     assert_secret_absent(&outcome, EXPECTED_PASSWORD);
 }
 
 #[test]
-fn conpty_rejects_wrong_password_retry_and_bounds_failure_paths() {
+fn anonymous_pipe_closes_after_one_value_and_bounds_failure_paths() {
     let wrong = run_probe("repeat", EXPECTED_PASSWORD, Duration::from_secs(10));
-    let wrong_error = wrong.result.as_ref().unwrap_err().to_string();
-    assert!(wrong_error.contains("automatic retries are forbidden"));
+    assert_ne!(wrong.result.as_ref().unwrap().exit_code, 0);
+    assert!(String::from_utf8_lossy(&wrong.stderr).contains("unexpectedly received a retry"));
     assert_secret_absent(&wrong, EXPECTED_PASSWORD);
 
     let timeout = run_probe("sleep", EXPECTED_PASSWORD, Duration::from_millis(500));
@@ -104,14 +104,14 @@ fn conpty_rejects_wrong_password_retry_and_bounds_failure_paths() {
     );
     assert_secret_absent(&timeout, EXPECTED_PASSWORD);
 
-    let overflow = run_probe("overflow", EXPECTED_PASSWORD, Duration::from_secs(10));
+    let overflow = run_probe("overflow", EXPECTED_PASSWORD, Duration::from_millis(500));
     assert!(
         overflow
             .result
             .as_ref()
             .unwrap_err()
             .to_string()
-            .contains("pseudoconsole output exceeded")
+            .contains("exceeded")
     );
     assert_secret_absent(&overflow, EXPECTED_PASSWORD);
 

@@ -215,6 +215,60 @@ fn run() -> Result<()> {
                 ));
             }
         }
+        Command::InternalPasswordArchiveExtraction {
+            backend_root,
+            candidates,
+            archive,
+            output,
+            encoding,
+            max_files,
+            max_directories,
+            max_total_bytes,
+            max_single_file_bytes,
+            max_depth,
+            max_path_bytes,
+            allow_unsandboxed,
+        } => {
+            #[cfg(windows)]
+            iroha_zip::platform::extract_password_archive(
+                &backend_root,
+                &candidates,
+                &archive,
+                &output,
+                encoding,
+                &iroha_zip::policy::Limits {
+                    max_archive_bytes: u64::MAX,
+                    max_files,
+                    max_directories,
+                    max_total_bytes,
+                    max_single_file_bytes,
+                    max_depth,
+                    max_path_bytes,
+                },
+                allow_unsandboxed,
+            )?;
+            #[cfg(not(windows))]
+            {
+                let _ = (
+                    backend_root,
+                    candidates,
+                    archive,
+                    output,
+                    encoding,
+                    max_files,
+                    max_directories,
+                    max_total_bytes,
+                    max_single_file_bytes,
+                    max_depth,
+                    max_path_bytes,
+                    allow_unsandboxed,
+                );
+                return Err(iroha_zip::error::IrohaZipError::Unsupported(
+                    "the internal password archive extractor is only available on Windows"
+                        .to_owned(),
+                ));
+            }
+        }
         Command::InternalRawArchive {
             backend_root,
             candidates,
@@ -401,21 +455,14 @@ fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
 }
 
 fn read_password_probe_line() -> Result<zeroize::Zeroizing<String>> {
-    #[cfg(windows)]
-    {
-        iroha_zip::platform::read_console_password_probe_line()
+    let mut input = zeroize::Zeroizing::new(String::new());
+    std::io::stdin()
+        .read_line(&mut input)
+        .map_err(|error| iroha_zip::error::IrohaZipError::io("read password probe input", error))?;
+    while input.ends_with(['\r', '\n']) {
+        input.pop();
     }
-    #[cfg(not(windows))]
-    {
-        let mut input = zeroize::Zeroizing::new(String::new());
-        std::io::stdin().read_line(&mut input).map_err(|error| {
-            iroha_zip::error::IrohaZipError::io("read password probe input", error)
-        })?;
-        while input.ends_with(['\r', '\n']) {
-            input.pop();
-        }
-        Ok(input)
-    }
+    Ok(input)
 }
 
 fn print_evidence(evidence: &BackendEvidence) {

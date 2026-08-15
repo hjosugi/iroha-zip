@@ -181,6 +181,44 @@ fn internal_failure_probes_are_hidden_but_parseable() {
         }
     ));
 
+    let password_extraction = Cli::try_parse_from([
+        "iroha-zip",
+        "internal-password-archive-extraction",
+        "backend",
+        "candidates.txt",
+        "archive.bin",
+        "output",
+        "--encoding",
+        "cp932",
+        "--max-files",
+        "100000",
+        "--max-directories",
+        "25000",
+        "--max-total-bytes",
+        "34359738368",
+        "--max-single-file-bytes",
+        "8589934592",
+        "--max-depth",
+        "64",
+        "--max-path-bytes",
+        "4096",
+    ])
+    .unwrap();
+    assert!(matches!(
+        password_extraction.command,
+        Command::InternalPasswordArchiveExtraction {
+            encoding: FilenameEncoding::Cp932,
+            max_files: 100_000,
+            max_directories: 25_000,
+            max_total_bytes: 34_359_738_368,
+            max_single_file_bytes: 8_589_934_592,
+            max_depth: 64,
+            max_path_bytes: 4_096,
+            allow_unsandboxed: false,
+            ..
+        }
+    ));
+
     let raw = Cli::try_parse_from([
         "iroha-zip",
         "internal-raw-archive",
