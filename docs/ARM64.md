@@ -37,15 +37,18 @@ AppContainerがcapability 0であること、7 profile/rootと全一時rootが�
 fail closedしました。
 
 暗号化ZIPを含むschema-v5拡張はexact `main` commit
-`1f8cce72c1730ae3026bf386988f62b32c0470c4`の
-[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811)で合格しました。
+`5cbc6c27fb67466369b20180a9c5aa2fdd3f6713`の
+[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031)で合格しました。
 downloadした5 JSONを独立に確認し、3暗号方式すべてで保護された日英control、一回限りchannel、
 passwordのstdout／stderr非露出、sourceと同じpreview／extract tree、wrong-password／cancel時の
 destination非公開、全PEの`0xAA64` identity、完全cleanupを確認しました。
+全5 JSONはraw/canonical SHA-256とartifact API digest付きの
+[長期証跡snapshot](https://github.com/hjosugi/iroha-zip/tree/v0.6.1/evidence/windows/31868019031/windows-arm64-native)
+にも保存しています。
 
 ### 配布境界
 
-[`v0.6.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.0)は`windows-arm64`と
+[`v0.6.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.1)は`windows-arm64`と
 `windows-x64`を別名で扱います。release workflowはnative ARM64 runnerでbuild/packageし、
 次のtag-driven境界で取り違えを拒否します。
 
@@ -69,7 +72,7 @@ Release APIはlatest／stable／immutableと、exact 11 assetの公開状態を�
 
 ### ARM64での導入
 
-1. `iroha-zip-0.6.0-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
+1. `iroha-zip-0.6.1-windows-arm64.zip`を取得し、SHA-256とattestationを確認します。
 2. native ARM64版MSYS2で`mingw-w64-clang-aarch64-libarchive`を導入します。
 3. ARM64版の設定画面で「MSYS2から取り込む」を選びます。設定画面はCLANGARM64を自動指定します。
 4. CLI自動化では次を使用します。
@@ -128,16 +131,18 @@ The LPAC query returned `ERROR_INVALID_PARAMETER` on that Windows 11 ARM environ
 without a normal-AppContainer fallback.
 
 The schema-v5 encrypted-ZIP expansion passed for exact `main` commit
-`1f8cce72c1730ae3026bf386988f62b32c0470c4` in
-[Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). Independent
+`5cbc6c27fb67466369b20180a9c5aa2fdd3f6713` in
+[Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). Independent
 checks of all five downloaded JSON reports confirmed the protected bilingual control, one-use
 channel, password absence from stdout/stderr, source-identical preview/extraction trees for all three
 encryption modes, wrong-password/cancel destination absence, `0xAA64` identity for every PE, and
 complete cleanup.
+All five reports are also retained with raw/canonical SHA-256 values and the artifact API digest in the
+[durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/v0.6.1/evidence/windows/31868019031/windows-arm64-native).
 
 ### Distribution boundary
 
-[`v0.6.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.0) uses separately named
+[`v0.6.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.1) uses separately named
 `windows-arm64` and `windows-x64` assets. The release workflow builds/packages on a native ARM64
 runner and rejects architecture confusion at these tag-driven boundaries:
 
@@ -164,7 +169,7 @@ API reports it as latest, stable, immutable, and complete with the exact 11-asse
 
 ### ARM64 setup
 
-1. Download `iroha-zip-0.6.0-windows-arm64.zip` and verify its SHA-256 and attestation.
+1. Download `iroha-zip-0.6.1-windows-arm64.zip` and verify its SHA-256 and attestation.
 2. Install `mingw-w64-clang-aarch64-libarchive` in native ARM64 MSYS2.
 3. Choose **Import from MSYS2** in the ARM64 Settings build. It selects CLANGARM64 automatically.
 4. For CLI automation, use:

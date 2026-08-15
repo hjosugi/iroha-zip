@@ -6,7 +6,7 @@ iroha-zip is a Rust wrapper for extracting untrusted archives on Windows with mi
 
 It does not attempt to reimplement every archive format in Rust. It runs a current libarchive / `bsdtar.exe` backend as a separate process inside an ephemeral AppContainer, then inspects inputs and outputs in Rust. Neither extraction nor creation runs `bsdtar.exe` directly with the user's normal privileges.
 
-This is not a security-audited product. Version `v0.6.0` is a practical stable build whose design and real-world behavior are still being validated.
+This is not a security-audited product. Version `v0.6.1` is a practical stable build whose design and real-world behavior are still being validated.
 
 ## Download
 
@@ -208,7 +208,7 @@ Successful output is written to:
 
 ```text
 dist\iroha-zip\
-dist\iroha-zip-0.6.0-windows-x64.zip
+dist\iroha-zip-0.6.1-windows-x64.zip
 ```
 
 The normal invocation creates the x64 package; pass `-Target aarch64-pc-windows-msvc` for a local ARM64 build. The tag-driven workflow builds both packages independently on native x64 and ARM64 runners. Official releases attach two ZIPs, six standalone executables, two ZIP sidecars, one combined SHA-256 inventory, and GitHub artifact attestations. See [About unsigned releases](docs/UNSIGNED_RELEASE.md) for SmartScreen and independent verification guidance. The strict verification path required for future Authenticode-signed releases remains documented in the [release verification specification](docs/RELEASE_VERIFICATION.md).
@@ -248,7 +248,7 @@ The application manages:
 
 `--allow-unsandboxed` is a noisy, per-command diagnostic exception and cannot be persisted.
 
-Size fields accept readable binary units such as `16 GiB` and `512 MiB`. Validation focuses the invalid field. The title's `*` and a close confirmation expose unsaved changes. Tab/Shift+Tab, access keys, Enter-to-save, and Escape are supported. High-DPI scaling adds scrolling and focus tracking when necessary. Backend replacement, association removal, and restoring defaults require confirmation; long-running imports and diagnostics report status. Configuration writes are serialized and rollback-safe. The implemented contract and remaining physical-device matrix are in [Settings accessibility](docs/SETTINGS_ACCESSIBILITY.md).
+Size fields accept readable binary units such as `16 GiB` and `512 MiB`. Validation focuses the invalid field. The title's `*` and a close confirmation expose unsaved changes. Tab/Shift+Tab, access keys, Enter-to-save, and Escape are supported. Settings is Per-Monitor V2 DPI aware and recomputes the Windows-suggested rectangle, every control, scrolling, and system font from a 96-DPI baseline when monitor DPI changes. Scrolling and focus tracking keep every field reachable when content does not fit. Backend replacement, association removal, and restoring defaults require confirmation; long-running imports and diagnostics report status. Configuration writes are serialized and rollback-safe. The implemented contract and remaining physical-device matrix are in [Settings accessibility](docs/SETTINGS_ACCESSIBILITY.md).
 
 The default configuration path is:
 
@@ -344,9 +344,9 @@ This validates configuration, every backend hash, `bsdtar --version`, and AppCon
 - It cannot guarantee protection from unknown vulnerabilities in AppContainer, the Windows kernel, or libarchive.
 - Normal AppContainer is the default. Experimental LPAC must be selected explicitly and used only after `doctor` succeeds with the chosen backend. There is no silent compatibility downgrade.
 - It cannot fully eliminate races against an attacker who already controls the same user account.
-- `v0.6.0` distributes Windows x64 and native ARM64 as separate assets. [ARM64 status](docs/ARM64.md) records the measured boundary and untested device scope.
+- `v0.6.1` distributes Windows x64 and native ARM64 as separate assets. [ARM64 status](docs/ARM64.md) records the measured boundary and untested device scope.
 - CodeQL `extended` analysis is enabled for Rust, GitHub Actions, and JavaScript. [CodeQL baseline](docs/CODEQL.md) records the initial 233 sink/source reviews and the later test-only alert #234 decision. Open alerts were zero as of 2026-08-15.
-- The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. Schema-v5 E2E passed the 14 additional read formats, generated malicious corpus, and ZipCrypto/AES-128/AES-256 encrypted-ZIP matrix across native Windows 11 ARM and Windows Server 2022/2025 x64 in [Actions run 31862810811](https://github.com/hjosugi/iroha-zip/actions/runs/31862810811). This is not a substitute for Windows 10/11 x64 desktop-device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
+- The Linux suite, Clippy, Windows MSVC type checking, and five bounded fuzz targets cover manifests, Windows paths, archive names, Windows command lines, and configuration round trips. Schema-v5 E2E passed the 14 additional read formats, generated malicious corpus, and ZipCrypto/AES-128/AES-256 encrypted-ZIP matrix across native Windows 11 ARM and Windows Server 2022/2025 x64 in [Actions run 31868019031](https://github.com/hjosugi/iroha-zip/actions/runs/31868019031). All 11 JSON reports are preserved with raw/canonical SHA-256 and artifact API digests in the [durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/v0.6.1/evidence/windows/31868019031). This is not a substitute for Windows 10/11 x64 desktop-device validation or a security audit. See [Fuzzing](docs/FUZZING.md), [Windows E2E](docs/WINDOWS_E2E.md), [Malicious corpus](docs/MALICIOUS_CORPUS.md), and [Build status](docs/BUILD_STATUS.md).
 
 Remaining work and acceptance criteria are tracked in [`docs/ISSUE_BACKLOG.md`](docs/ISSUE_BACKLOG.md). Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing a change.
 

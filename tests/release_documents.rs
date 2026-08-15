@@ -75,6 +75,32 @@ fn packaged_release_documents_match_the_crate_version() {
     assert!(release_notes.contains(&arm64_zip));
     assert_eq!(release_notes.matches("## 日本語").count(), 1);
     assert_eq!(release_notes.matches("## English").count(), 1);
+    let (japanese_notes, english_notes) = release_notes
+        .split_once("\n---\n\n## English\n")
+        .expect("release notes must have one explicit Japanese/English boundary");
+    for marker in ["\n### ", "\n- ", "```", "]("] {
+        assert_eq!(
+            japanese_notes.matches(marker).count(),
+            english_notes.matches(marker).count(),
+            "bilingual release-note structure differs for marker {marker:?}"
+        );
+    }
+
+    let changelog = include_str!("../CHANGELOG.md");
+    assert!(
+        changelog.contains(&format!("\n## {version} - ")),
+        "CHANGELOG.md is missing the current release heading"
+    );
+    let licenses = include_str!("../THIRD-PARTY-LICENSES.html");
+    assert!(
+        licenses.contains(&format!("iroha-zip {version}</a>")),
+        "third-party license inventory has a stale root package version"
+    );
+    let fuzz_manifest = include_str!("../fuzz/Cargo.toml");
+    assert!(
+        fuzz_manifest.contains(&format!("version = \"={version}\"")),
+        "fuzz workspace dependency has a stale root package version"
+    );
 
     let verification = include_str!("../docs/RELEASE_VERIFICATION.md");
     assert!(verification.contains(&format!("Version `{version}` contains exactly 11 assets.")));
@@ -102,6 +128,7 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     let english_page = include_str!("../site/en/index.html");
     let not_found_page = include_str!("../site/404.html");
     let site_script = include_str!("../site/assets/site.js");
+    let site_contract = include_str!("site_release_contract.mjs");
     let site_styles = include_str!("../site/assets/styles.css");
     let favicon = include_str!("../site/assets/favicon.svg");
     let robots = include_str!("../site/robots.txt");
@@ -169,6 +196,10 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     assert!(!japanese_page.contains("ConPTY"));
     assert!(!english_page.contains("ConPTY"));
     assert!(site_script.contains(&format!("const fallbackVersion = \"{tag}\";")));
+    assert!(
+        site_contract.contains(&format!("const tag = \"{tag}\";")),
+        "dependency-free Pages contract has a stale release tag"
+    );
     assert!(site_script.contains("const stableTagPattern = /^v(\\d+\\.\\d+\\.\\d+)$/;"));
     assert!(site_script.contains("release.immutable !== true"));
     assert!(site_script.contains("assets.length !== expectedAssetNames.length"));

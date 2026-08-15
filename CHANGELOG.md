@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.1 - 2026-08-15
+
 - Declare Per-Monitor V2 DPI awareness in every Windows executable and make Settings consume the
   `WM_DPICHANGED` suggested rectangle, rebuild fonts from the effective DPI, and relayout from a
   stable 96-DPI baseline. Extend native Settings evidence with an effective-awareness assertion and

@@ -1,17 +1,17 @@
-# iroha-zip 0.6.0
+# iroha-zip 0.6.1
 
 ## 日本語
 
-iroha-zip 0.6.0は、暗号化ZIPの`preview`／`extract`へ、秘密値をcommand line、environment、
-file、永続config、stdout／stderrへ渡さないnative password入力を追加するminor安定版です。
-Windows x64とnative Windows ARM64を別々のnative runnerでbuildし、意図的にAuthenticode
-未署名のまま、exact 11 assetのimmutable Releaseとして公開します。
+iroha-zip 0.6.1は、0.6.0の暗号化ZIPとsandboxの境界を維持しながら、Settingsの
+Per-Monitor V2 DPI対応とWindows実測証跡の長期保存を強化するpatch安定版です。Windows x64と
+native Windows ARM64を別々のnative runnerでbuildし、意図的にAuthenticode未署名のまま、
+exact 11 assetのimmutable Releaseとして公開します。
 
 ### ダウンロードの選び方
 
-- **一般的なIntel/AMD PC**: `iroha-zip-0.6.0-windows-x64.zip`
-- **Windows on ARM PC**: `iroha-zip-0.6.0-windows-arm64.zip`
-- CLIだけが必要な場合は、対応する`iroha-zip-0.6.0-windows-<arch>.exe`を選べます。
+- **一般的なIntel/AMD PC**: `iroha-zip-0.6.1-windows-x64.zip`
+- **Windows on ARM PC**: `iroha-zip-0.6.1-windows-arm64.zip`
+- CLIだけが必要な場合は、対応する`iroha-zip-0.6.1-windows-<arch>.exe`を選べます。
 - native設定画面と関連付けlauncherも、各architecture向けの個別EXEがあります。
 - `SHA256SUMS.txt`は2つのZIPと6つの個別EXEをまとめて対象にします。各ZIPには専用の
   `.zip.sha256`もあります。
@@ -43,22 +43,16 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
 - 正しいpasswordはZipCrypto、WinZip AES-128、AES-256でpreview／展開tree一致を確認しています。
   wrong password、timeout、EOF、overflow、異常終了、cancel、cleanup failureは非公開でfail closedします。
 
-### v0.5.3からの変更
+### v0.6.0からの変更
 
-- password付きZIPをstock `bsdtar --passphrase`へ渡さず、manifest固定済みlibarchive readerを
-  AppContainer内で実行する一回限りchannelを実装しました。
-- native dialog、secret zeroization、明示handle allowlist、suspended child verification、
-  entry/path/resource enforcementと、platform-neutralな失敗回帰を追加しました。
-- Windows E2Eをschema v5へ拡張し、ZipCrypto／AES-128／AES-256、日英password UI、
-  preview／extract、wrong-password／cancel非公開、秘密のoutput非露出を検証します。
-- cross-process password editとdialog commandはbounded synchronous Windows messageで駆動し、
-  process identityを照合したdialog closureを要求します。生成fixtureのpasswordは、manifestを持たない
-  stock第三者`bsdtar.exe`のlegacy argv encodingと混同しないようASCIIに固定し、日本語passwordは
-  製品のnative one-use-channel probeで独立に検証します。
-- MicrosoftのAppContainer profile削除契約に従う最大20回・50 ms間隔のbounded retryを追加しました。
-  恒久cleanup failureは引き続きfatalです。
-- PR branchでpush／pull_requestのCIが二重実行されないようにしつつ、`main`、tag、schedule、
-  manual workflowの検証は維持しました。
+- 3 EXEをPer-Monitor V2 DPI awareとし、Settingsは`WM_DPICHANGED`のsuggested rectangleを適用して、
+  96-DPI基準から全control・scroll・system fontを再計算します。
+- native UIA証跡は実効Per-Monitor V2 contextと日英それぞれの96→144→96 synthetic transitionを必須にし、
+  suggested geometry、150%拡大、往復後のdrift-free復帰を検証します。
+- native ARM64と固定Windows Serverのevidence artifactを90日保持し、exact-main runの11 JSONを
+  raw/canonical SHA-256とActions artifact API digest付きのcanonical snapshotとして保存します。
+- `main`はLinux・Windows x64・native ARM64・dependency policy・3言語CodeQLを必須checkとし、
+  adminを含むforce push／削除防止、conversation resolution、linear history、squash-onlyを適用します。
 
 ### 既知の境界
 
@@ -69,26 +63,25 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
 - セキュリティ監査済み製品ではありません。Windows 10/11 x64 desktop実機、実験的LPAC、
   screen reader／mixed DPI、さらに広いmalformed format／race試験は継続課題です。
 
-実測範囲は[暗号化書庫の境界](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/ENCRYPTED_ARCHIVES.md)、
-[Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/WINDOWS_E2E.md)、
-[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/ARM64.md)、
-[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/BUILD_STATUS.md)を確認してください。
+実測範囲は[暗号化書庫の境界](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/ENCRYPTED_ARCHIVES.md)、
+[Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/WINDOWS_E2E.md)、
+[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/ARM64.md)、
+[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/BUILD_STATUS.md)を確認してください。
 
 ---
 
 ## English
 
-iroha-zip 0.6.0 is a stable minor release that adds native password input for encrypted-ZIP
-`preview` and `extract` without placing the secret on a command line, in the environment, in a file
-or persistent configuration, or on stdout/stderr. Windows x64 and native Windows ARM64 are built on
-separate native runners and published intentionally without Authenticode signatures as an immutable
-Release with exactly 11 assets.
+iroha-zip 0.6.1 is a stable patch release that retains the encrypted-ZIP and sandbox boundaries from
+0.6.0 while strengthening Per-Monitor V2 DPI behavior in Settings and durable preservation of measured
+Windows evidence. Windows x64 and native Windows ARM64 are built on separate native runners and
+published intentionally without Authenticode signatures as an immutable Release with exactly 11 assets.
 
 ### Which download to choose
 
-- **Typical Intel/AMD PC**: `iroha-zip-0.6.0-windows-x64.zip`
-- **Windows on ARM PC**: `iroha-zip-0.6.0-windows-arm64.zip`
-- If you need only the CLI, choose the matching `iroha-zip-0.6.0-windows-<arch>.exe`.
+- **Typical Intel/AMD PC**: `iroha-zip-0.6.1-windows-x64.zip`
+- **Windows on ARM PC**: `iroha-zip-0.6.1-windows-arm64.zip`
+- If you need only the CLI, choose the matching `iroha-zip-0.6.1-windows-<arch>.exe`.
 - Separate native Settings and file-association launcher executables are available for each architecture.
 - `SHA256SUMS.txt` covers both ZIPs and all six standalone executables. Each ZIP also has its own
   `.zip.sha256` sidecar.
@@ -122,22 +115,18 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
   Wrong password, timeout, EOF, overflow, crash, cancellation, and cleanup failure all fail closed
   without publication.
 
-### Changes from v0.5.3
+### Changes from v0.6.0
 
-- Implement a one-use channel and manifest-pinned AppContainer libarchive reader instead of passing
-  encrypted-ZIP passwords to stock `bsdtar --passphrase`.
-- Add the native dialog, secret zeroization, explicit handle allowlist, suspended-child verification,
-  entry/path/resource enforcement, and platform-neutral failure regressions.
-- Extend Windows E2E to schema v5 for ZipCrypto/AES-128/AES-256, bilingual password UI,
-  preview/extract, wrong-password/cancel non-publication, and secret absence from output.
-- Drive the cross-process protected edit and dialog command with bounded synchronous Windows messages,
-  then require process-identity-checked closure. Keep generated-fixture passwords ASCII so the stock
-  third-party `bsdtar.exe` without an iroha-zip UTF-8 manifest cannot conflate legacy argv conversion
-  with the product transport; a native one-use-channel probe independently covers Japanese input.
-- Add Microsoft's bounded AppContainer profile-deletion recovery contract: at most 20 attempts spaced
-  50 ms apart. Persistent cleanup failure remains fatal.
-- Avoid duplicate push/pull-request CI for PR branches while retaining `main`, tag, scheduled, and
-  manually dispatched validation.
+- Declare all three executables Per-Monitor V2 DPI aware. Settings applies the `WM_DPICHANGED`
+  suggested rectangle and recomputes every control, scroll extent, and system font from a stable
+  96-DPI baseline.
+- Require native UIA evidence for the effective Per-Monitor V2 context and bilingual 96→144→96
+  synthetic transitions, including suggested geometry, 150% scaling, and drift-free restoration.
+- Retain native ARM64 and fixed Windows Server evidence artifacts for 90 days and preserve the exact-main
+  run's 11 JSON reports as a canonical snapshot with raw/canonical SHA-256 and Actions artifact API digests.
+- Protect `main` with required Linux, Windows x64, native ARM64, dependency-policy, and three-language
+  CodeQL checks, admin enforcement, force-push/deletion denial, conversation resolution, linear history,
+  and squash-only merges.
 
 ### Known boundaries
 
@@ -148,7 +137,7 @@ iroha-zip.exe extract .\encrypted.zip --prompt-password
 - This is not a security-audited product. Windows 10/11 x64 desktop devices, experimental LPAC,
   screen readers/mixed DPI, and broader malformed-format/race testing remain open.
 
-See [Encrypted archives](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/ENCRYPTED_ARCHIVES.md),
-[Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/WINDOWS_E2E.md),
-[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/ARM64.md), and
-[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.6.0/docs/BUILD_STATUS.md) for the measured boundary.
+See [Encrypted archives](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/ENCRYPTED_ARCHIVES.md),
+[Windows E2E](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/WINDOWS_E2E.md),
+[ARM64 status](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/ARM64.md), and
+[Build Status](https://github.com/hjosugi/iroha-zip/blob/v0.6.1/docs/BUILD_STATUS.md) for the measured boundary.

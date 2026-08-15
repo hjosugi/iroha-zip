@@ -13,9 +13,9 @@ iroha-zip の現在の公式 Windows バイナリは Authenticode 未署名で�
 PowerShell で SHA-256 を表示する例:
 
 ```powershell
-Get-FileHash .\iroha-zip-0.6.0-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.6.1-windows-x64.zip -Algorithm SHA256
 # Windows on ARMの場合 / For Windows on ARM:
-Get-FileHash .\iroha-zip-0.6.0-windows-arm64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.6.1-windows-arm64.zip -Algorithm SHA256
 ```
 
 dry runで得たSHA-256を、後から作る正式Releaseの期待値として使わないでください。dry runとtag公開は
@@ -42,9 +42,9 @@ The current official iroha-zip Windows binaries are not Authenticode-signed. Win
 Example SHA-256 check in PowerShell:
 
 ```powershell
-Get-FileHash .\iroha-zip-0.6.0-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.6.1-windows-x64.zip -Algorithm SHA256
 # Windows on ARM:
-Get-FileHash .\iroha-zip-0.6.0-windows-arm64.zip -Algorithm SHA256
+Get-FileHash .\iroha-zip-0.6.1-windows-arm64.zip -Algorithm SHA256
 ```
 
 Do not use a dry-run SHA-256 value as the expected digest for a later published Release. Dry runs
