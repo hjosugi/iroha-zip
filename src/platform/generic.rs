@@ -10,11 +10,18 @@ use std::time::{Duration, Instant};
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
+use crate::password::ArchivePassword;
 use crate::platform::{FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec};
 use crate::util;
 
 pub fn prepare_backend_executable(path: &Path) -> Result<()> {
     validate_regular_file_security(path)
+}
+
+pub fn prompt_archive_password(_archive: &Path) -> Result<Option<ArchivePassword>> {
+    Err(IrohaZipError::Unsupported(
+        "secure archive-password input is available only on Windows".to_owned(),
+    ))
 }
 
 pub struct Sandbox {
@@ -209,6 +216,12 @@ impl Sandbox {
     }
 
     pub fn run(&self, mut spec: ProcessSpec) -> Result<ProcessResult> {
+        if spec.interactive_password.is_some() {
+            return Err(IrohaZipError::Unsupported(
+                "secure archive-password input requires the Windows AppContainer one-use channel"
+                    .to_owned(),
+            ));
+        }
         if let Some(temp_dir) = spec.temp_dir.as_deref() {
             validate_directory_security(temp_dir)?;
             let resolved = fs::canonicalize(temp_dir).map_err(|error| {

@@ -291,9 +291,29 @@ iroha-zip.exe extract .\archive.zip
 iroha-zip.exe extract .\archive.zip --encoding cp932
 iroha-zip.exe extract .\archive.7z --output D:\Extracted\archive
 iroha-zip.exe extract .\archive.tar.gz --open
+iroha-zip.exe extract .\encrypted.zip --prompt-password
 ```
 
 既存の出力先は上書きしません。出力先を省略すると、書庫の隣に衝突しない名前を作ります。
+
+### 暗号化ZIP
+
+`preview`と`extract`に`--prompt-password`を付けると、日英併記のnative dialogで一回だけ
+パスワードを入力できます。パスワード値をCLI option、環境変数、設定、fileへ渡す経路はありません。
+封印済みの内部抽出子は、検証済みAppContainer内でtokenとcapability 0件を確認した後だけ、明示的な
+handle listに含めた匿名pipeから1値を受け取ります。manifest固定済みlibarchive DLLへ値を登録し、
+通常file／directory以外を作成前に拒否して展開します。wrong password、timeout、policy違反、cancelは
+いずれも出力先を公開しません。
+
+```powershell
+iroha-zip.exe preview .\encrypted.zip --prompt-password
+iroha-zip.exe extract .\encrypted.zip --prompt-password
+```
+
+対象はWindows 10以降と、取り込んだlibarchive buildが読めるZipCrypto／WinZip AESの
+暗号化ZIPです。ダブルクリックではパスワード画面を出さず、暗号化書庫の作成、password valueの
+command-line指定、unsandboxed password処理には対応しません。詳細なsecret lifetime、fail-closed条件、
+検証範囲は[暗号化書庫](docs/ENCRYPTED_ARCHIVES.md)を参照してください。
 
 ### 作成
 
@@ -316,7 +336,7 @@ iroha-zip.exe doctor
 
 ## 現在の制約
 
-- パスワード付き書庫は未対応です。stock Windows版bsdtarの制約と、コマンドラインへ秘密を載せないConPTY設計・試験条件は[暗号化書庫設計](docs/ENCRYPTED_ARCHIVES.md)で追跡します。
+- パスワード入力はCLIの暗号化ZIP `preview`／`extract`だけです。ダブルクリック、暗号化書庫の作成、ZIP以外の暗号化形式、自動retryには対応しません。[暗号化書庫の境界](docs/ENCRYPTED_ARCHIVES.md)を参照してください。
 - 自動updaterは未実装です。未署名版から自己更新を有効にせず、署名・downgrade・rollback・backend分離の条件を[署名付きupdater設計](docs/UPDATER.md)で固定しています。
 - CLIのpolicy-safe previewと選択展開はありますが、書庫内容を閲覧・検索・選択するネイティブGUIは未実装です。
 - ウイルス対策エンジンではありません。展開後の実行ファイルが安全であることは保証しません。

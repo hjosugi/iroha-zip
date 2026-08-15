@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::mem::{size_of, size_of_val};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -16,9 +16,9 @@ use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_HANDLE_EOF, ERROR_INVALID_PARAMETER,
-    ERROR_NO_MORE_FILES, ERROR_SUCCESS, FreeLibrary, GetLastError, HANDLE, HANDLE_FLAG_INHERIT,
-    HANDLE_FLAGS, HLOCAL, LocalFree, SetHandleInformation, WAIT_ABANDONED, WAIT_OBJECT_0,
-    WAIT_TIMEOUT,
+    ERROR_NO_MORE_FILES, ERROR_SUCCESS, FreeLibrary, GetHandleInformation, GetLastError, HANDLE,
+    HANDLE_FLAG_INHERIT, HANDLE_FLAGS, HLOCAL, LocalFree, SetHandleInformation, WAIT_ABANDONED,
+    WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Security::Authorization::{
     ConvertSidToStringSidW, EXPLICIT_ACCESS_W, GetNamedSecurityInfoW, NO_MULTIPLE_TRUSTEE,
@@ -54,15 +54,17 @@ use windows::Win32::System::Com::{
     CoTaskMemFree, CoUninitialize,
 };
 use windows::Win32::System::JobObjects::{
-    CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
-    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
+    CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION,
+    JOB_OBJECT_LIMIT_JOB_MEMORY, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+    SetInformationJobObject, TerminateJobObject,
 };
 use windows::Win32::System::LibraryLoader::{
     BeginUpdateResourceW, EndUpdateResourceW, FindResourceW, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE,
     LOAD_LIBRARY_AS_IMAGE_RESOURCE, LoadLibraryExW, LoadResource, LockResource, SizeofResource,
     UpdateResourceW,
 };
+use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateMutexW, CreateProcessW,
     DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
@@ -80,6 +82,7 @@ use windows::core::{Error as WindowsError, GUID, HRESULT, PCWSTR, PWSTR};
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
+use crate::password::MAX_PASSWORD_UTF8_BYTES;
 use crate::platform::{
     FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec, ProcessTempObservation,
 };
@@ -87,6 +90,13 @@ use crate::util;
 use crate::windows_command_line;
 
 const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
+const PASSWORD_PIPE_BUFFER_BYTES: u32 = 4 * 1024;
+const _: () = assert!(
+    MAX_PASSWORD_UTF8_BYTES < PASSWORD_PIPE_BUFFER_BYTES as usize,
+    "the complete delimited password must fit in the pipe before child resume"
+);
+const APP_CONTAINER_PROFILE_DELETE_ATTEMPTS: usize = 20;
+const APP_CONTAINER_PROFILE_DELETE_RETRY_DELAY: Duration = Duration::from_millis(50);
 const CONFIG_SAVE_MUTEX_NAME: &str = r"Local\iroha-zip.ConfigSave.v1";
 const CONFIG_SAVE_MUTEX_TIMEOUT_MS: u32 = 30_000;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
@@ -802,9 +812,8 @@ impl Sandbox {
             Mode::AppContainer {
                 profile_name, sid, ..
             } => unsafe {
-                let name = wide_null(OsStr::new(&profile_name));
-                if let Err(error) = DeleteAppContainerProfile(PCWSTR(name.as_ptr())) {
-                    failure = Some(windows_error("DeleteAppContainerProfile", error));
+                if let Err(error) = delete_appcontainer_profile_with_retry(&profile_name) {
+                    failure = Some(error);
                 }
                 if let Err(error) = fs::remove_dir_all(&self.root)
                     && error.kind() != std::io::ErrorKind::NotFound
@@ -1287,10 +1296,8 @@ fn create_appcontainer() -> Result<(String, PSID, PathBuf)> {
         Ok(resolved_root) => Ok((profile_name, sid, resolved_root)),
         Err(error) => {
             let mut cleanup_errors = Vec::new();
-            unsafe {
-                if let Err(cleanup) = DeleteAppContainerProfile(PCWSTR(name.as_ptr())) {
-                    cleanup_errors.push(format!("DeleteAppContainerProfile failed: {cleanup}"));
-                }
+            if let Err(cleanup) = delete_appcontainer_profile_with_retry(&profile_name) {
+                cleanup_errors.push(cleanup.to_string());
             }
             if let Some(root) = cleanup_root
                 && let Err(cleanup) = fs::remove_dir_all(&root)
@@ -1316,6 +1323,32 @@ fn create_appcontainer() -> Result<(String, PSID, PathBuf)> {
     }
 }
 
+fn delete_appcontainer_profile_with_retry(profile_name: &str) -> Result<()> {
+    let name = wide_null(OsStr::new(profile_name));
+    retry_appcontainer_profile_delete(
+        || unsafe { DeleteAppContainerProfile(PCWSTR(name.as_ptr())) },
+        thread::sleep,
+    )
+    .map_err(|error| windows_error("DeleteAppContainerProfile", error))
+}
+
+fn retry_appcontainer_profile_delete(
+    mut delete: impl FnMut() -> windows::core::Result<()>,
+    mut delay: impl FnMut(Duration),
+) -> windows::core::Result<()> {
+    let mut last_error = None;
+    for attempt in 0..APP_CONTAINER_PROFILE_DELETE_ATTEMPTS {
+        match delete() {
+            Ok(()) => return Ok(()),
+            Err(error) => last_error = Some(error),
+        }
+        if attempt + 1 < APP_CONTAINER_PROFILE_DELETE_ATTEMPTS {
+            delay(APP_CONTAINER_PROFILE_DELETE_RETRY_DELAY);
+        }
+    }
+    Err(last_error.expect("profile deletion is attempted at least once"))
+}
+
 fn appcontainer_folder(sid: PSID) -> Result<PathBuf> {
     let mut sid_text = PWSTR::null();
     unsafe { ConvertSidToStringSidW(sid, &raw mut sid_text) }
@@ -1339,7 +1372,7 @@ fn run_in_appcontainer(
     isolation: IsolationMode,
     memory_limit_bytes: usize,
     sandbox_root: &Path,
-    spec: ProcessSpec,
+    mut spec: ProcessSpec,
 ) -> Result<ProcessResult> {
     let stdout = File::create(&spec.stdout_log).map_err(|error| {
         IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
@@ -1347,7 +1380,20 @@ fn run_in_appcontainer(
     let stderr = File::create(&spec.stderr_log).map_err(|error| {
         IrohaZipError::io_path("cannot create process stderr log", &spec.stderr_log, error)
     })?;
-    let stdin = open_child_stdin(&spec)?;
+    let (stdin, mut password_channel) = if let Some(password) = spec.interactive_password.take() {
+        if spec.stdin_file.is_some() {
+            return Err(IrohaZipError::Sandbox(
+                "one-use password input cannot be combined with a stdin file".to_owned(),
+            ));
+        }
+        let (child_read, controller_write) = create_noninheritable_pipe()?;
+        (
+            child_read.into_file(),
+            Some((controller_write.into_file(), password.into_transport()?)),
+        )
+    } else {
+        (open_child_stdin(&spec)?, None)
+    };
 
     let stdout_handle = raw_handle(&stdout);
     let stderr_handle = raw_handle(&stderr);
@@ -1364,7 +1410,8 @@ fn run_in_appcontainer(
     let mut job_limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     job_limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         | JOB_OBJECT_LIMIT_JOB_MEMORY
-        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+        | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
     job_limits.BasicLimitInformation.ActiveProcessLimit = 1;
     job_limits.JobMemoryLimit = memory_limit_bytes;
     let job_limits_size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
@@ -1509,6 +1556,22 @@ fn run_in_appcontainer(
         }
     };
 
+    // The child is still suspended and its token has been positively checked.
+    // A bounded write fits in the dedicated pipe buffer, so close-delimited EOF
+    // is established without FlushFileBuffers waiting on child-side reads.
+    if let Some((mut input, mut password)) = password_channel.take() {
+        let write_result = input.write_all(password.line());
+        drop(input);
+        if let Err(error) = write_result {
+            let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0007) };
+            let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
+            return Err(IrohaZipError::io(
+                "cannot write the one-use password channel",
+                error,
+            ));
+        }
+    }
+
     // The backend must not execute until the token and capability checks above
     // have positively established the requested isolation. CREATE_SUSPENDED
     // closes the interval between CreateProcessW and that fail-closed decision.
@@ -1529,6 +1592,35 @@ fn run_in_appcontainer(
     drop(thread_handle);
 
     wait_for_process(&process, &job, &spec, isolation_evidence)
+}
+
+fn create_noninheritable_pipe() -> Result<(OwnedHandle, OwnedHandle)> {
+    let mut read = HANDLE::default();
+    let mut write = HANDLE::default();
+    unsafe {
+        CreatePipe(
+            &raw mut read,
+            &raw mut write,
+            None,
+            PASSWORD_PIPE_BUFFER_BYTES,
+        )
+    }
+    .map_err(|error| windows_error("CreatePipe(password channel)", error))?;
+    let read = OwnedHandle::new(read);
+    let write = OwnedHandle::new(write);
+    for handle in [read.handle(), write.handle()] {
+        unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)) }
+            .map_err(|error| windows_error("clear password pipe inheritance", error))?;
+        let mut flags = 0u32;
+        unsafe { GetHandleInformation(handle, &raw mut flags) }
+            .map_err(|error| windows_error("verify password pipe inheritance", error))?;
+        if flags & HANDLE_FLAG_INHERIT.0 != 0 {
+            return Err(IrohaZipError::Sandbox(
+                "password pipe handle remained inheritable".to_owned(),
+            ));
+        }
+    }
+    Ok((read, write))
 }
 
 fn verify_process_isolation(process: HANDLE, isolation: IsolationMode) -> Result<ProcessIsolation> {
@@ -1672,6 +1764,11 @@ fn query_token_flag(
 }
 
 fn run_unsandboxed(spec: ProcessSpec) -> Result<ProcessResult> {
+    if spec.interactive_password.is_some() {
+        return Err(IrohaZipError::Unsupported(
+            "secure archive-password input refuses the unsandboxed fallback".to_owned(),
+        ));
+    }
     let stdout = File::create(&spec.stdout_log).map_err(|error| {
         IrohaZipError::io_path("cannot create process stdout log", &spec.stdout_log, error)
     })?;
@@ -1802,6 +1899,12 @@ impl OwnedHandle {
 
     fn handle(&self) -> HANDLE {
         self.0
+    }
+
+    fn into_file(mut self) -> File {
+        let raw = self.0.0 as RawHandle;
+        self.0 = HANDLE::default();
+        unsafe { File::from_raw_handle(raw) }
     }
 }
 
@@ -2383,6 +2486,40 @@ mod tests {
     }
 
     #[test]
+    fn appcontainer_profile_deletion_retry_is_bounded_and_stops_on_success() {
+        let mut attempts = 0usize;
+        let mut delays = Vec::new();
+        retry_appcontainer_profile_delete(
+            || {
+                attempts += 1;
+                if attempts < 3 {
+                    Err(WindowsError::from_hresult(HRESULT::from_win32(32)))
+                } else {
+                    Ok(())
+                }
+            },
+            |delay| delays.push(delay),
+        )
+        .unwrap();
+        assert_eq!(attempts, 3);
+        assert_eq!(delays, vec![APP_CONTAINER_PROFILE_DELETE_RETRY_DELAY; 2]);
+
+        let mut attempts = 0usize;
+        let mut delay_count = 0usize;
+        let error = retry_appcontainer_profile_delete(
+            || {
+                attempts += 1;
+                Err(WindowsError::from_hresult(HRESULT::from_win32(32)))
+            },
+            |_| delay_count += 1,
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), HRESULT::from_win32(32));
+        assert_eq!(attempts, APP_CONTAINER_PROFILE_DELETE_ATTEMPTS);
+        assert_eq!(delay_count, APP_CONTAINER_PROFILE_DELETE_ATTEMPTS - 1);
+    }
+
+    #[test]
     fn appcontainer_process_stays_suspended_until_isolation_is_verified() {
         let sandbox = Sandbox::new(256, false, IsolationMode::AppContainer).unwrap();
         let root = sandbox.root().to_path_buf();
@@ -2398,6 +2535,7 @@ mod tests {
             current_dir: root.clone(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: None,
             stdout_log: stdout.clone(),
             stderr_log: stderr,
             timeout: Duration::from_secs(5),

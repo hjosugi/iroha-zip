@@ -187,6 +187,7 @@ printf 'image' > "$output/archive/images/photo.jpg"
         config: &config,
         archive: &archive,
         encoding: FilenameEncoding::Auto,
+        password: None,
         allow_unsandboxed: true,
     })
     .unwrap();
@@ -206,6 +207,7 @@ printf 'image' > "$output/archive/images/photo.jpg"
         output: Some(&destination),
         encoding: FilenameEncoding::Auto,
         selections: &[PathBuf::from("docs/readme.txt")],
+        password: None,
         open: false,
         allow_unsandboxed: true,
     })
@@ -263,6 +265,7 @@ exit 42
         output: Some(&destination),
         encoding: FilenameEncoding::Auto,
         selections: &[],
+        password: None,
         open: false,
         allow_unsandboxed: true,
     });
@@ -325,6 +328,7 @@ exit 99
         output: Some(&destination),
         encoding: FilenameEncoding::Auto,
         selections: &[],
+        password: None,
         open: false,
         allow_unsandboxed: true,
     });
@@ -383,6 +387,7 @@ exit 99
         output: Some(&destination),
         encoding: FilenameEncoding::Auto,
         selections: &[],
+        password: None,
         open: false,
         allow_unsandboxed: true,
     });

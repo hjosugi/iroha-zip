@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Add a one-use, AppContainer-preserving anonymous-pipe password channel and sealed internal
+  libarchive extractor for encrypted ZIP `preview` and `extract`, with no password-value CLI option,
+  environment/config/file/log storage, or unsandboxed fallback.
+- Add a bounded bilingual native password dialog, non-`Clone` zeroizing UTF-16/UTF-8 secret
+  storage, explicit inherited-handle allowlisting, child token self-verification, pre-creation entry
+  rejection, exact separator/alias validation, and fail-closed EOF, timeout, overflow, crash,
+  wrong-password, and cancellation paths.
+- Deliver the bounded password into a dedicated 4 KiB pipe after external token verification while
+  the child remains suspended, close-delimit it without a synchronous flush, and only then resume
+  the child, preventing the reader/flush deadlock observed by native ARM64 E2E.
+- Follow the documented Windows profile-deletion recovery contract with a sub-second bounded retry;
+  persistent AppContainer cleanup failures remain fatal and are never reported as success.
+- Expand Windows evidence to schema v5 with native-UI ZipCrypto, WinZip AES-128, and AES-256
+  preview/extraction, complete tree comparison, public-fixture password output-absence checks, and
+  wrong-password/cancel non-publication. Require standard UI Automation `InvokePattern` exposure,
+  set the cross-process protected edit through bounded `WM_SETTEXT` rather than the in-process-only
+  `SetWindowTextW` helper,
+  drive the real window procedure through the button's bounded synchronous `WM_COMMAND` / `BN_CLICKED`
+  notification, and require process-identity-checked dialog closure within a bounded interval so a
+  recycled HWND cannot cause a false timeout.
+  Keep generator-side fixture passwords ASCII because the stock third-party `bsdtar.exe` has no
+  iroha-zip UTF-8 manifest; the native one-use-channel probe independently covers Japanese input.
 - Record the independently verified immutable `v0.5.3` publication, exact 11-asset inventory,
   tag-ref attestations, intentionally unsigned PE state, and byte-matched bilingual Pages deployment.
 - Record the reviewed test-only CodeQL alert #234 and refresh issue-reporting guidance for `v0.5.3`.

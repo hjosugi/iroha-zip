@@ -1,12 +1,19 @@
 #![allow(unsafe_code)]
 
+use std::collections::HashSet;
 use std::ffi::{CStr, CString, OsStr, c_char, c_int, c_void};
 use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::mem::{size_of, transmute_copy};
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::ptr;
+
+use windows::Win32::Storage::FileSystem::{
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN,
+};
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::backend::{
     MAX_BACKEND_MANIFEST_BYTES, MAX_BACKEND_MANIFEST_FILES, validate_manifest_path,
@@ -14,6 +21,7 @@ use crate::backend::{
 use crate::cli::RawFilter;
 use crate::config::FilenameEncoding;
 use crate::error::{IrohaZipError, Result};
+use crate::password::MAX_PASSWORD_UTF8_BYTES;
 use crate::policy;
 
 use super::windows_impl::{
@@ -25,6 +33,8 @@ const ARCHIVE_OK: c_int = 0;
 const ARCHIVE_EOF: c_int = 1;
 const ARCHIVE_WARN: c_int = -20;
 const ARCHIVE_FORMAT_RAW: c_int = 0x0009_0000;
+const AE_IFREG: u32 = 0o100_000;
+const AE_IFDIR: u32 = 0o040_000;
 const LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR: u32 = 0x0000_0100;
 const LOAD_LIBRARY_SEARCH_SYSTEM32: u32 = 0x0000_0800;
 const MAX_INTERNAL_LISTING_BYTES: u64 = 64 * 1024 * 1024;
@@ -34,9 +44,13 @@ const MAX_INTERNAL_ENTRIES: u64 = 1_000_000;
 type ArchiveReadNew = unsafe extern "C" fn() -> *mut c_void;
 type ArchiveReadSupport = unsafe extern "C" fn(*mut c_void) -> c_int;
 type ArchiveReadSetOptions = unsafe extern "C" fn(*mut c_void, *const c_char) -> c_int;
+type ArchiveReadAddPassphrase = unsafe extern "C" fn(*mut c_void, *const c_char) -> c_int;
 type ArchiveReadOpenFilenameW = unsafe extern "C" fn(*mut c_void, *const u16, usize) -> c_int;
 type ArchiveReadNextHeader = unsafe extern "C" fn(*mut c_void, *mut *mut c_void) -> c_int;
 type ArchiveEntryPathnameUtf8 = unsafe extern "C" fn(*mut c_void) -> *const c_char;
+type ArchiveEntryFiletype = unsafe extern "C" fn(*mut c_void) -> u32;
+type ArchiveEntryHardlinkIsSet = unsafe extern "C" fn(*mut c_void) -> c_int;
+type ArchiveEntrySize = unsafe extern "C" fn(*mut c_void) -> i64;
 type ArchiveReadDataSkip = unsafe extern "C" fn(*mut c_void) -> c_int;
 type ArchiveReadData = unsafe extern "C" fn(*mut c_void, *mut c_void, usize) -> isize;
 type ArchiveFilterCode = unsafe extern "C" fn(*mut c_void, c_int) -> c_int;
@@ -61,9 +75,13 @@ struct ArchiveApi {
     support_format_all: ArchiveReadSupport,
     support_format_raw: ArchiveReadSupport,
     set_options: ArchiveReadSetOptions,
+    add_passphrase: ArchiveReadAddPassphrase,
     open_filename_w: ArchiveReadOpenFilenameW,
     next_header: ArchiveReadNextHeader,
     pathname_utf8: ArchiveEntryPathnameUtf8,
+    entry_filetype: ArchiveEntryFiletype,
+    hardlink_is_set: ArchiveEntryHardlinkIsSet,
+    entry_size: ArchiveEntrySize,
     data_skip: ArchiveReadDataSkip,
     read_data: ArchiveReadData,
     filter_code: ArchiveFilterCode,
@@ -125,9 +143,13 @@ impl ArchiveApi {
                 required_symbol(module, c"archive_read_support_format_raw")?
             },
             set_options: unsafe { required_symbol(module, c"archive_read_set_options")? },
+            add_passphrase: unsafe { required_symbol(module, c"archive_read_add_passphrase")? },
             open_filename_w: unsafe { required_symbol(module, c"archive_read_open_filename_w")? },
             next_header: unsafe { required_symbol(module, c"archive_read_next_header")? },
             pathname_utf8: unsafe { required_symbol(module, c"archive_entry_pathname_utf8")? },
+            entry_filetype: unsafe { required_symbol(module, c"archive_entry_filetype")? },
+            hardlink_is_set: unsafe { required_symbol(module, c"archive_entry_hardlink_is_set")? },
+            entry_size: unsafe { required_symbol(module, c"archive_entry_size")? },
             data_skip: unsafe { required_symbol(module, c"archive_read_data_skip")? },
             read_data: unsafe { required_symbol(module, c"archive_read_data")? },
             filter_code: unsafe { required_symbol(module, c"archive_filter_code")? },
@@ -175,6 +197,386 @@ pub fn write_utf8_archive_listing(
         )));
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn extract_password_archive(
+    backend_root: &Path,
+    candidate_file: &Path,
+    archive_path: &Path,
+    output_directory: &Path,
+    encoding: FilenameEncoding,
+    limits: &policy::Limits,
+) -> Result<()> {
+    require_current_process_appcontainer(false)?;
+    validate_password_extract_paths(archive_path, output_directory)?;
+    let candidates = read_candidates(backend_root, candidate_file)?;
+    validate_regular_file_security(archive_path)?;
+    let mut password = read_one_use_password()?;
+    let api = ArchiveApi::load(&candidates)?;
+    let archive = unsafe { (api.read_new)() };
+    if archive.is_null() {
+        return Err(IrohaZipError::Backend(
+            "libarchive could not allocate a password archive reader".to_owned(),
+        ));
+    }
+
+    password.push(0);
+    let passphrase_status = unsafe { (api.add_passphrase)(archive, password.as_ptr().cast()) };
+    password.zeroize();
+    let operation = if passphrase_status == ARCHIVE_OK {
+        extract_archive_entries(
+            &api,
+            archive,
+            archive_path,
+            output_directory,
+            encoding,
+            limits,
+        )
+    } else {
+        Err(IrohaZipError::Backend(format!(
+            "libarchive rejected the one-use password: status {passphrase_status}"
+        )))
+    };
+    let close_status = unsafe { (api.close)(archive) };
+    let free_status = unsafe { (api.free)(archive) };
+    operation?;
+    if close_status < ARCHIVE_WARN || free_status < ARCHIVE_WARN {
+        return Err(IrohaZipError::Backend(format!(
+            "libarchive password extraction cleanup failed: close={close_status}, free={free_status}"
+        )));
+    }
+    Ok(())
+}
+
+fn read_one_use_password() -> Result<Zeroizing<Vec<u8>>> {
+    let maximum_transport_bytes = u64::try_from(MAX_PASSWORD_UTF8_BYTES.saturating_add(2))
+        .map_err(|_| IrohaZipError::Policy("password transport limit overflow".to_owned()))?;
+    let mut bytes = Zeroizing::new(Vec::with_capacity(
+        MAX_PASSWORD_UTF8_BYTES.saturating_add(1),
+    ));
+    io::stdin()
+        .lock()
+        .take(maximum_transport_bytes)
+        .read_to_end(&mut bytes)
+        .map_err(|error| IrohaZipError::io("cannot read the one-use password channel", error))?;
+    if bytes.len() > MAX_PASSWORD_UTF8_BYTES.saturating_add(1) {
+        return Err(IrohaZipError::Policy(
+            "one-use password channel exceeded its byte limit".to_owned(),
+        ));
+    }
+    if bytes.pop() != Some(b'\r') || bytes.is_empty() {
+        return Err(IrohaZipError::Policy(
+            "one-use password channel did not contain exactly one bounded value".to_owned(),
+        ));
+    }
+    if bytes.iter().any(|byte| matches!(*byte, 0 | b'\r' | b'\n'))
+        || std::str::from_utf8(&bytes).is_err()
+    {
+        return Err(IrohaZipError::Policy(
+            "one-use password channel contained an invalid UTF-8 value".to_owned(),
+        ));
+    }
+    Ok(bytes)
+}
+
+fn validate_password_extract_paths(archive_path: &Path, output_directory: &Path) -> Result<()> {
+    let input_directory = archive_path.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox("password archive has no sandbox input directory".to_owned())
+    })?;
+    let workspace = input_directory.parent().ok_or_else(|| {
+        IrohaZipError::Sandbox("password archive has no sandbox workspace".to_owned())
+    })?;
+    if archive_path != workspace.join("input").join("archive.bin") {
+        return Err(IrohaZipError::Sandbox(
+            "password archive is outside the fixed sandbox input path".to_owned(),
+        ));
+    }
+    if output_directory != workspace.join("output") {
+        return Err(IrohaZipError::Sandbox(
+            "password archive output is outside the fixed sandbox output path".to_owned(),
+        ));
+    }
+    validate_directory_security(output_directory)?;
+    let mut entries = fs::read_dir(output_directory).map_err(|error| {
+        IrohaZipError::io_path(
+            "cannot inspect password archive output directory",
+            output_directory,
+            error,
+        )
+    })?;
+    if entries
+        .next()
+        .transpose()
+        .map_err(|error| {
+            IrohaZipError::io_path(
+                "cannot enumerate password archive output directory",
+                output_directory,
+                error,
+            )
+        })?
+        .is_some()
+    {
+        return Err(IrohaZipError::Sandbox(
+            "password archive output directory was not empty".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn extract_archive_entries(
+    api: &ArchiveApi,
+    archive: *mut c_void,
+    archive_path: &Path,
+    output_directory: &Path,
+    encoding: FilenameEncoding,
+    limits: &policy::Limits,
+) -> Result<()> {
+    require_archive_status(
+        unsafe { (api.support_filter_all)(archive) },
+        "enable password archive filters",
+    )?;
+    require_archive_status(
+        unsafe { (api.support_format_all)(archive) },
+        "enable password archive formats",
+    )?;
+    if let Some(option) = encoding.bsdtar_option() {
+        let option = CString::new(option).map_err(|_| {
+            IrohaZipError::Backend("archive encoding option contains NUL".to_owned())
+        })?;
+        require_archive_status(
+            unsafe { (api.set_options)(archive, option.as_ptr()) },
+            "set password archive filename encoding",
+        )?;
+    }
+
+    let archive_wide = wide_null(archive_path.as_os_str());
+    let open_status = unsafe { (api.open_filename_w)(archive, archive_wide.as_ptr(), 10240) };
+    if open_status != ARCHIVE_OK {
+        return Err(IrohaZipError::Backend(format!(
+            "libarchive could not open the password archive: status {open_status}"
+        )));
+    }
+
+    let mut aliases = HashSet::new();
+    let mut files = 0u64;
+    let mut directories = 0u64;
+    let mut total_bytes = 0u64;
+    let bounded_path_bytes = limits.max_path_bytes.min(MAX_INTERNAL_PATH_BYTES);
+    loop {
+        let mut entry = ptr::null_mut();
+        let status = unsafe { (api.next_header)(archive, &raw mut entry) };
+        if status == ARCHIVE_EOF {
+            break;
+        }
+        if status != ARCHIVE_OK || entry.is_null() {
+            return Err(IrohaZipError::Backend(format!(
+                "libarchive could not read a password archive header: status {status}"
+            )));
+        }
+        let name = unsafe { bounded_c_bytes((api.pathname_utf8)(entry), bounded_path_bytes) }?;
+        let name = std::str::from_utf8(&name).map_err(|_| {
+            IrohaZipError::Policy(
+                "libarchive returned a password archive pathname that is not UTF-8".to_owned(),
+            )
+        })?;
+        let filetype = unsafe { (api.entry_filetype)(entry) };
+        let relative = validated_member_path(name, filetype == AE_IFDIR, limits, &mut aliases)?;
+        if unsafe { (api.hardlink_is_set)(entry) } != 0 {
+            return Err(IrohaZipError::Policy(format!(
+                "hard-linked archive member is rejected before creation: {name:?}"
+            )));
+        }
+        match filetype {
+            AE_IFDIR => {
+                ensure_directory_chain(
+                    output_directory,
+                    &relative,
+                    &mut directories,
+                    limits.max_directories,
+                )?;
+                let skip_status = unsafe { (api.data_skip)(archive) };
+                if skip_status != ARCHIVE_OK {
+                    return Err(IrohaZipError::Backend(format!(
+                        "libarchive could not finish directory member {name:?}: status {skip_status}"
+                    )));
+                }
+            }
+            AE_IFREG => {
+                files = files.checked_add(1).ok_or_else(|| {
+                    IrohaZipError::Policy("password archive file count overflow".to_owned())
+                })?;
+                if files > limits.max_files {
+                    return Err(IrohaZipError::Policy(format!(
+                        "password archive file count exceeds {}",
+                        limits.max_files
+                    )));
+                }
+                let declared_size = unsafe { (api.entry_size)(entry) };
+                if declared_size >= 0
+                    && u64::try_from(declared_size).unwrap_or(u64::MAX)
+                        > limits.max_single_file_bytes
+                {
+                    return Err(IrohaZipError::Policy(format!(
+                        "password archive member exceeds {} bytes before extraction: {name:?}",
+                        limits.max_single_file_bytes
+                    )));
+                }
+                extract_regular_entry(
+                    api,
+                    archive,
+                    output_directory,
+                    &relative,
+                    name,
+                    &mut directories,
+                    &mut total_bytes,
+                    limits,
+                )?;
+            }
+            other => {
+                return Err(IrohaZipError::Policy(format!(
+                    "special archive member type {other:#o} is rejected before creation: {name:?}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validated_member_path(
+    name: &str,
+    is_directory: bool,
+    limits: &policy::Limits,
+    aliases: &mut HashSet<String>,
+) -> Result<PathBuf> {
+    policy::validate_archive_member_name(name, limits)?;
+    if name.ends_with(['/', '\\']) && !is_directory {
+        return Err(IrohaZipError::Policy(format!(
+            "regular password archive member has a directory marker: {name:?}"
+        )));
+    }
+    let name = name.strip_suffix(['/', '\\']).unwrap_or(name);
+    let mut relative = PathBuf::new();
+    for component in name.split(['/', '\\']) {
+        relative.push(component);
+    }
+    policy::validate_relative_path(&relative, limits)?;
+    let normalized = name.replace('\\', "/").to_lowercase();
+    if !aliases.insert(normalized) {
+        return Err(IrohaZipError::Policy(format!(
+            "duplicate or case-aliasing password archive member is rejected: {name:?}"
+        )));
+    }
+    Ok(relative)
+}
+
+fn ensure_directory_chain(
+    output_directory: &Path,
+    relative: &Path,
+    directories: &mut u64,
+    maximum: u64,
+) -> Result<()> {
+    let mut directory = output_directory.to_path_buf();
+    for component in relative.components() {
+        directory.push(component.as_os_str());
+        match fs::create_dir(&directory) {
+            Ok(()) => {
+                *directories = directories.checked_add(1).ok_or_else(|| {
+                    IrohaZipError::Policy("password archive directory count overflow".to_owned())
+                })?;
+                if *directories > maximum {
+                    return Err(IrohaZipError::Policy(format!(
+                        "password archive directory count exceeds {maximum}"
+                    )));
+                }
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                validate_directory_security(&directory)?;
+            }
+            Err(error) => {
+                return Err(IrohaZipError::io_path(
+                    "cannot create password archive directory",
+                    &directory,
+                    error,
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn extract_regular_entry(
+    api: &ArchiveApi,
+    archive: *mut c_void,
+    output_directory: &Path,
+    relative: &Path,
+    display_name: &str,
+    directories: &mut u64,
+    total_bytes: &mut u64,
+    limits: &policy::Limits,
+) -> Result<()> {
+    if let Some(parent) = relative.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        ensure_directory_chain(
+            output_directory,
+            parent,
+            directories,
+            limits.max_directories,
+        )?;
+    }
+    let target = output_directory.join(relative);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .custom_flags((FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN).0)
+        .open(&target)
+        .map_err(|error| {
+            IrohaZipError::io_path("cannot create password archive output", &target, error)
+        })?;
+    let mut member_bytes = 0u64;
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = unsafe { (api.read_data)(archive, buffer.as_mut_ptr().cast(), buffer.len()) };
+        if read == 0 {
+            break;
+        }
+        if read < 0 {
+            return Err(IrohaZipError::Backend(format!(
+                "libarchive could not decrypt member {display_name:?}: status {read}"
+            )));
+        }
+        let read = usize::try_from(read).map_err(|_| {
+            IrohaZipError::Policy("password archive read length overflow".to_owned())
+        })?;
+        let read_u64 = u64::try_from(read).unwrap_or(u64::MAX);
+        member_bytes = member_bytes.checked_add(read_u64).ok_or_else(|| {
+            IrohaZipError::Policy("password archive member size overflow".to_owned())
+        })?;
+        *total_bytes = total_bytes.checked_add(read_u64).ok_or_else(|| {
+            IrohaZipError::Policy("password archive total size overflow".to_owned())
+        })?;
+        if member_bytes > limits.max_single_file_bytes {
+            return Err(IrohaZipError::Policy(format!(
+                "password archive member exceeds {} bytes: {display_name:?}",
+                limits.max_single_file_bytes
+            )));
+        }
+        if *total_bytes > limits.max_total_bytes {
+            return Err(IrohaZipError::Policy(format!(
+                "password archive total size exceeds {} bytes",
+                limits.max_total_bytes
+            )));
+        }
+        file.write_all(&buffer[..read]).map_err(|error| {
+            IrohaZipError::io_path("cannot write password archive output", &target, error)
+        })?;
+    }
+    file.sync_all().map_err(|error| {
+        IrohaZipError::io_path("cannot flush password archive output", &target, error)
+    })?;
+    validate_regular_file_security(&target)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -621,4 +1023,33 @@ unsafe fn required_symbol<T: Copy>(module: *mut c_void, name: &'static CStr) -> 
 
 fn wide_null(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(Some(0)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_member_paths_reject_erased_separators_and_aliases() {
+        let limits = policy::Limits::default();
+        for unsafe_name in [
+            "/absolute.txt",
+            "\\absolute.txt",
+            "folder//item.txt",
+            "folder\\\\item.txt",
+            "./item.txt",
+            "folder/../item.txt",
+        ] {
+            assert!(
+                validated_member_path(unsafe_name, false, &limits, &mut HashSet::new()).is_err(),
+                "unsafe member was accepted: {unsafe_name:?}"
+            );
+        }
+
+        assert!(validated_member_path("file.txt/", false, &limits, &mut HashSet::new()).is_err());
+
+        let mut aliases = HashSet::new();
+        assert!(validated_member_path("Folder/item.txt", false, &limits, &mut aliases).is_ok());
+        assert!(validated_member_path("folder\\ITEM.TXT", false, &limits, &mut aliases).is_err());
+    }
 }

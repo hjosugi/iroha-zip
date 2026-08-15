@@ -62,7 +62,20 @@ Support passwords without command-line, environment, log, crash-report, or persi
 
 Acceptance: use a protected anonymous channel or equivalent one-use mechanism, zero sensitive buffers where practical, prevent inherited handles, and test cancellation/wrong-password paths.
 
-Progress (2026-08-09): the stock Windows bsdtar boundary is documented. Its safe-looking interactive callback requires a console input handle, while `--passphrase` exposes the secret in process arguments and is explicitly documented upstream as insecure. The implementation contract therefore uses a one-use ConPTY channel with non-inheritable controller ends, zeroizing buffers, concurrent output draining, bounded prompt handling, and fail-closed cancellation. The ConPTY transport, native password dialog, and encrypted corpus tests remain open.
+Progress (2026-08-15): the product path now uses a one-use anonymous pipe without `--passphrase`,
+inheritable controller handles, or environment/config/file/log storage. A byte-identical sealed
+internal child remains suspended until its AppContainer/LPAC token and zero capabilities are
+verified; only its stdin read handle is admitted through the explicit handle list. The parent writes
+the bounded value into a dedicated 4 KiB pipe and closes it while the verified child is still
+suspended, then performs the sole resume without a synchronous pipe flush. The child loads only
+manifest-pinned libarchive DLL candidates, registers the one bounded value through the public
+libarchive password API, rejects non-file/directory entries before creation, and re-enforces path and
+resource limits while reading. A non-`Clone`, always-redacted secret owns zeroizing UTF-16/UTF-8
+buffers, and the bilingual password control is cleared before destruction. Platform-neutral tests
+and a real-AppContainer probe cover Japanese input, cancellation, EOF after one value, timeout,
+large output, crash, cleanup, and log absence. The schema-v5 matrix generates
+ZipCrypto/AES-128/AES-256 ZIPs, drives the native UI, compares preview/extracted trees, and requires
+wrong-password/cancel non-publication. Hosted real-backend evidence and review remain the final gate.
 
 ### [SAFE-008: Defender/antimalware handoff](https://github.com/hjosugi/iroha-zip/issues/10)
 

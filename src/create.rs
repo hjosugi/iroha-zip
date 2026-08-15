@@ -125,6 +125,7 @@ pub fn create_archive(
             current_dir: sandbox.root().to_path_buf(),
             temp_dir: Some(process_temp.clone()),
             stdin_file: None,
+            interactive_password: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds),
@@ -224,6 +225,7 @@ fn verify_created_archive(
         archive_snapshot,
         FilenameEncoding::Auto,
         staging::ListingPolicy::CreatedByIrohaZip,
+        None,
         allow_unsandboxed,
     )?;
     let observed = match transfer::fingerprint_tree(staged.extracted_root(), &config.limits) {

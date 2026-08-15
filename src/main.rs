@@ -13,15 +13,15 @@ use std::time::Duration;
 use clap::Parser;
 use iroha_zip::backend::BackendBundle;
 use iroha_zip::backend_evidence::BackendEvidence;
-use iroha_zip::cli::{Cli, Command};
+use iroha_zip::cli::{Cli, Command, PasswordProbeMode};
 #[cfg(windows)]
 use iroha_zip::config::AttachmentHandoffPolicy;
 use iroha_zip::config::{Config, default_config_path};
 use iroha_zip::create;
-#[cfg(windows)]
 use iroha_zip::error::IrohaZipError;
 use iroha_zip::error::Result;
 use iroha_zip::extract::{self, ExtractRequest};
+use iroha_zip::password::{PasswordPreparation, prepare_password};
 #[cfg(windows)]
 use iroha_zip::platform::{AttachmentHandoffSession, ProcessIsolation, ProcessSpec, Sandbox};
 use iroha_zip::preview::{self, PreviewRequest};
@@ -155,6 +155,9 @@ fn run() -> Result<()> {
         Command::InternalCrashProbe => {
             std::process::abort();
         }
+        Command::InternalPasswordProbe { mode } => {
+            run_password_probe(mode)?;
+        }
         Command::InternalProcessTempProbe => {
             let report = iroha_zip::isolation::process_temp_probe()?;
             println!(
@@ -212,6 +215,57 @@ fn run() -> Result<()> {
                 ));
             }
         }
+        Command::InternalPasswordArchiveExtraction {
+            backend_root,
+            candidates,
+            archive,
+            output,
+            encoding,
+            max_files,
+            max_directories,
+            max_total_bytes,
+            max_single_file_bytes,
+            max_depth,
+            max_path_bytes,
+        } => {
+            #[cfg(windows)]
+            iroha_zip::platform::extract_password_archive(
+                &backend_root,
+                &candidates,
+                &archive,
+                &output,
+                encoding,
+                &iroha_zip::policy::Limits {
+                    max_archive_bytes: u64::MAX,
+                    max_files,
+                    max_directories,
+                    max_total_bytes,
+                    max_single_file_bytes,
+                    max_depth,
+                    max_path_bytes,
+                },
+            )?;
+            #[cfg(not(windows))]
+            {
+                let _ = (
+                    backend_root,
+                    candidates,
+                    archive,
+                    output,
+                    encoding,
+                    max_files,
+                    max_directories,
+                    max_total_bytes,
+                    max_single_file_bytes,
+                    max_depth,
+                    max_path_bytes,
+                );
+                return Err(iroha_zip::error::IrohaZipError::Unsupported(
+                    "the internal password archive extractor is only available on Windows"
+                        .to_owned(),
+                ));
+            }
+        }
         Command::InternalRawArchive {
             backend_root,
             candidates,
@@ -253,16 +307,24 @@ fn run() -> Result<()> {
         Command::Preview {
             archive,
             encoding,
+            prompt_password,
             allow_unsandboxed,
         } => {
             let config = Config::load(&config_path)?;
             let backend = BackendBundle::verify(&config.backend_directory()?)?;
             let encoding = encoding.unwrap_or(config.behavior.default_filename_encoding);
+            let password = match prepare_password(prompt_password, || {
+                iroha_zip::platform::prompt_archive_password(&archive)
+            })? {
+                PasswordPreparation::Ready(password) => password,
+                PasswordPreparation::Cancelled => return Ok(()),
+            };
             let result = preview::preview(PreviewRequest {
                 backend: &backend,
                 config: &config,
                 archive: &archive,
                 encoding,
+                password,
                 allow_unsandboxed,
             })?;
             for entry in &result.entries {
@@ -283,12 +345,19 @@ fn run() -> Result<()> {
             output,
             encoding,
             select,
+            prompt_password,
             open,
             allow_unsandboxed,
         } => {
             let config = Config::load(&config_path)?;
             let backend = BackendBundle::verify(&config.backend_directory()?)?;
             let encoding = encoding.unwrap_or(config.behavior.default_filename_encoding);
+            let password = match prepare_password(prompt_password, || {
+                iroha_zip::platform::prompt_archive_password(&archive)
+            })? {
+                PasswordPreparation::Ready(password) => password,
+                PasswordPreparation::Cancelled => return Ok(()),
+            };
             let result = extract::extract(ExtractRequest {
                 backend: &backend,
                 config: &config,
@@ -296,6 +365,7 @@ fn run() -> Result<()> {
                 output: output.as_deref(),
                 encoding,
                 selections: &select,
+                password,
                 open,
                 allow_unsandboxed,
             })?;
@@ -322,6 +392,66 @@ fn run() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
+    use std::io::Write as _;
+
+    const EXPECTED: &str = "日本語-password-probe";
+
+    if std::env::args_os()
+        .chain(std::env::vars_os().flat_map(|(key, value)| [key, value]))
+        .any(|value| value.to_string_lossy().contains(EXPECTED))
+    {
+        return Err(IrohaZipError::Sandbox(
+            "password probe sentinel reached command-line or environment state".to_owned(),
+        ));
+    }
+
+    if mode == PasswordProbeMode::Overflow {
+        let block = vec![b'X'; 64 * 1024];
+        let mut output = std::io::stdout().lock();
+        for _ in 0..18 {
+            output.write_all(&block).map_err(|error| {
+                iroha_zip::error::IrohaZipError::io("password probe output", error)
+            })?;
+        }
+        output.flush().map_err(|error| {
+            iroha_zip::error::IrohaZipError::io("flush password probe output", error)
+        })?;
+    }
+
+    let input = read_password_probe_line()?;
+    let matches = input.as_str() == EXPECTED;
+
+    match mode {
+        PasswordProbeMode::Accept if matches => Ok(()),
+        PasswordProbeMode::Accept => Err(IrohaZipError::Backend(
+            "password probe received the wrong one-use value".to_owned(),
+        )),
+        PasswordProbeMode::Repeat => {
+            let _forbidden_retry = read_password_probe_line()?;
+            Err(IrohaZipError::Backend(
+                "password probe unexpectedly received a retry".to_owned(),
+            ))
+        }
+        PasswordProbeMode::Sleep | PasswordProbeMode::Overflow => {
+            std::thread::sleep(std::time::Duration::from_mins(1));
+            Ok(())
+        }
+        PasswordProbeMode::Crash => std::process::abort(),
+    }
+}
+
+fn read_password_probe_line() -> Result<zeroize::Zeroizing<String>> {
+    let mut input = zeroize::Zeroizing::new(String::new());
+    std::io::stdin()
+        .read_line(&mut input)
+        .map_err(|error| iroha_zip::error::IrohaZipError::io("read password probe input", error))?;
+    while input.ends_with(['\r', '\n']) {
+        input.pop();
+    }
+    Ok(input)
 }
 
 fn print_evidence(evidence: &BackendEvidence) {
@@ -438,6 +568,7 @@ fn probe_backend_in_sandbox(
             current_dir: sandbox.root().to_path_buf(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds.clamp(1, 30)),

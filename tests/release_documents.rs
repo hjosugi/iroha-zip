@@ -164,6 +164,10 @@ fn bilingual_pages_match_the_crate_version_and_topology() {
     assert!(root.contains("rel=\"icon\" href=\"assets/favicon.svg\""));
     assert!(japanese_page.contains("rel=\"alternate\" hreflang=\"en\""));
     assert!(english_page.contains("rel=\"alternate\" hreflang=\"ja\""));
+    assert!(japanese_page.contains("一回限りの匿名pipe"));
+    assert!(english_page.contains("One-use anonymous pipe"));
+    assert!(!japanese_page.contains("ConPTY"));
+    assert!(!english_page.contains("ConPTY"));
     assert!(site_script.contains(&format!("const fallbackVersion = \"{tag}\";")));
     assert!(site_script.contains("const stableTagPattern = /^v(\\d+\\.\\d+\\.\\d+)$/;"));
     assert!(site_script.contains("release.immutable !== true"));

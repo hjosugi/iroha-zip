@@ -159,9 +159,30 @@ child file／directoryを開く操作自体はWin32 path APIを使うため、�
 
 ### 暗号化書庫
 
-安全なパスワード受け渡しは未実装です。現在の全backend processは標準入力を`NUL`へ固定しているため、対話入力を要求する書庫はfail closedになります。bsdtarの`--passphrase`は秘密をprocess argumentsへ残すため使用しません。Windows版bsdtarの対話callbackはconsole handleを要求するので、単純な匿名pipeへの差し替えも採用しません。
+暗号化ZIPのCLI `preview`／`extract`は、boolean flagの`--prompt-password`を指定した場合だけnative
+password dialogを表示します。秘密値を受け取るCLI option、environment variable、永続config、fileは
+ありません。bsdtarの`--passphrase`は秘密をprocess argumentsへ残すため製品経路では使用しません。
+Windows版bsdtarの対話callbackはconsole handleを要求し、capability 0件AppContainer内のConPTYでは
+互換handleを得られないことを実機CIで確認したため、password経路ではstock bsdtarを起動しません。
 
-計画中の経路は、一回限りのConPTY input、非継承のcontroller handle、専用threadでのoutput drain、prompt回数・時間・出力量の上限、native password dialog、終了直後のbuffer zeroizationを組み合わせます。cancel、空入力、wrong password、複数prompt、timeout、backend crashの全経路でpartial outputと秘密channelを破棄できるまで有効化しません。詳細は[`ENCRYPTED_ARCHIVES.md`](ENCRYPTED_ARCHIVES.md)で追跡します。
+実装は一回限りの匿名pipe、明示的に非継承にしたcontroller write handle、native password dialog、
+zeroizing UTF-16／UTF-8 bufferを組み合わせます。byte-identicalかつ封印済みの内部抽出子は、既存の
+suspended AppContainer launchを維持します。child側read handleだけを明示的handle listへ含め、親は要求modeと
+capability 0件を肯定確認した後、childがまだsuspendedの間に専用4 KiB pipeへ1値だけを書いて
+write endを閉じます。その後にだけchildを1回resumeし、childはDLL load前に自分のtokenを再検証します。
+内部抽出子はmanifest固定済みDLL候補だけをloadし、libarchive password APIへ1値を登録します。
+通常file／directory以外を作成前に拒否し、UTF-8 path、重複alias、file／directory数、単一／合計容量、
+深さ、path長を再検証しながらcreate-new fileへ書きます。wrong password、timeout、policy違反、backend
+crashはJobを終了してpartial outputと秘密channelを破棄します。全Jobへ
+`JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`を適用し、unhandled child faultを通常の対話的Windows
+fault-reporting経路へ進めません。cancelはsandboxもchildも作りません。
+
+明示的unsandboxed経路とraw compressed streamのpassword要求では、安全でないtransportへfallbackせず
+fail closedになります。
+zeroizationはbest effortであり、paging、hibernation、privileged debugger、OS管理のcrash dumpから秘密が
+消える保証はありません。libarchive自身がreader allocationへcopyしたpassphraseはreader破棄時にfree
+されますが、free前の上書きはupstream契約にありません。ダブルクリック、暗号化書庫の作成、ZIP以外の
+暗号化形式、自動retryは未対応です。詳細は[`ENCRYPTED_ARCHIVES.md`](ENCRYPTED_ARCHIVES.md)で固定します。
 
 ## 7. 将来の強化候補
 

@@ -8,6 +8,7 @@ use crate::backend::BackendBundle;
 use crate::cli::RawFilter;
 use crate::config::{Config, FilenameEncoding};
 use crate::error::{IrohaZipError, Result};
+use crate::password::ArchivePassword;
 use crate::platform::{ProcessSpec, Sandbox};
 use crate::policy::AuditSummary;
 use crate::snapshot::AuditedFile;
@@ -69,6 +70,7 @@ pub(crate) fn stage_archive(
     mut archive_snapshot: AuditedFile,
     encoding: FilenameEncoding,
     listing_policy: ListingPolicy,
+    mut password: Option<ArchivePassword>,
     allow_unsandboxed: bool,
 ) -> Result<StagedArchive> {
     let archive = archive_snapshot.path().to_path_buf();
@@ -82,6 +84,12 @@ pub(crate) fn stage_archive(
             "raw-stream output name exceeds {} UTF-8 bytes: {:?}",
             config.limits.max_path_bytes, contract.output_name
         )));
+    }
+    #[cfg(windows)]
+    if raw_stream.is_some() && password.is_some() {
+        return Err(IrohaZipError::Usage(
+            "raw compressed streams do not support archive passwords".to_owned(),
+        ));
     }
     let sandbox = Sandbox::new(
         config.sandbox.memory_limit_mib,
@@ -167,6 +175,7 @@ pub(crate) fn stage_archive(
             current_dir: workspace_root.clone(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: None,
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds),
@@ -240,6 +249,19 @@ pub(crate) fn stage_archive(
                     ),
                     "sandboxed libarchive raw-stream extraction",
                 )
+            } else if password.is_some() {
+                (
+                    listing_program,
+                    internal_password_extraction_arguments(
+                        &backend_dir,
+                        &listing_candidates,
+                        &sandbox_archive,
+                        &output_dir,
+                        encoding,
+                        &config.limits,
+                    ),
+                    "sandboxed libarchive password extraction",
+                )
             } else {
                 (sandbox_backend, bsdtar_args, "bsdtar extraction")
             };
@@ -284,6 +306,7 @@ pub(crate) fn stage_archive(
             current_dir: workspace_root.clone(),
             temp_dir: None,
             stdin_file: None,
+            interactive_password: password.take(),
             stdout_log: stdout_log.clone(),
             stderr_log: stderr_log.clone(),
             timeout: Duration::from_secs(config.sandbox.timeout_seconds),
@@ -419,6 +442,39 @@ fn internal_raw_arguments(
     if allow_unsandboxed {
         args.push(OsString::from("--allow-unsandboxed"));
     }
+    args
+}
+
+#[cfg(windows)]
+fn internal_password_extraction_arguments(
+    backend_root: &Path,
+    candidates: &Path,
+    archive: &Path,
+    output: &Path,
+    encoding: FilenameEncoding,
+    limits: &policy::Limits,
+) -> Vec<OsString> {
+    let args = vec![
+        OsString::from("internal-password-archive-extraction"),
+        backend_root.as_os_str().to_owned(),
+        candidates.as_os_str().to_owned(),
+        archive.as_os_str().to_owned(),
+        output.as_os_str().to_owned(),
+        OsString::from("--encoding"),
+        OsString::from(encoding.cli_name()),
+        OsString::from("--max-files"),
+        OsString::from(limits.max_files.to_string()),
+        OsString::from("--max-directories"),
+        OsString::from(limits.max_directories.to_string()),
+        OsString::from("--max-total-bytes"),
+        OsString::from(limits.max_total_bytes.to_string()),
+        OsString::from("--max-single-file-bytes"),
+        OsString::from(limits.max_single_file_bytes.to_string()),
+        OsString::from("--max-depth"),
+        OsString::from(limits.max_depth.to_string()),
+        OsString::from("--max-path-bytes"),
+        OsString::from(limits.max_path_bytes.to_string()),
+    ];
     args
 }
 

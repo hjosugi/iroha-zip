@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::backend::BackendBundle;
 use crate::config::{Config, FilenameEncoding};
 use crate::error::{IrohaZipError, Result};
+use crate::password::ArchivePassword;
 use crate::policy::{self, AuditSummary, Limits};
 use crate::{platform, staging, transfer};
 
@@ -40,6 +41,7 @@ pub struct PreviewRequest<'a> {
     pub config: &'a Config,
     pub archive: &'a Path,
     pub encoding: FilenameEncoding,
+    pub password: Option<ArchivePassword>,
     pub allow_unsandboxed: bool,
 }
 
@@ -51,6 +53,7 @@ pub fn preview(request: PreviewRequest<'_>) -> Result<PreviewResult> {
         archive,
         request.encoding,
         staging::ListingPolicy::External,
+        request.password,
         request.allow_unsandboxed,
     )?;
     let result = match inventory_tree(staged.payload_root(), &request.config.limits) {
