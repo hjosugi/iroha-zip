@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Preserve the independently verified `v0.6.2` immutable Release as an exact 11-asset snapshot with
+  API digests and lengths, checksum subjects, x64/ARM64 PE identities, ZIP-to-standalone equality,
+  unsigned Certificate Tables, annotated-tag identity, release/workflow attestations, and ordinary
+  Rust regressions for the retained evidence.
+- Require future publication runs to verify the GitHub Release attestation and all 11 local assets
+  after immutable/latest readback, with bounded retries and deterministic cross-platform tests for
+  delayed availability, mismatch, exhaustion, incomplete inventory, and duplicate names. Make the
+  bilingual Pages updater reject Release API assets without exact positive lengths and SHA-256
+  digests.
+- Add a repository-wide Markdown contract that discovers exact-case relative links and local heading
+  anchors while rejecting links, non-files, traversal outside the repository, and generated trees.
+- Make the bug, feature, and pull-request templates fully bilingual and private-report aware; fix the
+  project-root and custom-404 language metadata, heading association, and destination-language links;
+  and lock those contribution and Pages contracts into ordinary tests.
+- Give every repository-defined GitHub Actions job an explicit timeout, disable persisted checkout
+  credentials, and add a regression for the exact regular workflow inventory, all 28 full-SHA action
+  references, all 10 checkout settings, forbidden privileged triggers, and write permissions. Record
+  a successful current-main five-target bounded fuzz campaign.
+- Refresh the fuzz-only `cc` and `find-msvc-tools` patch releases while leaving production
+  dependencies and the pinned `libfuzzer-sys` unchanged; pass the locked workspace, dependency
+  policy, deterministic regression, native x64/ARM64 CI, CodeQL, and a five-target sanitizer campaign.
+
 ## 0.6.2 - 2026-08-15
 
 - Decouple completed immutable-release evidence from the crate's not-yet-published version so release
