@@ -290,9 +290,29 @@ iroha-zip.exe extract .\archive.zip
 iroha-zip.exe extract .\archive.zip --encoding cp932
 iroha-zip.exe extract .\archive.7z --output D:\Extracted\archive
 iroha-zip.exe extract .\archive.tar.gz --open
+iroha-zip.exe extract .\encrypted.zip --prompt-password
 ```
 
 Existing destinations are never overwritten. Without `--output`, a collision-safe sibling directory is selected.
+
+### Encrypted ZIP
+
+Add `--prompt-password` to `preview` or `extract` to enter one password in the native bilingual
+dialog. No path accepts the password value as a CLI option, environment variable, configuration
+field, or file. The verified backend starts in AppContainer, its token and zero capability count are
+checked, and only then does iroha-zip answer one pinned prompt through a hidden ConPTY. A wrong
+password, additional prompt, timeout, or cancellation publishes no destination.
+
+```powershell
+iroha-zip.exe preview .\encrypted.zip --prompt-password
+iroha-zip.exe extract .\encrypted.zip --prompt-password
+```
+
+This path requires Windows 10 version 1809 or later and covers ZipCrypto/WinZip AES encrypted ZIPs
+that the imported libarchive build can read. Double-click does not prompt; encrypted creation,
+command-line password values, and unsandboxed password handling are not supported. See
+[Encrypted archives](docs/ENCRYPTED_ARCHIVES.md) for the secret lifetime, fail-closed behavior, and
+measured boundary.
 
 ### Create
 
@@ -315,7 +335,7 @@ This validates configuration, every backend hash, `bsdtar --version`, and AppCon
 
 ## Current limitations
 
-- Password-protected archives are not supported. The stock Windows bsdtar constraints and a ConPTY design that avoids command-line secrets are tracked in [Encrypted archives](docs/ENCRYPTED_ARCHIVES.md).
+- Password input is limited to CLI `preview`/`extract` for encrypted ZIPs. Double-click prompting, encrypted archive creation, encrypted non-ZIP formats, and automatic retries are not supported. See [Encrypted archives](docs/ENCRYPTED_ARCHIVES.md).
 - No automatic updater is implemented. The unsigned build does not self-update; [Signed updater design](docs/UPDATER.md) fixes the signature, downgrade, rollback, and backend-separation gates.
 - The CLI has policy-safe preview and selective extraction, but there is no native archive browsing/search/selection GUI.
 - iroha-zip is not an antivirus engine and cannot promise that extracted executables are safe.

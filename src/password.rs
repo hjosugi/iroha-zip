@@ -231,6 +231,23 @@ impl PasswordOutputMonitor {
     }
 
     fn observe_prompt_byte(&mut self, byte: u8, events: &mut Vec<PasswordOutputEvent>) {
+        if self.prompt_count > 0 {
+            if matches!(byte, b'\r' | b'\n') {
+                self.prompt_match = 0;
+                return;
+            }
+            if BACKEND_PASSWORD_PROMPT.get(self.prompt_match) == Some(&byte) {
+                self.prompt_match += 1;
+                if self.prompt_match == BACKEND_PASSWORD_PROMPT.len() {
+                    self.prompt_count = self.prompt_count.saturating_add(1);
+                    events.push(PasswordOutputEvent::AdditionalPrompt);
+                    self.prompt_match = 0;
+                }
+            } else {
+                self.prompt_match = usize::from(BACKEND_PASSWORD_PROMPT.first() == Some(&byte));
+            }
+            return;
+        }
         if matches!(byte, b'\r' | b'\n') {
             self.prompt_match = 0;
             self.line_start = true;
@@ -342,7 +359,7 @@ mod tests {
         let mut events = Vec::new();
         monitor.consume(b"Enter pass", &mut sanitized, &mut events);
         monitor.consume(b"phrase:", &mut sanitized, &mut events);
-        monitor.consume(b"\r\nEnter passphrase:", &mut sanitized, &mut events);
+        monitor.consume(b"Enter passphrase:", &mut sanitized, &mut events);
         assert_eq!(
             events,
             [

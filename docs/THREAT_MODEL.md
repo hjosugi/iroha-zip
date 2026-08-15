@@ -159,9 +159,25 @@ child file／directoryを開く操作自体はWin32 path APIを使うため、�
 
 ### 暗号化書庫
 
-安全なパスワード受け渡しは未実装です。現在の全backend processは標準入力を`NUL`へ固定しているため、対話入力を要求する書庫はfail closedになります。bsdtarの`--passphrase`は秘密をprocess argumentsへ残すため使用しません。Windows版bsdtarの対話callbackはconsole handleを要求するので、単純な匿名pipeへの差し替えも採用しません。
+暗号化ZIPのCLI `preview`／`extract`は、boolean flagの`--prompt-password`を指定した場合だけnative
+password dialogを表示します。秘密値を受け取るCLI option、environment variable、永続config、fileは
+ありません。bsdtarの`--passphrase`は秘密をprocess argumentsへ残すため製品経路では使用しません。
+Windows版bsdtarの対話callbackがconsole handleを要求するため、通常の匿名pipeでも代用しません。
 
-計画中の経路は、一回限りのConPTY input、非継承のcontroller handle、専用threadでのoutput drain、prompt回数・時間・出力量の上限、native password dialog、終了直後のbuffer zeroizationを組み合わせます。cancel、空入力、wrong password、複数prompt、timeout、backend crashの全経路でpartial outputと秘密channelを破棄できるまで有効化しません。詳細は[`ENCRYPTED_ARCHIVES.md`](ENCRYPTED_ARCHIVES.md)で追跡します。
+実装は一回限りのhidden ConPTY input、明示的に非継承にしたcontroller handle、専用threadでの統合
+output drain、1 MiB output上限、固定promptのline-start照合、prompt後の完全log抑止、native password
+dialog、zeroizing UTF-16／UTF-8 bufferを組み合わせます。childは既存のsuspended AppContainer launchを
+維持し、要求modeとcapability 0件を肯定確認した後だけresumeします。最初の正確なpromptへ1行だけ
+書いてinputを閉じ、追加prompt、wrong password、timeout、output超過、backend crashはJobを終了して
+partial outputと秘密channelを破棄します。全Jobへ`JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`を
+適用し、unhandled child faultを通常の対話的Windows fault-reporting経路へ進めません。cancelはsandboxも
+childも作りません。
+
+ConPTY APIは動的に解決します。Windows 10 version 1809未満などAPIがない環境、明示的unsandboxed経路、
+raw compressed streamのpassword要求では、安全でないtransportへfallbackせずfail closedになります。
+zeroizationはbest effortであり、paging、hibernation、privileged debugger、OS管理のcrash dumpから秘密が
+消える保証ではありません。ダブルクリック、暗号化書庫の作成、ZIP以外の暗号化形式、自動retryは
+未対応です。詳細は[`ENCRYPTED_ARCHIVES.md`](ENCRYPTED_ARCHIVES.md)で固定します。
 
 ## 7. 将来の強化候補
 

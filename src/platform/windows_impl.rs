@@ -54,11 +54,14 @@ use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
     CoTaskMemFree, CoUninitialize,
 };
-use windows::Win32::System::Console::{COORD, HPCON};
+use windows::Win32::System::Console::{
+    CONSOLE_MODE, COORD, GetConsoleMode, GetStdHandle, HPCON, ReadConsoleW, STD_INPUT_HANDLE,
+};
 use windows::Win32::System::JobObjects::{
-    CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
-    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
+    CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION,
+    JOB_OBJECT_LIMIT_JOB_MEMORY, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+    SetInformationJobObject, TerminateJobObject,
 };
 use windows::Win32::System::LibraryLoader::{
     BeginUpdateResourceW, EndUpdateResourceW, FindResourceW, GetModuleHandleW, GetProcAddress,
@@ -79,12 +82,14 @@ use windows::Win32::System::WindowsProgramming::PROCESS_CREATION_ALL_APPLICATION
 use windows::Win32::UI::Shell::{AttachmentServices, IAttachmentExecute};
 use windows::Win32::UI::WindowsAndMessaging::RT_MANIFEST;
 use windows::core::{Error as WindowsError, GUID, HRESULT, PCSTR, PCWSTR, PWSTR};
+use zeroize::Zeroizing;
 
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
 use crate::password::{
-    ArchivePassword, PasswordOutputEvent, PasswordOutputMonitor, PasswordTransport,
+    ArchivePassword, MAX_PASSWORD_UTF16_UNITS, PasswordOutputEvent, PasswordOutputMonitor,
+    PasswordTransport,
 };
 use crate::platform::{
     FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec, ProcessTempObservation,
@@ -120,6 +125,42 @@ const UTF8_BACKEND_MANIFEST: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
   </application>
 </assembly>
 "#;
+
+/// Reproduce stock Windows bsdtar's console-input boundary for the internal
+/// password transport probe. This is intentionally not a general secret-input
+/// API; the product UI returns an `ArchivePassword` directly.
+pub fn read_console_password_probe_line() -> Result<Zeroizing<String>> {
+    let input = unsafe { GetStdHandle(STD_INPUT_HANDLE) }
+        .map_err(|error| windows_error("GetStdHandle(password probe)", error))?;
+    let mut console_mode = CONSOLE_MODE::default();
+    unsafe { GetConsoleMode(input, &raw mut console_mode) }
+        .map_err(|error| windows_error("GetConsoleMode(password probe)", error))?;
+
+    let mut units = Zeroizing::new(vec![0u16; MAX_PASSWORD_UTF16_UNITS.saturating_add(2)]);
+    let mut read = 0u32;
+    let capacity = u32::try_from(units.len().saturating_sub(1))
+        .map_err(|_| IrohaZipError::Sandbox("password probe buffer overflow".to_owned()))?;
+    unsafe {
+        ReadConsoleW(
+            input,
+            units.as_mut_ptr().cast::<c_void>(),
+            capacity,
+            &raw mut read,
+            None,
+        )
+    }
+    .map_err(|error| windows_error("ReadConsoleW(password probe)", error))?;
+    let read = usize::try_from(read)
+        .map_err(|_| IrohaZipError::Sandbox("password probe length overflow".to_owned()))?;
+    let read = read.min(units.len());
+    units.truncate(read);
+    while units.last().is_some_and(|unit| matches!(*unit, 10 | 13)) {
+        units.pop();
+    }
+    let text = String::from_utf16(&units)
+        .map_err(|_| IrohaZipError::Sandbox("password probe received invalid UTF-16".to_owned()))?;
+    Ok(Zeroizing::new(text))
+}
 
 pub fn prepare_backend_executable(path: &Path) -> Result<()> {
     validate_regular_file_security(path)?;
@@ -1382,7 +1423,8 @@ fn run_in_appcontainer(
     let mut job_limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     job_limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         | JOB_OBJECT_LIMIT_JOB_MEMORY
-        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+        | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
     job_limits.BasicLimitInformation.ActiveProcessLimit = 1;
     job_limits.JobMemoryLimit = memory_limit_bytes;
     let job_limits_size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
@@ -1606,7 +1648,8 @@ fn run_in_appcontainer_with_password(
     let mut job_limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     job_limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         | JOB_OBJECT_LIMIT_JOB_MEMORY
-        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+        | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
     job_limits.BasicLimitInformation.ActiveProcessLimit = 1;
     job_limits.JobMemoryLimit = memory_limit_bytes;
     let job_limits_size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())

@@ -24,7 +24,7 @@ using System;
 using System.Runtime.InteropServices;
 
 public static class IrohaZipPasswordAutomationNative {
-    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetWindowTextW(IntPtr window, string text);
 
@@ -764,7 +764,7 @@ try {
         $previewRun = Invoke-PasswordTestProcess -FilePath $executablePath -Arguments @(
             "--config", $configPath, "preview", $archive, "--prompt-password"
         ) -Password $publicFixturePassword
-        if ($previewRun.stdout -notmatch '(?m)^file\s+\d+\s+fixture\.txt$') {
+        if ($previewRun.stdout -notmatch '(?m)^file\s+\d+\s+fixture\.txt\r?$') {
             throw "Encrypted $($fixture.name) preview did not expose the controlled fixture tree."
         }
         $extractRun = Invoke-PasswordTestProcess -FilePath $executablePath -Arguments @(

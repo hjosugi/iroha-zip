@@ -231,6 +231,8 @@ iroha-zip.exe create seven-zip .\folder .\folder.7z</code></pre>
             <h3>Extract and preview</h3>
             <pre><code>iroha-zip.exe preview .\archive.zip
 iroha-zip.exe extract .\archive.zip
+iroha-zip.exe extract .\encrypted.zip `
+  --prompt-password
 iroha-zip.exe extract .\archive.zip `
   --select "docs\index.txt"</code></pre>
           </div>
@@ -256,8 +258,9 @@ iroha-zip.exe create tar-gz `
             <h3>Automated</h3>
             <ul class="check-list">
               <li>Rust unit/integration tests and Clippy</li>
-              <li>Server 2022/2025 14-format schema-v4 E2E</li>
+              <li>Server 2022/2025 14-format + encrypted-ZIP schema-v5 E2E</li>
               <li>Same 14-format, hostile-corpus, and bilingual-UI matrix on native ARM64</li>
+              <li>One-use ConPTY and bilingual password dialog</li>
               <li>Five bounded fuzz targets</li>
               <li>Backend manifest, SBOM, and license validation</li>
               <li>Generated hostile-archive regressions</li>
@@ -270,7 +273,7 @@ iroha-zip.exe create tar-gz `
               <li>Complete Windows 10/11 device and format matrix</li>
               <li>Experimental LPAC compatibility and denial measurements</li>
               <li>Long fuzz campaigns and independent security audit</li>
-              <li>Protected input for encrypted archives</li>
+              <li>Password UI/ConPTY teardown on Windows 10/11 devices</li>
               <li>Multiple retail Windows on ARM device checks</li>
               <li>Future Authenticode signing</li>
             </ul>

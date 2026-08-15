@@ -62,7 +62,18 @@ Support passwords without command-line, environment, log, crash-report, or persi
 
 Acceptance: use a protected anonymous channel or equivalent one-use mechanism, zero sensitive buffers where practical, prevent inherited handles, and test cancellation/wrong-password paths.
 
-Progress (2026-08-09): the stock Windows bsdtar boundary is documented. Its safe-looking interactive callback requires a console input handle, while `--passphrase` exposes the secret in process arguments and is explicitly documented upstream as insecure. The implementation contract therefore uses a one-use ConPTY channel with non-inheritable controller ends, zeroizing buffers, concurrent output draining, bounded prompt handling, and fail-closed cancellation. The ConPTY transport, native password dialog, and encrypted corpus tests remain open.
+Progress (2026-08-15): the product path now implements a one-use ConPTY channel without
+`--passphrase`, inheritable controller handles, environment/config/file storage, or post-prompt log
+output. The backend remains suspended until its AppContainer/LPAC token and zero capabilities are
+verified. A non-`Clone`, always-redacted secret owns bounded zeroizing UTF-16/UTF-8 buffers; the
+native bilingual password control is cleared before destruction. Exact line-start prompt matching,
+one write, a 1 MiB terminal-output cap, a concurrent drain, and Job termination cover additional
+prompts, timeout, output overflow, monitor failure, and backend abort. Platform-neutral tests and a
+real-AppContainer transport probe cover Japanese input, cancellation, spoofed/fragmented prompts,
+retry, timeout, overflow, crash, cleanup, and log absence. The schema-v5 backend matrix additionally
+generates ZipCrypto/AES-128/AES-256 ZIPs from public deterministic data, drives the native UI,
+compares preview/extracted trees, and requires wrong-password/cancel non-publication. Hosted
+real-backend evidence and review remain the final acceptance gate for this branch.
 
 ### [SAFE-008: Defender/antimalware handoff](https://github.com/hjosugi/iroha-zip/issues/10)
 

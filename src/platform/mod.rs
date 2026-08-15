@@ -69,9 +69,10 @@ pub use windows_impl::{
     AttachmentHandoffSession, ConfigSaveGuard, DirectorySnapshot, Sandbox, create_snapshot_target,
     file_identity, file_identity_from_handle, lock_config_save, open_folder, open_snapshot_source,
     prepare_backend_executable, probe_process_temp, probe_staging_security_write_denials,
-    read_mark_of_the_web, validate_directory_security, validate_extracted_entry_security,
-    validate_open_snapshot_source, validate_post_handoff_entry_security,
-    validate_regular_file_security, verify_mark_of_the_web, write_mark_of_the_web,
+    read_console_password_probe_line, read_mark_of_the_web, validate_directory_security,
+    validate_extracted_entry_security, validate_open_snapshot_source,
+    validate_post_handoff_entry_security, validate_regular_file_security, verify_mark_of_the_web,
+    write_mark_of_the_web,
 };
 
 #[cfg(not(windows))]

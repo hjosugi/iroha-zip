@@ -365,11 +365,8 @@ fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
     std::io::stdout().flush().map_err(|error| {
         iroha_zip::error::IrohaZipError::io("flush password probe prompt", error)
     })?;
-    let mut input = zeroize::Zeroizing::new(String::new());
-    std::io::stdin()
-        .read_line(&mut input)
-        .map_err(|error| iroha_zip::error::IrohaZipError::io("read password probe input", error))?;
-    let matches = input.trim_end_matches(['\r', '\n']) == EXPECTED;
+    let input = read_password_probe_line()?;
+    let matches = input.as_str() == EXPECTED;
 
     match mode {
         PasswordProbeMode::Accept if matches => Ok(()),
@@ -381,15 +378,7 @@ fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
             std::io::stdout().flush().map_err(|error| {
                 iroha_zip::error::IrohaZipError::io("flush repeated password probe prompt", error)
             })?;
-            let mut forbidden_retry = zeroize::Zeroizing::new(String::new());
-            std::io::stdin()
-                .read_line(&mut forbidden_retry)
-                .map_err(|error| {
-                    iroha_zip::error::IrohaZipError::io(
-                        "read forbidden password probe retry",
-                        error,
-                    )
-                })?;
+            let _forbidden_retry = read_password_probe_line()?;
             Err(IrohaZipError::Backend(
                 "password probe unexpectedly received a retry".to_owned(),
             ))
@@ -399,6 +388,24 @@ fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
             Ok(())
         }
         PasswordProbeMode::Crash => std::process::abort(),
+    }
+}
+
+fn read_password_probe_line() -> Result<zeroize::Zeroizing<String>> {
+    #[cfg(windows)]
+    {
+        iroha_zip::platform::read_console_password_probe_line()
+    }
+    #[cfg(not(windows))]
+    {
+        let mut input = zeroize::Zeroizing::new(String::new());
+        std::io::stdin().read_line(&mut input).map_err(|error| {
+            iroha_zip::error::IrohaZipError::io("read password probe input", error)
+        })?;
+        while input.ends_with(['\r', '\n']) {
+            input.pop();
+        }
+        Ok(input)
     }
 }
 

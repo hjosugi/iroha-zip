@@ -231,6 +231,8 @@ iroha-zip.exe create seven-zip .\folder .\folder.7z</code></pre>
             <h3>展開・プレビュー</h3>
             <pre><code>iroha-zip.exe preview .\archive.zip
 iroha-zip.exe extract .\archive.zip
+iroha-zip.exe extract .\encrypted.zip `
+  --prompt-password
 iroha-zip.exe extract .\archive.zip `
   --select "資料\index.txt"</code></pre>
           </div>
@@ -256,8 +258,9 @@ iroha-zip.exe create tar-gz `
             <h3>自動化済み</h3>
             <ul class="check-list">
               <li>Rust unit / integration testsとClippy</li>
-              <li>Server 2022/2025の14形式schema-v4 E2E</li>
+              <li>Server 2022/2025の14形式＋暗号化ZIP schema-v5 E2E</li>
               <li>native ARM64の同一14形式／悪性corpus／日英UI</li>
+              <li>一回限りのConPTYと日英password dialog</li>
               <li>5つのbounded fuzz target</li>
               <li>backend manifest / SBOM / license検証</li>
               <li>生成型の悪性書庫回帰テスト</li>
@@ -270,7 +273,7 @@ iroha-zip.exe create tar-gz `
               <li>Windows 10/11実機の全format matrix</li>
               <li>実験的LPACの互換性とdenial測定</li>
               <li>長時間fuzzingと独立セキュリティ監査</li>
-              <li>パスワード付き書庫の秘密入力</li>
+              <li>Windows 10/11実機でのpassword UI／ConPTY teardown</li>
               <li>複数のWindows ARM市販機での実機確認</li>
               <li>将来のAuthenticode署名</li>
             </ul>

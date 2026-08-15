@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add a one-use, AppContainer-preserving ConPTY password channel for encrypted ZIP `preview` and
+  `extract`, with no password-value CLI option, environment/config/file storage, or unsandboxed
+  fallback.
+- Add a bounded bilingual native password dialog, non-`Clone` zeroizing UTF-16/UTF-8 secret
+  storage, exact one-prompt handling, post-prompt log suppression, and fail-closed retry, timeout,
+  overflow, crash, wrong-password, and cancellation paths.
+- Expand Windows evidence to schema v5 with native-UI ZipCrypto, WinZip AES-128, and AES-256
+  preview/extraction, complete tree comparison, public-sentinel output-absence checks, and
+  wrong-password/cancel non-publication.
 - Record the independently verified immutable `v0.5.3` publication, exact 11-asset inventory,
   tag-ref attestations, intentionally unsigned PE state, and byte-matched bilingual Pages deployment.
 - Record the reviewed test-only CodeQL alert #234 and refresh issue-reporting guidance for `v0.5.3`.
