@@ -65,22 +65,22 @@ matching tag and an explicit `publish` choice.
     immutable, latest, and an exact match for all 11 assets.
 
 The repository immutable-release policy was enabled on 2026-08-14. The current stable unsigned
-[`v0.6.1`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.1) publication passed the complete
-dual-architecture contract from commit `572e9b74e1218be6f9539f192c07f44d88da0099` in
-[Actions run 31870222507](https://github.com/hjosugi/iroha-zip/actions/runs/31870222507), after the
+[`v0.6.2`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.2) publication passed the complete
+dual-architecture contract from commit `4c53bb0b2666486c541b47606e54cf1345f672c3` in
+[Actions run 31877964740](https://github.com/hjosugi/iroha-zip/actions/runs/31877964740), after the
 same path passed without publication in
-[dry run 31869916211](https://github.com/hjosugi/iroha-zip/actions/runs/31869916211). The exact source
-also passed [tag CI run 31870222509](https://github.com/hjosugi/iroha-zip/actions/runs/31870222509).
+[dry run 31877701103](https://github.com/hjosugi/iroha-zip/actions/runs/31877701103). The exact source
+also passed [tag CI run 31877964744](https://github.com/hjosugi/iroha-zip/actions/runs/31877964744).
 An independent public re-download matched all 11 Release API digests and byte lengths, eight subjects
 in `SHA256SUMS.txt`, both one-line sidecars, all direct and ZIP-contained PE machine identities,
 every ZIP-to-standalone executable byte, bilingual package content and checked-in documents, backend
 non-inclusion, release-body equality, annotated tag object
-`04bab2e3117ccb7ff281b385cbd55aa74cf527a3`, the exact tag commit, and all nine tag-ref attestations
+`d9fb686b830e24798c822b2d00e1a4d8bdbc8f37`, the exact tag commit, and all nine tag-ref attestations
 with hosted-runner enforcement. The Certificate Table was empty in all six distinct executables,
 confirming the disclosed intentionally unsigned state. The fixed metadata, asset hashes, workflow
 artifact digests, and independent checks are retained in the
-[v0.6.1 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.1)
-and exercised by an ordinary Rust regression. `v0.6.0` was the preceding complete-contract immutable
+[v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2)
+and exercised by an ordinary Rust regression. `v0.6.1` was the preceding complete-contract immutable
 release; unsigned `v0.4.1` was the
 first publication under the immutable policy, while `v0.4.0` predates enforcement and remains mutable
 according to GitHub's API. A failed future draft remains unpublished for investigation; it is not

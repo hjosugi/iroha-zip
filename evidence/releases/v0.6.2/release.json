@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "repository": "hjosugi/iroha-zip",
+  "recorded_at": "2026-08-15",
+  "tag": {
+    "name": "v0.6.2",
+    "annotated_tag_object_sha": "d9fb686b830e24798c822b2d00e1a4d8bdbc8f37",
+    "commit_sha": "4c53bb0b2666486c541b47606e54cf1345f672c3"
+  },
+  "release": {
+    "id": 371015434,
+    "name": "iroha-zip 0.6.2",
+    "url": "https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.2",
+    "target_commitish": "main",
+    "created_at": "2026-08-15T09:49:17Z",
+    "published_at": "2026-08-15T09:54:10Z",
+    "draft": false,
+    "prerelease": false,
+    "immutable": true,
+    "latest": true,
+    "asset_count": 11
+  },
+  "assets": [
+    {
+      "id": 515566737,
+      "name": "iroha-zip-0.6.2-windows-arm64.exe",
+      "size": 1468416,
+      "digest": "sha256:4ce060df9d32e9b0b3b77fba7af8248035c7e2e3f391f5dc493393e56fb65926",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566736,
+      "name": "iroha-zip-0.6.2-windows-arm64.zip",
+      "size": 2000334,
+      "digest": "sha256:82ce74477fcbf8f6d89459af535c62aa5d567353bcebe4384d9c7fe9e104f9f7",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566735,
+      "name": "iroha-zip-0.6.2-windows-arm64.zip.sha256",
+      "size": 100,
+      "digest": "sha256:11869f2ba766cb0b7d3e4cd79ca807af0d02251ffd9e4f9b8ac0695b2cbd86d0",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566741,
+      "name": "iroha-zip-0.6.2-windows-x64.exe",
+      "size": 1806848,
+      "digest": "sha256:a118ed9501dfcf9a90a133ec385dd226a8c8eb9bbed6e22ccff7c3159ab087e4",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566739,
+      "name": "iroha-zip-0.6.2-windows-x64.zip",
+      "size": 2172059,
+      "digest": "sha256:19e2644882208605d855d9b7a45c9c43e487e86d5e167a1c75d309252d891888",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566745,
+      "name": "iroha-zip-0.6.2-windows-x64.zip.sha256",
+      "size": 98,
+      "digest": "sha256:0a71d97502ec68ed886997f21b34158dc36051eeb619935ccecd7051f2f6f388",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566750,
+      "name": "iroha-zip-settings-0.6.2-windows-arm64.exe",
+      "size": 781312,
+      "digest": "sha256:39ae33f81982b39c63f966fee49a2ad8d75492f02668a8bcbbfd398139cfdc11",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566748,
+      "name": "iroha-zip-settings-0.6.2-windows-x64.exe",
+      "size": 946176,
+      "digest": "sha256:61f071ea112705e35f10842fd90ceb3569ffae45dc7d240389c84fea92369c87",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566754,
+      "name": "iroha-zip-shell-0.6.2-windows-arm64.exe",
+      "size": 1233920,
+      "digest": "sha256:2680935cc3f0bf3c6341490d2216f948fa2a31ee7f21706b155cd9811a7a1691",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566756,
+      "name": "iroha-zip-shell-0.6.2-windows-x64.exe",
+      "size": 1523200,
+      "digest": "sha256:ce36253c45c676c22069603d24f637a1e013c3d331374bda9f0f598fa0eb4c16",
+      "state": "uploaded"
+    },
+    {
+      "id": 515566760,
+      "name": "SHA256SUMS.txt",
+      "size": 822,
+      "digest": "sha256:5d8e5d278792f91acfb2570f6530ba32be61de6054d8b13690b7f94ae405ce94",
+      "state": "uploaded"
+    }
+  ],
+  "workflows": {
+    "source_ci": {
+      "run_id": 31877302461,
+      "workflow": "CI",
+      "event": "push",
+      "ref": "main",
+      "commit_sha": "4c53bb0b2666486c541b47606e54cf1345f672c3",
+      "conclusion": "success"
+    },
+    "source_codeql": {
+      "run_id": 31877302295,
+      "workflow": "CodeQL",
+      "event": "dynamic",
+      "ref": "main",
+      "commit_sha": "4c53bb0b2666486c541b47606e54cf1345f672c3",
+      "conclusion": "success"
+    },
+    "source_pages": {
+      "run_id": 31877302446,
+      "workflow": "GitHub Pages",
+      "event": "push",
+      "ref": "main",
+      "commit_sha": "4c53bb0b2666486c541b47606e54cf1345f672c3",
+      "conclusion": "success"
+    },
+    "dry_run": {
+      "run_id": 31877701103,
+      "workflow": "Release",
+      "event": "workflow_dispatch",
+      "ref": "main",
+      "commit_sha": "4c53bb0b2666486c541b47606e54cf1345f672c3",
+      "publish": false,
+      "conclusion": "success"
+    },
+    "release": {
+      "run_id": 31877964740,
+      "workflow": "Release",
+      "event": "push",
+      "ref": "v0.6.2",
+      "commit_sha": "4c53bb0b2666486c541b47606e54cf1345f672c3",
+      "publish": true,
+      "conclusion": "success"
+    },
+    "tag_ci": {
+      "run_id": 31877964744,
+      "workflow": "CI",
+      "event": "push",
+      "ref": "v0.6.2",
+      "commit_sha": "4c53bb0b2666486c541b47606e54cf1345f672c3",
+      "conclusion": "success"
+    }
+  },
+  "workflow_artifacts": {
+    "dry_run": [
+      {
+        "id": 9245235693,
+        "name": "iroha-zip-0.6.2-complete-release-attempt-1",
+        "size": 7917022,
+        "digest": "sha256:85589c914afb3f962d19fab16c12f38bbb014810959f36f0df8573054c6748bb",
+        "expires_at": "2026-09-14T09:48:07Z"
+      },
+      {
+        "id": 9245230606,
+        "name": "iroha-zip-0.6.2-windows-arm64-attempt-1",
+        "size": 3792396,
+        "digest": "sha256:cf60390d1c55490a37132fea667567bdc67c9e35a28abf9be58018c2ec95348e",
+        "expires_at": "2026-09-14T09:47:40Z"
+      },
+      {
+        "id": 9245227991,
+        "name": "iroha-zip-0.6.2-windows-x64-attempt-1",
+        "size": 4124146,
+        "digest": "sha256:2f97858472b77f850c4e058a24c5f3de919bb65105cbfbe83c7b51931640c383",
+        "expires_at": "2026-09-14T09:47:26Z"
+      }
+    ],
+    "release": [
+      {
+        "id": 9245297733,
+        "name": "iroha-zip-0.6.2-complete-release-attempt-1",
+        "size": 7917011,
+        "digest": "sha256:5331bba99de7f618e54a6baf248a9d7c1fd03440f456fb30aa98908943bec24e",
+        "expires_at": "2026-09-14T09:54:00Z"
+      },
+      {
+        "id": 9245293551,
+        "name": "iroha-zip-0.6.2-windows-x64-attempt-1",
+        "size": 4124137,
+        "digest": "sha256:6d2b609fc17a2265da505c9855f9b989bd7ff67860848ef492b98414b9f6cb8f",
+        "expires_at": "2026-09-14T09:53:36Z"
+      },
+      {
+        "id": 9245291697,
+        "name": "iroha-zip-0.6.2-windows-arm64-attempt-1",
+        "size": 3792397,
+        "digest": "sha256:540116c14470ab64f39fd8e921a4dceec5a16245e38cefd29c5eb5657904c3c3",
+        "expires_at": "2026-09-14T09:53:26Z"
+      }
+    ],
+    "tag_ci": [
+      {
+        "id": 9245310565,
+        "name": "windows-arm64-native",
+        "size": 11400,
+        "digest": "sha256:679d6548c7e7b83ae7a1b379241d532b2faa92ea1aeceab013ad3fde87c29fbe",
+        "expires_at": "2026-11-13T09:49:21Z"
+      }
+    ]
+  },
+  "attestations": {
+    "verified": true,
+    "repository": "hjosugi/iroha-zip",
+    "signer_workflow": "hjosugi/iroha-zip/.github/workflows/release.yml",
+    "source_ref": "refs/tags/v0.6.2",
+    "deny_self_hosted_runners": true,
+    "subjects": [
+      "iroha-zip-0.6.2-windows-arm64.exe",
+      "iroha-zip-0.6.2-windows-arm64.zip",
+      "iroha-zip-0.6.2-windows-x64.exe",
+      "iroha-zip-0.6.2-windows-x64.zip",
+      "iroha-zip-settings-0.6.2-windows-arm64.exe",
+      "iroha-zip-settings-0.6.2-windows-x64.exe",
+      "iroha-zip-shell-0.6.2-windows-arm64.exe",
+      "iroha-zip-shell-0.6.2-windows-x64.exe",
+      "SHA256SUMS.txt"
+    ]
+  },
+  "independent_verification": {
+    "all_public_assets_downloaded": true,
+    "release_api_size_and_digest_match": true,
+    "exact_asset_inventory_match": true,
+    "combined_checksum_subject_count": 8,
+    "zip_sidecar_count": 2,
+    "zip_to_standalone_executables_byte_identical": true,
+    "backend_binaries_absent": true,
+    "bilingual_package_documents_match_source": true,
+    "release_body_matches_source": true,
+    "public_pages_match_source": true,
+    "x64_pe_machine": "0x8664",
+    "arm64_pe_machine": "0xAA64",
+    "distinct_executable_count": 6,
+    "empty_authenticode_certificate_table_count": 6,
+    "authenticode_signed": false
+  }
+}

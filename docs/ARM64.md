@@ -63,18 +63,18 @@ schema-v2 Settingsの2 reportは全26 controlsの正逆順、wrap、可視性、
 5. 2 ZIPと6 EXEへarch別attestation、`SHA256SUMS.txt`へ集約attestationを発行する。
 6. draft時と公開後に全11 assetの大小文字を含む名前、byte長、SHA-256を照合する。
 
-`v0.6.1`公開では[Actions run 31870222507](https://github.com/hjosugi/iroha-zip/actions/runs/31870222507)が
-成功しました。事前の[非公開dry run 31869916211](https://github.com/hjosugi/iroha-zip/actions/runs/31869916211)と、
-tag側[CI run 31870222509](https://github.com/hjosugi/iroha-zip/actions/runs/31870222509)も合格しています。
+`v0.6.2`公開では[Actions run 31877964740](https://github.com/hjosugi/iroha-zip/actions/runs/31877964740)が
+成功しました。事前の[非公開dry run 31877701103](https://github.com/hjosugi/iroha-zip/actions/runs/31877701103)と、
+tag側[CI run 31877964744](https://github.com/hjosugi/iroha-zip/actions/runs/31877964744)も合格しています。
 GitHub Releaseから11 assetを独立に再取得し、API digest／byte長、
 8 checksum対象、2 sidecar、ZIP内外のx64／ARM64 PE identity、ZIPと個別EXEのbyte一致、
 日英package内容とsource文書の一致、backend非同梱、annotated tag object
-`04bab2e3117ccb7ff281b385cbd55aa74cf527a3`、exact tag commit
-`572e9b74e1218be6f9539f192c07f44d88da0099`、hosted-runner限定の
+`d9fb686b830e24798c822b2d00e1a4d8bdbc8f37`、exact tag commit
+`4c53bb0b2666486c541b47606e54cf1345f672c3`、hosted-runner限定の
 9つのtag-ref attestationを確認しました。6種類のEXEはすべてPE Certificate Tableが空でした。
 Release APIはlatest／stable／immutableと、exact 11 assetの公開状態を返しています。固定metadata、
 全asset hash、workflow artifact digest、独立検証結果は
-[v0.6.1 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.1)に保存しています。
+[v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2)に保存しています。
 
 ### ARM64での導入
 
@@ -165,20 +165,20 @@ runner and rejects architecture confusion at these tag-driven boundaries:
 5. Per-architecture attestations cover both ZIPs and six EXEs; a combined attestation covers the inventory.
 6. Draft and published readback compare exact case-sensitive names, byte lengths, and SHA-256 for all assets.
 
-For the `v0.6.1` publication,
-[Actions run 31870222507](https://github.com/hjosugi/iroha-zip/actions/runs/31870222507)
-succeeded after [non-publishing dry run 31869916211](https://github.com/hjosugi/iroha-zip/actions/runs/31869916211)
-and alongside passing tag [CI run 31870222509](https://github.com/hjosugi/iroha-zip/actions/runs/31870222509).
+For the `v0.6.2` publication,
+[Actions run 31877964740](https://github.com/hjosugi/iroha-zip/actions/runs/31877964740)
+succeeded after [non-publishing dry run 31877701103](https://github.com/hjosugi/iroha-zip/actions/runs/31877701103)
+and alongside passing tag [CI run 31877964744](https://github.com/hjosugi/iroha-zip/actions/runs/31877964744).
 All 11 assets were independently downloaded from the GitHub Release. API digests and byte lengths,
 eight checksum subjects, two sidecars, x64/ARM64 PE
 identities inside and outside the ZIPs, ZIP-to-standalone byte matches, bilingual package content,
 checked-in source documents, backend non-inclusion, annotated tag object
-`04bab2e3117ccb7ff281b385cbd55aa74cf527a3`, exact tag commit
-`572e9b74e1218be6f9539f192c07f44d88da0099`, and nine hosted-runner-only tag-ref attestations all
+`d9fb686b830e24798c822b2d00e1a4d8bdbc8f37`, exact tag commit
+`4c53bb0b2666486c541b47606e54cf1345f672c3`, and nine hosted-runner-only tag-ref attestations all
 matched. All six distinct executables had empty PE Certificate Tables. The Release
 API reports it as latest, stable, immutable, and complete with the exact 11-asset inventory. Fixed
 metadata, all asset hashes, workflow artifact digests, and independent results are retained in the
-[v0.6.1 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.1).
+[v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2).
 
 ### ARM64 setup
 

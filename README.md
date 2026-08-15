@@ -212,7 +212,7 @@ dist\iroha-zip\
    dist\iroha-zip-0.6.2-windows-x64.zip
 ```
 
-この通常実行はx64 packageを作成します。ARM64をローカルbuildする場合は`-Target aarch64-pc-windows-msvc`を指定します。tag-driven workflowはnative x64／ARM64 runnerで両packageを別々に作成します。公式リリースには2つのZIP、6つの個別EXE、2つのZIP sidecar、全体SHA-256一覧を添付し、GitHub artifact attestationも発行します。未署名であること、SmartScreen警告、独立検証手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)を参照してください。将来Authenticode署名を有効にするための厳格な検証経路は[リリース検証仕様](docs/RELEASE_VERIFICATION.md)に保持し、直前の独立検証済み公開結果は[v0.6.1 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.1)へ固定しています。
+この通常実行はx64 packageを作成します。ARM64をローカルbuildする場合は`-Target aarch64-pc-windows-msvc`を指定します。tag-driven workflowはnative x64／ARM64 runnerで両packageを別々に作成します。公式リリースには2つのZIP、6つの個別EXE、2つのZIP sidecar、全体SHA-256一覧を添付し、GitHub artifact attestationも発行します。未署名であること、SmartScreen警告、独立検証手順は[未署名リリースについて](docs/UNSIGNED_RELEASE.md)を参照してください。将来Authenticode署名を有効にするための厳格な検証経路は[リリース検証仕様](docs/RELEASE_VERIFICATION.md)に保持し、最新の独立検証済み公開結果は[v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2)へ固定しています。
 
 初回ビルド時に`Cargo.lock`がない場合は生成されます。以後は`Cargo.lock`をバージョン管理し、`--locked`でビルドしてください。
 
