@@ -65,19 +65,20 @@ matching tag and an explicit `publish` choice.
     immutable, latest, and an exact match for all 11 assets.
 
 The repository immutable-release policy was enabled on 2026-08-14. The stable unsigned
-[`v0.5.3`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.5.3) publication passed the complete
-dual-architecture contract from commit `7d5e60a907b7681c09aebff03d66f78c172d7c3e` in
-[Actions run 31792172328](https://github.com/hjosugi/iroha-zip/actions/runs/31792172328), after the same
-path passed without publication in
-[dry run 31791555768](https://github.com/hjosugi/iroha-zip/actions/runs/31791555768). An independent
-public re-download matched all 11 Release API digests and byte lengths, eight subjects in
-`SHA256SUMS.txt`, both one-line sidecars, all direct and ZIP-contained PE machine identities, every
-ZIP-to-standalone executable byte, bilingual package content, backend non-inclusion, annotated tag
-object `0973a3b9a12813f2fb0b94003a1be8187c987e3d`, the exact tag commit, all 90 local Markdown links
-in each architecture package, and all nine tag-ref attestations with hosted-runner enforcement. The
-Certificate Table was empty in all six distinct executables, confirming the disclosed intentionally
-unsigned state. `v0.5.2` was the preceding
-complete-contract release; unsigned `v0.4.1` was the first publication under the immutable policy,
+[`v0.6.0`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.0) publication passed the complete
+dual-architecture contract from commit `4464e4fb7ef36e1e24c54969df57817dd4202b25` in
+[Actions run 31864491738, attempt 2](https://github.com/hjosugi/iroha-zip/actions/runs/31864491738),
+after the same path passed without publication in
+[dry run 31864073772](https://github.com/hjosugi/iroha-zip/actions/runs/31864073772). Attempt 1 created
+no Release because GitHub's x64 attestation certificate request transiently returned HTTP 403;
+the complete rerun succeeded. An independent public re-download matched all 11 Release API digests
+and byte lengths, eight subjects in `SHA256SUMS.txt`, both one-line sidecars, all direct and
+ZIP-contained PE machine identities, every ZIP-to-standalone executable byte, bilingual package
+content and checked-in documents, backend non-inclusion, annotated tag object
+`4464c6b61ee809d9079a45b29c1626df5188303d`, the exact tag commit, and all nine tag-ref attestations
+with hosted-runner enforcement. The Certificate Table was empty in all six distinct executables,
+confirming the disclosed intentionally unsigned state. `v0.5.3` was the preceding complete-contract
+release; unsigned `v0.4.1` was the first publication under the immutable policy,
 while `v0.4.0` predates enforcement and remains mutable according to GitHub's API. A failed future
 draft remains unpublished for investigation; it is not silently deleted or overwritten.
 
