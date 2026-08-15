@@ -81,7 +81,7 @@ fn anonymous_pipe_delivers_one_non_ascii_password_without_logging_it() {
     assert_eq!(result.exit_code, 0);
     assert!(result.isolation.is_app_container);
     assert_eq!(result.isolation.capability_count, 0);
-    assert_eq!(outcome.stdout, b"Enter passphrase:");
+    assert!(outcome.stdout.is_empty());
     assert!(outcome.stderr.is_empty());
     assert_secret_absent(&outcome, EXPECTED_PASSWORD);
 }

@@ -787,7 +787,7 @@ try {
             passwordControlProtected = ($previewRun.passwordControlProtected -and
                 $extractRun.passwordControlProtected)
             passwordAbsentFromOutput = $true
-            oneUsePrompt = $true
+            oneUseChannel = $true
             explicitCleanupRequired = $true
         }
         $encryptedArchives[$fixture.name] = $archive

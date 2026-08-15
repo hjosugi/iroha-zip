@@ -424,10 +424,6 @@ fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
         })?;
     }
 
-    print!("Enter passphrase:");
-    std::io::stdout().flush().map_err(|error| {
-        iroha_zip::error::IrohaZipError::io("flush password probe prompt", error)
-    })?;
     let input = read_password_probe_line()?;
     let matches = input.as_str() == EXPECTED;
 
@@ -437,10 +433,6 @@ fn run_password_probe(mode: PasswordProbeMode) -> Result<()> {
             "password probe received the wrong one-use value".to_owned(),
         )),
         PasswordProbeMode::Repeat => {
-            print!("Enter passphrase:");
-            std::io::stdout().flush().map_err(|error| {
-                iroha_zip::error::IrohaZipError::io("flush repeated password probe prompt", error)
-            })?;
             let _forbidden_retry = read_password_probe_line()?;
             Err(IrohaZipError::Backend(
                 "password probe unexpectedly received a retry".to_owned(),
