@@ -48,9 +48,11 @@ permissions. It runs each of the five targets for at most 45 seconds, limits inp
 bytes, limits a single execution to 10 seconds, caps RSS at 2 GiB, and caps the whole job at 20
 minutes. Checked-in seeds are copied to `$RUNNER_TEMP`, so fuzzing cannot rewrite the source
 corpus. A failure uploads `fuzz/artifacts/` for 14 days. Both `actions/checkout` and
-`actions/upload-artifact` are pinned to reviewed full commit SHAs. The final five-target campaign
-for the exact `v0.5.0` tag commit passed in
-[Actions run 31774302200](https://github.com/hjosugi/iroha-zip/actions/runs/31774302200).
+`actions/upload-artifact` are pinned to reviewed full commit SHAs. The latest five-target campaign
+passed on exact `main` commit `7d2417086e59699dddba2344d1c31223a0e44925` in
+[Actions run 31883752464](https://github.com/hjosugi/iroha-zip/actions/runs/31883752464); the final
+campaign for the `v0.5.0` tag commit is retained in
+[run 31774302200](https://github.com/hjosugi/iroha-zip/actions/runs/31774302200).
 
 ## Local run
 
