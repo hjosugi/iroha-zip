@@ -152,15 +152,21 @@ through bounded cross-process `WM_SETTEXT`, drives its native standard buttons
 through bounded synchronous `WM_COMMAND` / `BN_CLICKED` notifications, previews and extracts every
 variant, compares the complete SHA-256 tree, rejects a wrong password, cancels before spawn,
 requires no destination on either failure, and checks that its deliberately public sentinel is
-absent from stdout/stderr. Only
-fixture generation uses generator-side `--passphrase`; the product path never does.
+absent from stdout/stderr. Only fixture generation uses generator-side `--passphrase`; the product
+path never does. The fixture password is ASCII because the stock third-party `bsdtar.exe` does not
+carry iroha-zip's UTF-8 process manifest; its legacy command-line conversion must not decide whether
+the product's UTF-8 password bytes match. The native AppContainer transport probe independently
+covers a Japanese password.
 
 schema-v5 Windows E2E harnessは決定的なZipCrypto、AES-128、AES-256 ZIPを生成し、UI Automationで
 日英dialogと標準button contractを検証し、公開fixture値だけをcross-process `WM_SETTEXT`で有界に
 設定してから、実dialog procedureへ有界な同期`WM_COMMAND` / `BN_CLICKED`通知を送り、
 全variantのpreview／extractと完全SHA-256 treeを比較します。wrong password拒否、
 spawn前cancel、両失敗時のdestination不存在、意図的に公開したsentinelのstdout／stderr非露出も検査
-します。generator側`--passphrase`はfixture生成だけで使い、製品経路では使いません。
+します。generator側`--passphrase`はfixture生成だけで使い、製品経路では使いません。fixture passwordは
+ASCIIに固定します。第三者stock `bsdtar.exe`はiroha-zipのUTF-8 process manifestを持たず、そのlegacy
+command-line変換に製品側UTF-8 passwordとの一致判定を依存させないためです。日本語passwordはnative
+AppContainer transport probeで独立に検証します。
 
 ## Residual risks / 残るrisk
 

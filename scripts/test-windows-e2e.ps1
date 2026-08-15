@@ -812,7 +812,11 @@ try {
         [byte[]](0, 1, 2, 127, 128, 254, 255)
     )
     $filterSourceTree = Compare-Tree $filterSourceRoot $filterSourceRoot
-    $publicFixturePassword = "公開テスト-日本語-password-42"
+    # The stock generator EXE has no iroha-zip UTF-8 process manifest. Keep its
+    # deliberately public command-line fixture ASCII so generator-side legacy
+    # argv conversion cannot change the bytes registered with libarchive.
+    # The native AppContainer password probe separately covers non-ASCII UTF-8.
+    $publicFixturePassword = "iroha-zip-public-e2e-password-42"
     $encryptedFormats = @(
         [pscustomobject]@{ name = "zipcrypt"; option = "zip:encryption=zipcrypt" },
         [pscustomobject]@{ name = "aes128"; option = "zip:encryption=aes128" },
@@ -868,7 +872,7 @@ try {
     $wrongPasswordRun = Invoke-PasswordTestProcess -FilePath $executablePath -Arguments @(
         "--config", $configPath, "extract", $encryptedArchives["aes256"],
         "--output", $wrongPasswordDestination, "--prompt-password"
-    ) -Password "公開テスト-日本語-wrong-42" -ExpectedExitCodes @(2)
+    ) -Password "iroha-zip-public-e2e-wrong-42" -ExpectedExitCodes @(2)
     if (Test-Path -LiteralPath $wrongPasswordDestination) {
         throw "Wrong encrypted-archive password published a destination tree."
     }
