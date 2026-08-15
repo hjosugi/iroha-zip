@@ -5,6 +5,32 @@ use std::path::Path;
 fn workflows_pin_actions_bound_jobs_and_drop_checkout_credentials() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workflows = ["ci.yml", "fuzz.yml", "pages.yml", "release.yml"];
+    let workflow_directory = repository.join(".github/workflows");
+    let mut discovered_workflows = fs::read_dir(&workflow_directory)
+        .expect("workflow directory must be readable")
+        .map(|entry| entry.expect("workflow entry must be readable"))
+        .map(|entry| {
+            let file_type = entry.file_type().unwrap_or_else(|error| {
+                panic!("cannot inspect {}: {error}", entry.path().display())
+            });
+            assert!(
+                file_type.is_file() && !file_type.is_symlink(),
+                "workflow must be a regular non-link file: {}",
+                entry.path().display()
+            );
+            entry
+                .file_name()
+                .into_string()
+                .expect("workflow name must be UTF-8")
+        })
+        .collect::<Vec<_>>();
+    discovered_workflows.sort();
+    assert_eq!(
+        discovered_workflows,
+        workflows.map(str::to_owned),
+        "every workflow file must be reviewed by this contract"
+    );
+
     let mut checkout_count = 0;
     let mut external_action_count = 0;
     let mut combined = String::new();
