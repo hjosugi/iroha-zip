@@ -75,8 +75,11 @@ An independent public re-download matched all 11 Release API digests and byte le
 in `SHA256SUMS.txt`, both one-line sidecars, all direct and ZIP-contained PE machine identities,
 every ZIP-to-standalone executable byte, bilingual package content and checked-in documents, backend
 non-inclusion, release-body equality, annotated tag object
-`d9fb686b830e24798c822b2d00e1a4d8bdbc8f37`, the exact tag commit, and all nine tag-ref attestations
-with hosted-runner enforcement. The Certificate Table was empty in all six distinct executables,
+`d9fb686b830e24798c822b2d00e1a4d8bdbc8f37`, the exact tag commit, and all nine tag-ref workflow
+attestations with hosted-runner enforcement. GitHub's separate release attestation bound that tag
+object to all 11 assets; `gh release verify` validated the release statement and
+`gh release verify-asset` validated every downloaded asset. The Certificate Table was empty in all
+six distinct executables,
 confirming the disclosed intentionally unsigned state. The fixed metadata, asset hashes, workflow
 artifact digests, and independent checks are retained in the
 [v0.6.2 release snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.2)
@@ -124,7 +127,15 @@ $expectedHash = ($expected -split '\s+')[0].ToLowerInvariant()
 if ($actual -cne $expectedHash) { throw 'SHA-256 mismatch' }
 ```
 
-Then verify the GitHub artifact attestation:
+Verify the GitHub release attestation and confirm that the downloaded asset belongs to it:
+
+```powershell
+gh release verify v0.6.2 --repo hjosugi/iroha-zip
+gh release verify-asset v0.6.2 .\iroha-zip-0.6.2-windows-arm64.zip `
+  --repo hjosugi/iroha-zip
+```
+
+Then independently verify the release workflow's GitHub artifact attestation:
 
 ```powershell
 gh attestation verify .\iroha-zip-0.6.2-windows-arm64.zip `
@@ -164,5 +175,7 @@ certificate authority's terms, identity declaration, or legal agreement for the 
 
 Primary references: [GitHub immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
 [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations),
-[GitHub CLI attestation verification](https://cli.github.com/manual/gh_attestation_verify), and
+[GitHub CLI release verification](https://cli.github.com/manual/gh_release_verify),
+[GitHub CLI release-asset verification](https://cli.github.com/manual/gh_release_verify-asset),
+[GitHub CLI artifact-attestation verification](https://cli.github.com/manual/gh_attestation_verify), and
 [Microsoft Authenticode](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/authenticode).

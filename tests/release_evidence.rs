@@ -101,7 +101,7 @@ fn validate_release_snapshot(snapshot: ReleaseSnapshot) {
     let version = snapshot.version;
     let tag = format!("v{version}");
 
-    assert_eq!(metadata["schema_version"], 1);
+    assert_eq!(metadata["schema_version"], 2);
     assert_eq!(metadata["repository"], "hjosugi/iroha-zip");
     assert_eq!(metadata["tag"]["name"], tag);
     let commit = metadata["tag"]["commit_sha"]
@@ -228,6 +228,51 @@ fn validate_release_snapshot(snapshot: ReleaseSnapshot) {
         format!("refs/tags/{tag}")
     );
     assert_eq!(metadata["attestations"]["deny_self_hosted_runners"], true);
+
+    let release_attestation = &metadata["release_attestation"];
+    assert_eq!(release_attestation["verified"], true);
+    assert_eq!(
+        release_attestation["predicate_type"],
+        "https://in-toto.io/attestation/release/v0.2"
+    );
+    assert_eq!(release_attestation["repository"], "hjosugi/iroha-zip");
+    assert_eq!(release_attestation["tag"], tag);
+    assert_eq!(release_attestation["release_id"], release["id"]);
+    assert_eq!(
+        release_attestation["release_subject_uri"],
+        format!("pkg:github/hjosugi/iroha-zip@v{version}")
+    );
+    assert_eq!(release_attestation["release_subject_sha1"], tag_object);
+    assert_eq!(release_attestation["asset_subject_count"], 11);
+    assert_eq!(release_attestation["asset_digests_match_release_api"], true);
+    assert_eq!(release_attestation["verified_downloaded_asset_count"], 11);
+    assert_eq!(
+        release_attestation["certificate_identity_regexp"],
+        r"^https://dotcom\.releases\.github\.com$"
+    );
+    assert_eq!(
+        release_attestation["timestamp_authority"],
+        "timestamp.githubapp.com"
+    );
+    let release_attestation_timestamp = release_attestation["timestamp"]
+        .as_str()
+        .expect("release attestation timestamp must be a string");
+    let timestamp_bytes = release_attestation_timestamp.as_bytes();
+    assert!(
+        timestamp_bytes.len() == 20
+            && timestamp_bytes[4] == b'-'
+            && timestamp_bytes[7] == b'-'
+            && timestamp_bytes[10] == b'T'
+            && timestamp_bytes[13] == b':'
+            && timestamp_bytes[16] == b':'
+            && timestamp_bytes[19] == b'Z'
+            && timestamp_bytes
+                .iter()
+                .enumerate()
+                .all(|(index, byte)| matches!(index, 4 | 7 | 10 | 13 | 16 | 19)
+                    || byte.is_ascii_digit()),
+        "release attestation timestamp is not canonical UTC"
+    );
 
     let checks = &metadata["independent_verification"];
     for field in [
