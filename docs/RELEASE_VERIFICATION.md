@@ -63,6 +63,10 @@ matching tag and an explicit `publish` choice.
 9. Draft readback must match all 11 local files by exact name, upload state, byte length, and SHA-256.
 10. Only that verified draft is published as latest. Published readback must be stable, non-prerelease,
     immutable, latest, and an exact match for all 11 assets.
+11. The publication job allows bounded GitHub propagation time, then requires `gh release verify` for
+    the Release and `gh release verify-asset` for every one of the 11 local files. It retries the
+    complete proof at most 24 times with five-second intervals and fails rather than waiting without
+    a bound or treating an incomplete proof as success.
 
 The repository immutable-release policy was enabled on 2026-08-14. The current stable unsigned
 [`v0.6.2`](https://github.com/hjosugi/iroha-zip/releases/tag/v0.6.2) publication passed the complete

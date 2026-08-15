@@ -328,3 +328,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $latestTag -cne $env:RELEASE_TAG) {
             throw 'The published release is not the latest stable release.'
           }
+          ./scripts/verify-github-release-attestation.ps1 `
+            -Tag $env:RELEASE_TAG `
+            -Repository $env:GITHUB_REPOSITORY `
+            -AssetFiles $assetFiles
