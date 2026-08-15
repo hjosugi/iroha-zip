@@ -90,6 +90,45 @@ fn native_control_ids_are_stable_unique_and_disjoint() {
             .iter()
             .all(|id| !control_id::is_setting(*id))
     );
+    let mut tab_ids = control_id::TAB_ORDER;
+    tab_ids.sort_unstable();
+    assert_eq!(tab_ids.as_slice(), ids.as_slice());
+}
+
+#[test]
+fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
+    let script = include_str!("../scripts/test-settings-ui.ps1");
+    let (_, tab_order_source) = script
+        .split_once("$tabOrder = @(")
+        .expect("native UI test must declare the expected tab order");
+    let (tab_order_source, _) = tab_order_source
+        .split_once("\n    )")
+        .expect("native UI test tab order must have a bounded literal");
+    let tab_order = tab_order_source
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .unwrap_or_else(|error| panic!("invalid scripted tab-order ID {value:?}: {error}"))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(tab_order, control_id::TAB_ORDER);
+
+    for marker in [
+        "[IrohaZipUiAutomationNative]::SendTab($false)",
+        "[IrohaZipUiAutomationNative]::SendTab($true)",
+        "forwardWrapTarget = $firstId",
+        "reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]",
+        "allFocusedControlsVisible = $true",
+        "schemaVersion = 2",
+    ] {
+        assert!(
+            script.contains(marker),
+            "native UI keyboard contract is missing {marker:?}"
+        );
+    }
 }
 
 #[test]

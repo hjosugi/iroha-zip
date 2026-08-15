@@ -29,6 +29,28 @@ using System.Runtime.InteropServices;
  }
 
 public static class IrohaZipUiAutomationNative {
+    private const uint InputKeyboard = 1;
+    private const uint KeyEventKeyUp = 0x0002;
+    private const ushort VirtualKeyShift = 0x10;
+    private const ushort VirtualKeyTab = 0x09;
+
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
+    private struct IrohaZipInput {
+        [FieldOffset(0)] public uint Type;
+        [FieldOffset(8)] public ushort VirtualKey;
+        [FieldOffset(10)] public ushort ScanCode;
+        [FieldOffset(12)] public uint Flags;
+        [FieldOffset(16)] public uint Time;
+        [FieldOffset(24)] public UIntPtr ExtraInfo;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(
+        uint count,
+        IrohaZipInput[] inputs,
+        int inputSize
+    );
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessageW(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
@@ -52,6 +74,45 @@ public static class IrohaZipUiAutomationNative {
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetLastActivePopup(IntPtr window);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr window);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    private static IrohaZipInput Key(ushort virtualKey, uint flags) {
+        return new IrohaZipInput {
+            Type = InputKeyboard,
+            VirtualKey = virtualKey,
+            Flags = flags
+        };
+    }
+
+    public static bool SendTab(bool reverse) {
+        if (IntPtr.Size != 8) {
+            throw new PlatformNotSupportedException(
+                "The iroha-zip Settings keyboard test requires a 64-bit Windows process."
+            );
+        }
+        IrohaZipInput[] inputs = reverse
+            ? new IrohaZipInput[] {
+                Key(VirtualKeyShift, 0),
+                Key(VirtualKeyTab, 0),
+                Key(VirtualKeyTab, KeyEventKeyUp),
+                Key(VirtualKeyShift, KeyEventKeyUp)
+            }
+            : new IrohaZipInput[] {
+                Key(VirtualKeyTab, 0),
+                Key(VirtualKeyTab, KeyEventKeyUp)
+            };
+        return SendInput(
+            (uint)inputs.Length,
+            inputs,
+            Marshal.SizeOf(typeof(IrohaZipInput))
+        ) == (uint)inputs.Length;
+    }
 }
 "@
 
@@ -138,6 +199,103 @@ function Require-Control {
     }
     $control.SetFocus()
     return $control
+}
+
+function Wait-ForFocusedVisibleControl {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [int]$Id
+    )
+    return Wait-Until -TimeoutSeconds 5 `
+        -Description "keyboard focus to reach visible control $Id" `
+        -Condition {
+            try {
+                $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+                if ($null -eq $focused -or
+                    $focused.Current.ProcessId -ne $Process.Id -or
+                    $focused.Current.AutomationId -ne [string]$Id) {
+                    return $false
+                }
+                $windowBounds = $MainWindow.Current.BoundingRectangle
+                $controlBounds = $focused.Current.BoundingRectangle
+                $tolerance = 2
+                if ($controlBounds.Width -le 0 -or
+                    $controlBounds.Height -le 0 -or
+                    $controlBounds.Left -lt ($windowBounds.Left - $tolerance) -or
+                    $controlBounds.Top -lt ($windowBounds.Top - $tolerance) -or
+                    $controlBounds.Right -gt ($windowBounds.Right + $tolerance) -or
+                    $controlBounds.Bottom -gt ($windowBounds.Bottom + $tolerance)) {
+                    return $false
+                }
+                return $focused
+            }
+            catch {
+                return $false
+            }
+        }
+}
+
+function Test-KeyboardTabOrder {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [hashtable]$Controls,
+        [int[]]$TabOrder
+    )
+    if ($TabOrder.Count -ne $Controls.Count) {
+        throw "The expected tab order has $($TabOrder.Count) controls, but UI Automation found $($Controls.Count)."
+    }
+    foreach ($id in $TabOrder) {
+        if (-not $Controls.ContainsKey($id)) {
+            throw "The expected tab order contains unknown control $id."
+        }
+    }
+
+    $windowHandle = [IntPtr]$MainWindow.Current.NativeWindowHandle
+    [void][IrohaZipUiAutomationNative]::SetForegroundWindow($windowHandle)
+    Wait-Until -TimeoutSeconds 5 `
+        -Description "the settings window to become the keyboard foreground window" `
+        -Condition {
+            [IrohaZipUiAutomationNative]::GetForegroundWindow() -eq $windowHandle
+        } | Out-Null
+
+    $firstId = [int]$TabOrder[0]
+    $Controls[$firstId].SetFocus()
+    Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
+
+    $forwardObserved = @($firstId)
+    $forwardExpected = @($TabOrder[1..($TabOrder.Count - 1)]) + @($firstId)
+    foreach ($expectedId in $forwardExpected) {
+        if (-not [IrohaZipUiAutomationNative]::SendTab($false)) {
+            throw "SendInput could not deliver Tab (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+        }
+        $focused = Wait-ForFocusedVisibleControl -Process $Process `
+            -MainWindow $MainWindow -Id $expectedId
+        $forwardObserved += [int]$focused.Current.AutomationId
+    }
+
+    $Controls[$firstId].SetFocus()
+    Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
+    $reverseObserved = @($firstId)
+    $reverseExpected = @($TabOrder[($TabOrder.Count - 1)..0])
+    foreach ($expectedId in $reverseExpected) {
+        if (-not [IrohaZipUiAutomationNative]::SendTab($true)) {
+            throw "SendInput could not deliver Shift+Tab (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+        }
+        $focused = Wait-ForFocusedVisibleControl -Process $Process `
+            -MainWindow $MainWindow -Id $expectedId
+        $reverseObserved += [int]$focused.Current.AutomationId
+    }
+
+    return [ordered]@{
+        method = "SendInput"
+        forwardObserved = $forwardObserved
+        reverseObserved = $reverseObserved
+        forwardWrapTarget = $firstId
+        reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]
+        allFocusedControlsVisible = $true
+    }
 }
 
 function Find-SecondaryWindow {
@@ -476,6 +634,15 @@ try {
         }
     }
 
+    $tabOrder = @(
+        2001, 1001, 1002, 1003, 1004,
+        2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011,
+        2012, 2013, 2014, 2015,
+        1101, 1102, 1103, 1104, 1201, 1, 2
+    )
+    $keyboardTraversal = Test-KeyboardTabOrder -Process $process `
+        -MainWindow $window -Controls $controls -TabOrder $tabOrder
+
     Test-SyntheticDpiTransition -MainWindow $window -Controls $controls
 
     foreach ($id in @(1001, 1003, 1004)) {
@@ -566,7 +733,7 @@ try {
         throw "Settings did not exit after confirming unsaved-change discard."
     }
 
-    Write-Host "Settings UI Automation contract passed for 26 controls, 96/144/96-DPI relayout, and safe button paths."
+    Write-Host "Settings UI Automation contract passed for exact forward/reverse 26-control keyboard traversal, 96/144/96-DPI relayout, and safe button paths."
 
     if ($null -ne $backendPath) {
         $process = Start-Process -FilePath $executablePath `
@@ -628,13 +795,14 @@ try {
         } -Description "the diagnosis result to close" | Out-Null
 
         $setupEvidence = [ordered]@{
-            schemaVersion = 1
+            schemaVersion = 2
             status = "passed"
             language = $Language
             generatedAtUtc = [DateTime]::UtcNow.ToString("o")
             controlCount = 26
             dpiAwareness = "PerMonitorV2"
             syntheticDpiTransitions = @(96, 144, 96)
+            keyboardTraversal = $keyboardTraversal
             safeFolderPickerCancellations = 3
             restoreDefaultsCancelAndConfirm = $true
             cancelButtonDiscardCancelAndConfirm = $true

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Exercise the native Settings keyboard path with real Win32 input in Japanese and English: require
+  exact forward Tab and reverse Shift+Tab traversal across all 26 controls, both wrap boundaries,
+  expected process/AutomationId focus, and automatic scrolling that keeps every focused control
+  visible. Lock the PowerShell order to a platform-neutral Rust contract and record schema-v2
+  machine-readable traversal evidence.
 - Preserve the independently verified `v0.6.1` publication as a bilingual, machine-readable release
   snapshot with the exact tag and commit, all 11 public asset hashes and API identities, dry/release/
   tag-CI artifact digests, nine attestation subjects, unsigned PE boundary, and an ordinary Rust
