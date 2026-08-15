@@ -1,11 +1,13 @@
 # Policy-safe archive preview and selective extraction
 
-Updated: 2026-08-09
+Updated: 2026-08-15
 
-This document records the UX-002 prototype boundary. The CLI can now preview the exact
+This document records the completed UX-002 security boundary. The CLI can preview the exact
 policy-safe tree that normal extraction would publish and can publish selected preview-relative
-paths. UX-002 remains open until its prerequisite Windows/security matrices and native graphical
-flow are complete.
+paths. [Issue #12](https://github.com/hjosugi/iroha-zip/issues/12) is closed because its preview and
+selective-extraction acceptance criteria are met by the shared sandbox, resource, path, audit, and
+publication contracts. A native graphical browser remains a separate future user-interface feature;
+it is not required to make the existing CLI boundary safe and is not claimed here as implemented.
 
 ## Why preview performs a complete temporary extraction
 
