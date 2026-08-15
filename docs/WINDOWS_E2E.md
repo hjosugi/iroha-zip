@@ -1,11 +1,11 @@
 # Windows end-to-end evidence
 
-Updated: 2026-08-15
+Updated: 2026-08-16
 
 This document defines the automated SAFE-001 evidence contract. The schema-v5 contract passed on
 both fixed-label x64 runners and the native `windows-11-arm` runner at exact `main` commit
-`9debd02e819899f8dbdfdd5281d3d0b2a68a89db` in
-[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650). Independently
+`71f7b674745bc8446142f4f7dbf71534839ac9fa` in
+[Actions run 31891960603](https://github.com/hjosugi/iroha-zip/actions/runs/31891960603). Independently
 downloaded JSON from all three environments records one effective `AC\Temp` path, successful
 in-container CNG and delete-on-close probes, abnormal-exit and corrupt-loader rejection, seven
 explicitly removed AppContainer profiles/roots per environment, all 14 named additional read formats
@@ -14,9 +14,10 @@ native ARM64 Japanese/English Settings, and the encrypted-ZIP/password assertion
 reports were selected by exact artifact filename and mechanically checked for schema-v5 success,
 three encryption modes, non-publication failures, malicious-corpus rejection, Settings diagnosis,
 Per-Monitor V2 awareness with drift-free synthetic 96→144→96 transitions, correct ARM64 PE identity,
-schema-v2 Settings keyboard traversal/shortcut evidence, and complete cleanup. Server 2022/2025
-records real `SendInput` for the complete forward/reverse 26-control Tab cycles, both wrap targets,
-Enter save/message dismissal, and Escape dirty-close request/cancellation. The hosted ARM64 reports
+schema-v3 Settings folder-picker/keyboard evidence, and complete cleanup. All four Settings reports
+record one completed production backend Browse picker and two safely cancelled import pickers.
+Server 2022/2025 records real `SendInput` for the complete forward/reverse 26-control Tab cycles,
+both wrap targets, Enter save/message dismissal, and Escape dirty-close request/cancellation. The hosted ARM64 reports
 preserve the same observed order and actions but explicitly mark the bounded non-key fallback and
 all real-key flags false. These results are evidence for the named disposable
 Server and hosted Windows 11 ARM images, not Windows 10/11 x64 desktop certification or a security
@@ -24,7 +25,7 @@ audit.
 
 A value-preserving canonical copy of all 11 reviewed JSON reports, the SHA-256 of each original
 downloaded file, the canonical-file SHA-256 inventory, and the three source artifact API digests are
-kept in the latest [durable run snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650).
+kept in the latest [durable run snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31891960603).
 The earlier run remains alongside it rather than being overwritten. Ordinary Rust tests require each
 snapshot's exact inventory and hashes and recheck its principal security assertions. The snapshots
 contain no generated hostile archive or backend binary and are diagnostic evidence, not release

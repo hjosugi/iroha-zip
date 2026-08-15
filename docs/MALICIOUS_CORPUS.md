@@ -1,8 +1,8 @@
 # Malicious archive regression corpus
 
-Updated: 2026-08-15
+Updated: 2026-08-16
 
-This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs and the native Windows 11 ARM64 job produced reviewed passing evidence in [Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650) from exact `main` commit `9debd02e819899f8dbdfdd5281d3d0b2a68a89db`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed. Canonical copies and both source/canonical SHA-256 inventories are retained in the [durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650); no generated archive is retained.
+This document defines the SAFE-002 regression corpus and its evidence contract. Both fixed-label Windows jobs and the native Windows 11 ARM64 job produced reviewed passing evidence in [Actions run 31891960603](https://github.com/hjosugi/iroha-zip/actions/runs/31891960603) from exact `main` commit `71f7b674745bc8446142f4f7dbf71534839ac9fa`: the benign control was accepted, all 18 hostile archives were rejected without publication, all three native policy fixtures were rejected, and each temporary root was removed. Canonical copies and both source/canonical SHA-256 inventories are retained in the [durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31891960603); no generated archive is retained.
 
 ## Distribution and retention policy
 

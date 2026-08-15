@@ -1,6 +1,6 @@
 # Windows ARM64 status / Windows ARM64 対応状況
 
-Updated: 2026-08-15
+Updated: 2026-08-16
 
 ## 日本語
 
@@ -37,15 +37,16 @@ AppContainerがcapability 0であること、7 profile/rootと全一時rootが�
 fail closedしました。
 
 暗号化ZIPを含むschema-v5拡張はexact `main` commit
-`9debd02e819899f8dbdfdd5281d3d0b2a68a89db`の
-[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650)で合格しました。
+`71f7b674745bc8446142f4f7dbf71534839ac9fa`の
+[Actions run 31891960603](https://github.com/hjosugi/iroha-zip/actions/runs/31891960603)で合格しました。
 downloadした5 JSONを独立に確認し、3暗号方式すべてで保護された日英control、一回限りchannel、
 passwordのstdout／stderr非露出、sourceと同じpreview／extract tree、wrong-password／cancel時の
 destination非公開、全PEの`0xAA64` identity、完全cleanupを確認しました。
 全5 JSONはraw/canonical SHA-256とartifact API digest付きの
-[長期証跡snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650/windows-arm64-native)
+[長期証跡snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31891960603/windows-arm64-native)
 にも保存しています。
-schema-v2 Settingsの2 reportは全26 controlsの正逆順、wrap、可視性、保存、dirty close取消を
+schema-v3 Settingsの2 reportはproduction backendのフォルダ選択完了1回、import picker取消2回、
+全26 controlsの正逆順、wrap、可視性、保存、dirty close取消を
 保持します。GitHub-hosted ARM64 desktopではspawnしたprocessのforeground/global UIA focusを
 取得できないため、限定した`AttachThreadInputSetFocus`／`UIAutomationFallback`経路を明記し、
 実Tab／Enter／Escape検証は`false`と記録します。これは物理keyboard証跡とは主張しません。
@@ -137,15 +138,16 @@ The LPAC query returned `ERROR_INVALID_PARAMETER` on that Windows 11 ARM environ
 without a normal-AppContainer fallback.
 
 The schema-v5 encrypted-ZIP expansion passed for exact `main` commit
-`9debd02e819899f8dbdfdd5281d3d0b2a68a89db` in
-[Actions run 31875638650](https://github.com/hjosugi/iroha-zip/actions/runs/31875638650). Independent
+`71f7b674745bc8446142f4f7dbf71534839ac9fa` in
+[Actions run 31891960603](https://github.com/hjosugi/iroha-zip/actions/runs/31891960603). Independent
 checks of all five downloaded JSON reports confirmed the protected bilingual control, one-use
 channel, password absence from stdout/stderr, source-identical preview/extraction trees for all three
 encryption modes, wrong-password/cancel destination absence, `0xAA64` identity for every PE, and
 complete cleanup.
 All five reports are also retained with raw/canonical SHA-256 values and the artifact API digest in the
-[durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31875638650/windows-arm64-native).
-The two schema-v2 Settings reports preserve the exact 26-control forward/reverse order, wrap,
+[durable evidence snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/windows/31891960603/windows-arm64-native).
+The two schema-v3 Settings reports preserve one completed production backend Browse picker, two
+safely cancelled import pickers, the exact 26-control forward/reverse order, wrap,
 visibility, save, and dirty-close cancellation actions. Because the GitHub-hosted ARM64 desktop does
 not expose foreground/global UIA focus for the spawned process, they identify the bounded
 `AttachThreadInputSetFocus`/`UIAutomationFallback` path and record real Tab, Enter, and Escape

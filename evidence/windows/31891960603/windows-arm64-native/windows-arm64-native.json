@@ -1,0 +1,182 @@
+{
+  "backendArchiveMatrixExecuted": true,
+  "backendPayloads": [
+    {
+      "name": "bsdtar.exe",
+      "sha256": "25f7476061a751882f2339e164189a4ba06bbe9f456402fa7a566b5b491b02ab"
+    },
+    {
+      "name": "libarchive-13.dll",
+      "sha256": "67b5505b766859a51c49db7f4adc65dc003a4ff04d54aeffed3398583d1b09a0"
+    },
+    {
+      "name": "libb2-1.dll",
+      "sha256": "50f8bf5ea80877d12918a6b39be3bcdf85f573d82bb20d18ca0c45b65df963a3"
+    },
+    {
+      "name": "libbz2-1.dll",
+      "sha256": "2ea55932ca4f70229c9bdb756faef51fb007d49a1681d448b0ad5256f4ff6141"
+    },
+    {
+      "name": "libexpat-1.dll",
+      "sha256": "ac10df6c7c0cc27256e00dacd58547ff68ee9f2af23440413d66944d63b04bf0"
+    },
+    {
+      "name": "libiconv-2.dll",
+      "sha256": "5eb3e024adbeb40e990530b64498fa5305b4ebeaa34db971196f92317f70a35d"
+    },
+    {
+      "name": "liblz4.dll",
+      "sha256": "7c31d23b5a20d7aab73ca4908cf34263f9e4a6671ae88440c5986be9417985f2"
+    },
+    {
+      "name": "liblzma-5.dll",
+      "sha256": "892422bdaffee8b7c89ac6082a1fb31a3409350e1ccb1b9f6e297a4de6e0630c"
+    },
+    {
+      "name": "libpcre2-8-0.dll",
+      "sha256": "15e209351c51815a39f1eae93152774234d1273d4378c4f5f4c95b152146ed9c"
+    },
+    {
+      "name": "libpcre2-posix-3.dll",
+      "sha256": "2a15da3cde6603056e05dcc7bfe48e7019f294f1a5360718551d1faef87f9d9f"
+    },
+    {
+      "name": "libzstd.dll",
+      "sha256": "87e871f3f06ee054cdac83f99a7ea260f306472c923a1615ef88000905bfb9f2"
+    },
+    {
+      "name": "zlib1.dll",
+      "sha256": "fed18d2fda0a1b0252787fd59e7c01ed900f5c90eeb131f30a9992abb328c7ca"
+    }
+  ],
+  "backendPeMachine": "0xAA64",
+  "binarySha256": "2eee97c03965c13e07ffde3605215a1812fed13e629619d5d0f7969c764b1dff",
+  "isolation": {
+    "cleanup": [
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.fec18cc03a9e50f9ae80",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.fec18cc03aa64285b1c2",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.fec18cc03aa815e86704",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.fec18cc03aa87f4e6f06",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.fec18cc03aa949213b08",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.fec18cc03aa9a1e38b8a",
+        "temporaryRootRemoved": true
+      },
+      {
+        "profileDeleteSucceeded": true,
+        "profileName": "iroha-zip.Job.fec18cc03aaa094fdd0c",
+        "temporaryRootRemoved": true
+      }
+    ],
+    "crash": {
+      "exitCode": -1073740791,
+      "terminatedWithoutSuccess": true
+    },
+    "loaderFailure": {
+      "createProcessRejected": true
+    },
+    "memory": {
+      "exitCode": 2,
+      "limitMib": 64,
+      "rejected": true,
+      "requestedMib": 256
+    },
+    "network": {
+      "denied": true,
+      "endpoint": "127.0.0.1:55116",
+      "errorKind": "TimedOut"
+    },
+    "probeSha256": "2eee97c03965c13e07ffde3605215a1812fed13e629619d5d0f7969c764b1dff",
+    "processTemp": {
+      "deleteOnCloseSucceeded": true,
+      "resolvedPath": "\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Packages\\iroha-zip.job.fec18cc03aa9a1e38b8a\\AC\\Temp\\",
+      "rngSucceeded": true,
+      "schemaVersion": 1,
+      "tempEnvironment": "\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Packages\\iroha-zip.job.fec18cc03aa9a1e38b8a\\AC\\Temp",
+      "tmpEnvironment": "\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Packages\\iroha-zip.job.fec18cc03aa9a1e38b8a\\AC\\Temp"
+    },
+    "requestedMode": "appcontainer",
+    "schemaVersion": 4,
+    "stagingWriteSeal": {
+      "aclApplied": true,
+      "deniedOperations": [
+        "overwrite-existing-file",
+        "append-existing-file",
+        "create-root-file",
+        "create-parent-file",
+        "create-root-directory",
+        "overwrite-nested-file",
+        "create-nested-file",
+        "rename-file",
+        "delete-file",
+        "change-file-attributes",
+        "open-dacl-for-write",
+        "open-owner-for-write"
+      ],
+      "readablePaths": [
+        "root-file",
+        "nested-file",
+        "parent-directory",
+        "root-directory",
+        "nested-directory",
+        "current-directory"
+      ]
+    },
+    "timeout": {
+      "error": "archive backend exceeded 250ms",
+      "limitMilliseconds": 250,
+      "rejected": true,
+      "requestedSleepMilliseconds": 5000
+    },
+    "token": {
+      "capabilityCount": 0,
+      "isAppContainer": true,
+      "isLessPrivilegedAppContainer": false
+    }
+  },
+  "lpac": {
+    "failClosed": true,
+    "failureClass": "token-query-invalid-parameter",
+    "isolation": {
+      "exitCode": 2,
+      "stderrSha256": "461fe7abfd014265954ae951cad98794dd33f19b457f98e18aaea4c36e105282",
+      "stdoutEmpty": true
+    },
+    "supported": false
+  },
+  "maliciousCorpusExecuted": true,
+  "peMachine": "0xAA64",
+  "releaseAssetPublished": false,
+  "runner": {
+    "imageOs": "win11-arm64",
+    "imageVersion": "20260809.134.1",
+    "osArchitecture": "Arm64",
+    "osDescription": "Microsoft Windows 10.0.26200",
+    "processArchitecture": "Arm64"
+  },
+  "rustHost": "host: aarch64-pc-windows-msvc",
+  "schemaVersion": 2,
+  "settingsMatrixExecuted": true
+}
