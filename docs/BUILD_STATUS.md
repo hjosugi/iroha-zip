@@ -53,8 +53,9 @@ Updated: 2026-08-15
 - Japanese and English static Pages rendered at desktop and mobile sizes, with all three public routes passing an automated WCAG 2 AA audit
 - All repository Markdown is UTF-8-readable; every relative file target and local heading anchor resolves with exact path casing on both case-sensitive and case-insensitive hosts
 - Bilingual bug, feature, and pull-request templates point sensitive reports to the private advisory route and keep their displayed release version under an ordinary Rust regression
+- Every GitHub Actions job has an explicit timeout, all 28 external action uses are fixed to full 40-hex commits, all 10 checkouts discard persisted credentials, and an ordinary Rust regression fixes the exact write-permission inventory
 
-The current Linux suite contains 116 passing default-feature tests, including password-transport,
+The current Linux suite contains 117 passing default-feature tests, including password-transport,
 package-version/document, and bilingual Pages version/topology contracts, plus one ignored
 system-libarchive compatibility test that is invoked explicitly when the dependency is available.
 The feature-gated minimized fuzz-regression gate adds one passing deterministic test to the normal
@@ -92,8 +93,9 @@ Windows PowerShell 5.1 launcher regression passed for exact `main` commit
 [Actions run 31877302461](https://github.com/hjosugi/iroha-zip/actions/runs/31877302461). The same tag
 commit passed again in
 [Actions run 31877964744](https://github.com/hjosugi/iroha-zip/actions/runs/31877964744). All external
-action uses are pinned to exact 40-hex commits, and the repository Actions policy rejects non-SHA
-references while retaining read-only default workflow permissions. Production-profile compilation
+action uses are pinned to exact 40-hex commits, every job has an explicit timeout, every checkout
+discards persisted credentials, and the repository Actions policy rejects non-SHA references while
+retaining read-only default workflow permissions. Production-profile compilation
 and signed-MSYS2 backend work are intentionally kept out of the duplicate x64 matrix path.
 
 The native GitHub `windows-11-arm` job requires OS/process architecture `Arm64` and Rust host
