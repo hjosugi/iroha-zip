@@ -187,7 +187,7 @@ zeroizationはbest effortであり、paging、hibernation、privileged debugger�
 ## 7. 将来の強化候補
 
 - LPACの実書庫・ACL・network denial matrixと必要capability 0件の実証
-- 最初の実環境Authenticode署名済みrelease証跡と独立レビュー、および署名済みアップデート（未署名`v0.6.0`は[release run 31864491738](https://github.com/hjosugi/iroha-zip/actions/runs/31864491738)でGitHub immutable policy、draft-first検証、公開後のexact 11 asset readback、hosted-runner限定attestationを完了した。これはpublisher署名の代替ではない）
+- 最初の実環境Authenticode署名済みrelease証跡と独立レビュー、および署名済みアップデート（未署名`v0.6.1`は[release run 31870222507](https://github.com/hjosugi/iroha-zip/actions/runs/31870222507)でGitHub immutable policy、draft-first検証、公開後のexact 11 asset readback、hosted-runner限定attestationを完了し、[恒久metadata snapshot](https://github.com/hjosugi/iroha-zip/tree/main/evidence/releases/v0.6.1)も保存した。これはpublisher署名の代替ではない）
 - Windows Attachment Servicesの実OS／Defender／第三者provider matrix
 - AppLocker／WDAC向けpublisher rule
 - 親handleをrootにしたnative child openとWindows reparse競合stress test

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve the independently verified `v0.6.1` publication as a bilingual, machine-readable release
+  snapshot with the exact tag and commit, all 11 public asset hashes and API identities, dry/release/
+  tag-CI artifact digests, nine attestation subjects, unsigned PE boundary, and an ordinary Rust
+  regression that rejects inventory, digest, workflow, architecture, or version drift.
+
 ## 0.6.1 - 2026-08-15
 
 - Declare Per-Monitor V2 DPI awareness in every Windows executable and make Settings consume the
