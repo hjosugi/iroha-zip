@@ -1,22 +1,28 @@
 # Settings accessibility and UI automation
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 This document records the implemented UX-001 contract and the evidence that is still required on
 real Windows systems. It does not claim screen-reader or high-DPI certification.
 
 ## Layout and keyboard contract
 
-`iroha-zip-settings.exe` embeds an `asInvoker`, System-DPI-aware Windows manifest. All coordinates
-are expressed at the 96-DPI logical baseline and scaled from the window DPI. The initial window is
-capped to the current display, is resizable and maximizable, and exposes horizontal and vertical
-scrollbars when the scaled content is larger than the client area. Moving focus with the keyboard
-automatically scrolls the focused control into view.
+`iroha-zip-settings.exe` embeds an `asInvoker`, Per-Monitor V2 Windows manifest, with Per-Monitor
+and legacy `true/pm` fallbacks. All control coordinates remain expressed at the exact 96-DPI
+logical baseline. On `WM_DPICHANGED`, the application applies Windows' suggested top-level
+rectangle, lays out every child HWND again from that baseline, rescales the transient scroll
+position, recreates the Windows message font for the new DPI, and recalculates both scrollbars.
+The initial window is capped to the current display, is resizable and maximizable, and exposes
+horizontal and vertical scrollbars when the scaled content is larger than the client area. Moving
+focus with the keyboard automatically scrolls the focused control into view.
 
 The platform-neutral scaling tests cover 96, 120, 144, 192, and 288 DPI (100–300%). This proves the
-integer conversion contract, not visual fit on a particular monitor. The current executable uses
-System DPI awareness rather than Per-Monitor V2; moving a running window between monitors with
-different scale factors remains part of the real-Windows matrix.
+integer conversion contract, not visual fit on a particular monitor. Windows UI Automation also
+requires the live top-level HWND to report the Per-Monitor V2 awareness context, sends a bounded
+synthetic 96→144→96 `WM_DPICHANGED` sequence, verifies Windows' suggested rectangle, and requires
+two representative controls to scale to 150% and return to their original widths. A synthetic
+message does not move a window between physical displays, so real mixed-monitor visual fit remains
+part of the real-Windows matrix.
 
 Every editable setting, combo box, checkbox, and action button has:
 
@@ -43,6 +49,11 @@ all 26 controls for:
 - enabled and keyboard-focusable state;
 - non-empty accessible name, access key, and bounds;
 - successful focus traversal, including controls initially outside the viewport.
+
+Before mutating the form, the same process-level test checks the effective Per-Monitor V2 context
+and the synthetic 96→144→96 relayout contract described above. This detects a missing embedded
+manifest, a handler that ignores the suggested rectangle, one-time-only child geometry, and
+round-trip scaling drift without claiming physical-monitor evidence.
 
 It edits a path and numeric value through `ValuePattern`, toggles a checkbox through
 `TogglePattern`, verifies the dirty-title contract without writing the temporary configuration,
@@ -106,7 +117,7 @@ source, manifest, evidence, or destination validation.
 UX-001 stays open until disposable Windows 10 and 11 systems record:
 
 1. visual fit and keyboard-only traversal at 100, 125, 150, 200, and 300% scaling;
-2. low-resolution viewport scrolling and mixed-DPI monitor movement;
+2. low-resolution viewport scrolling and repeated movement between physical mixed-DPI monitors;
 3. Narrator and at least one independent screen reader;
 4. Japanese and English Windows with long and non-ASCII paths;
 5. every external-state action, confirmation, progress indication, failure, and rollback;
@@ -116,6 +127,8 @@ UX-001 stays open until disposable Windows 10 and 11 systems record:
 Primary implementation references:
 
 - [Setting the default DPI awareness for a process](https://learn.microsoft.com/en-us/windows/win32/hidpi/setting-the-default-dpi-awareness-for-a-process)
+- [`WM_DPICHANGED`](https://learn.microsoft.com/en-us/windows/win32/hidpi/wm-dpichanged)
+- [High-DPI desktop application development](https://learn.microsoft.com/en-us/windows/win32/hidpi/high-dpi-desktop-application-development-on-windows)
 - [`GetDpiForWindow`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdpiforwindow)
 - [UI Automation overview](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/ui-automation-overview)
 - [Supporting UI Automation control types](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-supportinguiautocontroltypes)

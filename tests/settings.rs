@@ -1,6 +1,7 @@
 use iroha_zip::config::{AttachmentHandoffPolicy, Config, FilenameEncoding, IsolationMode};
 use iroha_zip::settings::{
-    SettingsAction, SettingsField, SettingsForm, control_id, format_byte_count, scale_logical,
+    SettingsAction, SettingsField, SettingsForm, control_id, format_byte_count, scale_between_dpi,
+    scale_logical,
 };
 
 #[test]
@@ -115,4 +116,21 @@ fn logical_layout_scaling_covers_100_through_300_percent() {
         assert_eq!(scale_logical(-100, dpi), -expected);
     }
     assert_eq!(scale_logical(100, 0), 100);
+}
+
+#[test]
+fn transient_pixels_rescale_between_monitor_dpi_spaces() {
+    assert_eq!(scale_between_dpi(125, 120, 144), 150);
+    assert_eq!(scale_between_dpi(-125, 120, 144), -150);
+    assert_eq!(scale_between_dpi(150, 144, 96), 100);
+    assert_eq!(scale_between_dpi(i32::MAX, 96, u32::MAX), i32::MAX);
+    assert_eq!(scale_between_dpi(i32::MIN, 96, u32::MAX), i32::MIN);
+    assert_eq!(scale_between_dpi(100, 0, 0), 100);
+}
+
+#[test]
+fn settings_manifest_declares_per_monitor_v2_with_legacy_fallback() {
+    let manifest = include_str!("../assets/iroha-zip-settings.manifest");
+    assert!(manifest.contains(">true/pm</dpiAware>"));
+    assert!(manifest.contains(">PerMonitorV2, PerMonitor</dpiAwareness>"));
 }

@@ -11,7 +11,7 @@ Updated: 2026-08-15
 - `cargo check --all-targets --target aarch64-pc-windows-msvc --locked`
 - Configuration serialization, backward compatibility, validation, rollback-safe replacement, and path-policy tests
 - Platform-neutral settings-form round trips, human-readable byte-unit parsing, and field-specific validation tests
-- Platform-neutral 100–300% layout scaling, stable 26-control IDs, exhaustive 11-action dispatch mapping, and concurrent-save tests
+- Platform-neutral 100–300% layout scaling, Per-Monitor V2 manifest/scroll-state contracts, stable 26-control IDs, exhaustive 11-action dispatch mapping, and concurrent-save tests
 - Shared archive staging, typed/sorted policy-safe preview inventory, fail-closed selective-tree materialization, and Unix fake-backend end-to-end orchestration tests
 - Sandboxed, 64 MiB-bounded archive-member preflight with raw absolute/drive/UNC, Windows-name, depth/path, and case-alias duplicate rejection before extraction
 - Deterministic source-generated ZIP/ustar/old-GNU sparse corpus with one control, 18 reject cases, and Windows-only hardlink/ADS/junction policy fixtures
@@ -137,7 +137,7 @@ A `vX.Y.Z` tag whose value matches `Cargo.toml` and points to current `main` bui
 
 - Disposable Windows 10/11 x64 runs of the now-passing fixed-Server evidence contract
 - LPAC `bsdtar --version`, archive-format, registry/file/COM denial, and network-denial measurements beyond the fixed-Server fail-closed token-query result
-- Settings-screen visual fit at 100–300% and mixed DPI, screen readers, completed folder-picker actions, Default Apps, UI-driven backend replacement, and other external-state rollback paths beyond the passing post-backup import rollback
+- Settings-screen visual fit at 100–300% and on physical mixed-DPI monitors beyond the synthetic 96→144→96 PMv2 relayout test, screen readers, completed folder-picker actions, Default Apps, UI-driven backend replacement, and other external-state rollback paths beyond the passing post-backup import rollback
 - Native archive-preview tree/search/selection UI, progress/cancellation accessibility, and real-format selected-publication matrix
 - Broader legacy-format, malformed-header, control-character, CPU-bomb, cancellation, and race fixtures beyond the passing pinned and generated corpora
 - Long-running fuzz campaigns beyond the bounded weekly smoke schedule
