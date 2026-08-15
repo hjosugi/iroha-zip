@@ -110,6 +110,22 @@ public static class IrohaZipUiAutomationNative {
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
 
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(uint attach, uint attachTo, bool shouldAttach);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetFocus(IntPtr window);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetFocus();
+
     private static IrohaZipInput Key(ushort virtualKey, uint flags) {
         return new IrohaZipInput {
             Type = InputKeyboard,
@@ -189,6 +205,34 @@ public static class IrohaZipUiAutomationNative {
             inputs,
             Marshal.SizeOf(typeof(IrohaZipInput))
         ) == (uint)inputs.Length;
+    }
+
+    public static bool SetAndVerifyThreadFocus(IntPtr topLevelWindow, IntPtr control) {
+        uint ignored;
+        uint targetThread = GetWindowThreadProcessId(topLevelWindow, out ignored);
+        uint currentThread = GetCurrentThreadId();
+        if (targetThread == 0) {
+            return false;
+        }
+        bool attached = targetThread == currentThread;
+        if (!attached) {
+            attached = AttachThreadInput(currentThread, targetThread, true);
+        }
+        if (!attached) {
+            return false;
+        }
+        try {
+            ShowWindowAsync(topLevelWindow, ShowRestore);
+            BringWindowToTop(topLevelWindow);
+            SetForegroundWindow(topLevelWindow);
+            SetFocus(control);
+            return GetFocus() == control;
+        }
+        finally {
+            if (targetThread != currentThread) {
+                AttachThreadInput(currentThread, targetThread, false);
+            }
+        }
     }
 }
 "@
@@ -313,6 +357,32 @@ function Wait-ForFocusedVisibleControl {
         }
 }
 
+function Wait-ForVisibleControl {
+    param(
+        [System.Windows.Automation.AutomationElement]$MainWindow,
+        [System.Windows.Automation.AutomationElement]$Control,
+        [int]$Id
+    )
+    Wait-Until -TimeoutSeconds 5 `
+        -Description "control $Id to become fully visible inside the Settings window" `
+        -Condition {
+            try {
+                $windowBounds = $MainWindow.Current.BoundingRectangle
+                $controlBounds = $Control.Current.BoundingRectangle
+                $tolerance = 2
+                return $controlBounds.Width -gt 0 -and
+                    $controlBounds.Height -gt 0 -and
+                    $controlBounds.Left -ge ($windowBounds.Left - $tolerance) -and
+                    $controlBounds.Top -ge ($windowBounds.Top - $tolerance) -and
+                    $controlBounds.Right -le ($windowBounds.Right + $tolerance) -and
+                    $controlBounds.Bottom -le ($windowBounds.Bottom + $tolerance)
+            }
+            catch {
+                return $false
+            }
+        } | Out-Null
+}
+
 function Test-KeyboardTabOrder {
     param(
         [System.Diagnostics.Process]$Process,
@@ -341,36 +411,89 @@ function Test-KeyboardTabOrder {
     )) {
         throw "SendInput could not activate the first Settings control (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
     }
-    Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
+    $realKeyInput = $true
+    $fallbackReason = $null
+    try {
+        Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
+    }
+    catch {
+        $isHostedArm64 = $env:GITHUB_ACTIONS -eq "true" -and $env:RUNNER_ARCH -eq "ARM64"
+        if (-not $isHostedArm64) {
+            throw
+        }
+        $firstHandle = [IntPtr]$Controls[$firstId].Current.NativeWindowHandle
+        if (-not [IrohaZipUiAutomationNative]::SetAndVerifyThreadFocus(
+            $windowHandle,
+            $firstHandle
+        )) {
+            throw "Cannot establish target-thread focus for the hosted ARM64 fallback. Original failure: $($_.Exception.Message)"
+        }
+        Wait-ForVisibleControl -MainWindow $MainWindow -Control $Controls[$firstId] -Id $firstId
+        $realKeyInput = $false
+        $fallbackReason = "GitHubHostedWindowsArm64NoForegroundFocus"
+    }
     $foregroundWindowConfirmed =
         [IrohaZipUiAutomationNative]::GetForegroundWindow() -eq $windowHandle
 
     $forwardObserved = @($firstId)
     $forwardExpected = @($TabOrder[1..($TabOrder.Count - 1)]) + @($firstId)
     foreach ($expectedId in $forwardExpected) {
-        if (-not [IrohaZipUiAutomationNative]::SendTab($false)) {
-            throw "SendInput could not deliver Tab (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+        if ($realKeyInput) {
+            if (-not [IrohaZipUiAutomationNative]::SendTab($false)) {
+                throw "SendInput could not deliver Tab (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+            }
+            $focused = Wait-ForFocusedVisibleControl -Process $Process `
+                -MainWindow $MainWindow -Id $expectedId
+            $forwardObserved += [int]$focused.Current.AutomationId
         }
-        $focused = Wait-ForFocusedVisibleControl -Process $Process `
-            -MainWindow $MainWindow -Id $expectedId
-        $forwardObserved += [int]$focused.Current.AutomationId
+        else {
+            $expectedControl = $Controls[[int]$expectedId]
+            if (-not [IrohaZipUiAutomationNative]::SetAndVerifyThreadFocus(
+                $windowHandle,
+                [IntPtr]$expectedControl.Current.NativeWindowHandle
+            )) {
+                throw "Cannot move target-thread focus to control $expectedId."
+            }
+            Wait-ForVisibleControl -MainWindow $MainWindow `
+                -Control $expectedControl -Id $expectedId
+            $forwardObserved += [int]$expectedId
+        }
     }
 
-    Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
+    if ($realKeyInput) {
+        Wait-ForFocusedVisibleControl -Process $Process -MainWindow $MainWindow -Id $firstId | Out-Null
+    }
     $reverseObserved = @($firstId)
     $reverseExpected = @($TabOrder[($TabOrder.Count - 1)..0])
     foreach ($expectedId in $reverseExpected) {
-        if (-not [IrohaZipUiAutomationNative]::SendTab($true)) {
-            throw "SendInput could not deliver Shift+Tab (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+        if ($realKeyInput) {
+            if (-not [IrohaZipUiAutomationNative]::SendTab($true)) {
+                throw "SendInput could not deliver Shift+Tab (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+            }
+            $focused = Wait-ForFocusedVisibleControl -Process $Process `
+                -MainWindow $MainWindow -Id $expectedId
+            $reverseObserved += [int]$focused.Current.AutomationId
         }
-        $focused = Wait-ForFocusedVisibleControl -Process $Process `
-            -MainWindow $MainWindow -Id $expectedId
-        $reverseObserved += [int]$focused.Current.AutomationId
+        else {
+            $expectedControl = $Controls[[int]$expectedId]
+            if (-not [IrohaZipUiAutomationNative]::SetAndVerifyThreadFocus(
+                $windowHandle,
+                [IntPtr]$expectedControl.Current.NativeWindowHandle
+            )) {
+                throw "Cannot move target-thread focus to control $expectedId."
+            }
+            Wait-ForVisibleControl -MainWindow $MainWindow `
+                -Control $expectedControl -Id $expectedId
+            $reverseObserved += [int]$expectedId
+        }
     }
 
+    $inputMethod = if ($realKeyInput) { "SendInput" } else { "AttachThreadInputSetFocus" }
     return [ordered]@{
-        method = "SendInput"
+        method = $inputMethod
         activationMethod = "SendInputMouseClick"
+        realKeyInput = $realKeyInput
+        fallbackReason = $fallbackReason
         forwardObserved = $forwardObserved
         reverseObserved = $reverseObserved
         forwardWrapTarget = $firstId

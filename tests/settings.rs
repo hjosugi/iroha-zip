@@ -120,7 +120,10 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
         "[IrohaZipUiAutomationNative]::SendTab($false)",
         "[IrohaZipUiAutomationNative]::SendTab($true)",
         "[IrohaZipUiAutomationNative]::ActivateAndClick(",
+        "[IrohaZipUiAutomationNative]::SetAndVerifyThreadFocus(",
         "activationMethod = \"SendInputMouseClick\"",
+        "GitHubHostedWindowsArm64NoForegroundFocus",
+        "realKeyInput = $realKeyInput",
         "forwardWrapTarget = $firstId",
         "reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]",
         "allFocusedControlsVisible = $true",
@@ -136,6 +139,10 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
     assert!(
         !script.contains("the settings window to become the keyboard foreground window"),
         "hosted Windows runners must verify the focused target rather than require a matching foreground HWND"
+    );
+    assert!(
+        script.contains("$env:GITHUB_ACTIONS -eq \"true\" -and $env:RUNNER_ARCH -eq \"ARM64\""),
+        "the non-key-input fallback must remain restricted to GitHub-hosted ARM64"
     );
 }
 

@@ -63,6 +63,14 @@ must reach Cancel from the first edit and return through the exact opposite orde
 the production `IsDialogMessageW` path instead of treating independent UIA `SetFocus` calls as Tab
 evidence. It remains automated runner evidence rather than a human assistive-technology test.
 
+`windows-latest` and the fixed Server x64 matrix must complete that real-input path in both
+languages. The GitHub-hosted Windows ARM64 image currently accepts `SendInput` but exposes no
+foreground/global UIA focus for the spawned window. Only when both `GITHUB_ACTIONS=true` and
+`RUNNER_ARCH=ARM64` hold, the harness records `realKeyInput: false` and uses the documented
+`AttachThreadInput`/`SetFocus` mechanism to require the same exact order and visible bounds in the
+target UI thread. Self-hosted and retail ARM64 runs may not take this fallback; they must complete
+the real-input path. This ARM hosted-runner limitation is not presented as physical-keyboard proof.
+
 Before mutating the form, the same process-level test checks the effective Per-Monitor V2 context
 and the synthetic 96→144→96 relayout contract described above. This detects a missing embedded
 manifest, a handler that ignores the suggested rectangle, one-time-only child geometry, and
