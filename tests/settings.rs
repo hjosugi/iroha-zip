@@ -119,11 +119,21 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
     for marker in [
         "[IrohaZipUiAutomationNative]::SendTab($false)",
         "[IrohaZipUiAutomationNative]::SendTab($true)",
+        "[IrohaZipUiAutomationNative]::SendKey([ushort]0x0D)",
+        "[IrohaZipUiAutomationNative]::SendKey([ushort]0x1B)",
         "[IrohaZipUiAutomationNative]::ActivateAndClick(",
         "[IrohaZipUiAutomationNative]::SetAndVerifyThreadFocus(",
         "activationMethod = \"SendInputMouseClick\"",
         "GitHubHostedWindowsArm64NoForegroundFocus",
         "realKeyInput = $realKeyInput",
+        "enterKeyVerified = $shortcutRealKeyInput",
+        "escapeKeyVerified = $shortcutRealKeyInput",
+        "escapeCloseRequestCompleted = $true",
+        "closeCancellationPreservedProcess = $true",
+        "savedTimeoutSeconds = 301",
+        "$shortcutTimeoutPattern.SetValue(\"300\")",
+        "the shortcut-test default-baseline saved message",
+        "keyboardShortcuts = $shortcutEvidence",
         "forwardWrapTarget = $firstId",
         "reverseWrapTarget = [int]$TabOrder[$TabOrder.Count - 1]",
         "allFocusedControlsVisible = $true",
@@ -143,6 +153,28 @@ fn native_ui_test_matches_and_exercises_the_complete_keyboard_tab_order() {
     assert!(
         script.contains("$env:GITHUB_ACTIONS -eq \"true\" -and $env:RUNNER_ARCH -eq \"ARM64\""),
         "the non-key-input fallback must remain restricted to GitHub-hosted ARM64"
+    );
+
+    let traversal_position = script
+        .find("$keyboardTraversal = Test-KeyboardTabOrder")
+        .expect("the native UI test must run keyboard traversal");
+    let shortcut_position = script
+        .find("$shortcutTimeoutPattern =")
+        .expect("the native UI test must run the keyboard-shortcut contract");
+    let dpi_position = script
+        .find("Test-SyntheticDpiTransition -MainWindow")
+        .expect("the native UI test must run the DPI-transition contract");
+    assert!(
+        traversal_position < shortcut_position && shortcut_position < dpi_position,
+        "real Enter/Escape input must run immediately after traversal and before dialog-heavy UI paths"
+    );
+    assert!(
+        !script[shortcut_position..dpi_position].contains("Start-Process"),
+        "keyboard shortcuts must reuse the foreground traversal process"
+    );
+    assert!(
+        !script.contains("Focus-ControlForRealInput"),
+        "keyboard shortcuts must not try to reacquire global foreground input through pointer activation"
     );
 }
 

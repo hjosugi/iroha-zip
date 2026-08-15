@@ -63,13 +63,25 @@ must reach Cancel from the first edit and return through the exact opposite orde
 the production `IsDialogMessageW` path instead of treating independent UIA `SetFocus` calls as Tab
 evidence. It remains automated runner evidence rather than a human assistive-technology test.
 
+Immediately after traversal, while the same window is still the verified real-input target,
+the test changes the timeout, sends `VK_RETURN`, requires the native saved message and
+`timeout_seconds = 301` on disk, and dismisses the message with a second real Enter. It then changes
+the value to 302, sends `VK_ESCAPE`, requires the unsaved-change confirmation, cancels that close,
+and confirms the process survived. The test then saves the default timeout through the native Save
+button to restore the form's internal baseline and removes that temporary file, so the existing
+Restore Defaults and both later Cancel decisions still run from their original state. This covers
+the production Enter-to-save and Escape-to-close-request mappings rather than inferring shortcuts
+from the `IDOK`/`IDCANCEL` control IDs.
+
 `windows-latest` and the fixed Server x64 matrix must complete that real-input path in both
 languages. The GitHub-hosted Windows ARM64 image currently accepts `SendInput` but exposes no
 foreground/global UIA focus for the spawned window. Only when both `GITHUB_ACTIONS=true` and
 `RUNNER_ARCH=ARM64` hold, the harness records `realKeyInput: false` and uses the documented
 `AttachThreadInput`/`SetFocus` mechanism to require the same exact order and visible bounds in the
 target UI thread. Self-hosted and retail ARM64 runs may not take this fallback; they must complete
-the real-input path. This ARM hosted-runner limitation is not presented as physical-keyboard proof.
+the real-input path. The same hosted fallback completes save/close through UI Automation but records
+both `enterKeyVerified` and `escapeKeyVerified` as false. This ARM hosted-runner limitation is not
+presented as physical-keyboard proof.
 
 Before mutating the form, the same process-level test checks the effective Per-Monitor V2 context
 and the synthetic 96→144→96 relayout contract described above. This detects a missing embedded
