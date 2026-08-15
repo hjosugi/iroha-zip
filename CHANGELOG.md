@@ -23,6 +23,8 @@
 - Refresh the fuzz-only `cc` and `find-msvc-tools` patch releases while leaving production
   dependencies and the pinned `libfuzzer-sys` unchanged; pass the locked workspace, dependency
   policy, deterministic regression, native x64/ARM64 CI, CodeQL, and a five-target sanitizer campaign.
+- Give double-click shell warnings and failures Japanese and English outcome summaries while
+  retaining the underlying technical details, with regression coverage for every error category.
 
 ## 0.6.2 - 2026-08-15
 

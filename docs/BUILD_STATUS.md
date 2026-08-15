@@ -31,6 +31,8 @@ Updated: 2026-08-15
   pipe with explicit handle allowlisting, manifest-pinned libarchive password reader, and fail-closed
   entry/path/resource enforcement. Platform-neutral tests cover cancellation, EOF, overflow, timeout,
   abnormal exit, cleanup, inherited-handle, and output-redaction boundaries.
+- Japanese and English outcome summaries for every double-click shell warning and error category,
+  while preserving the underlying technical diagnostics.
 - Native settings application type-check against `windows` 0.62.2 APIs
 - Settings manifest XML and UI Automation PowerShell syntax parsing
 - Safe UI Automation button paths for three folder-picker cancellations, Restore Defaults, and unsaved-change Cancel
@@ -55,7 +57,7 @@ Updated: 2026-08-15
 - Bilingual bug, feature, and pull-request templates point sensitive reports to the private advisory route and keep their displayed release version under an ordinary Rust regression
 - Every GitHub Actions job has an explicit timeout, all 28 external action uses are fixed to full 40-hex commits, all 10 checkouts discard persisted credentials, and an ordinary Rust regression fixes the exact write-permission inventory
 
-The current Linux suite contains 117 passing default-feature tests, including password-transport,
+The current Linux suite contains 119 passing default-feature tests, including password-transport,
 package-version/document, and bilingual Pages version/topology contracts, plus one ignored
 system-libarchive compatibility test that is invoked explicitly when the dependency is available.
 The feature-gated minimized fuzz-regression gate adds one passing deterministic test to the normal
