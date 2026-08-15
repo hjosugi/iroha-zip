@@ -83,15 +83,20 @@ AppContainer/LPAC mode and zero capabilities have been positively verified.
 Object属性を使ってsuspendedで作成します。要求したAppContainer／LPAC modeとcapability 0件を肯定確認
 するまで、親は秘密を書きません。
 
-After verification, the parent converts the bounded value to UTF-8, writes exactly one delimited
-value, flushes, closes the controller end, and zeroizes its transport buffer. The child accepts one
-bounded non-empty UTF-8 value and reads to EOF. The password never becomes an argument, environment
-value, file, named object, configuration field, or diagnostic value. `JOB_OBJECT_LIMIT_ACTIVE_PROCESS`
-keeps the child-process count at one, and `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`, timeout,
-memory, and live filesystem limits remain active.
+After verification and while the child is still suspended, the parent converts the bounded value to
+UTF-8, writes exactly one delimited value into a dedicated 4 KiB pipe, closes the controller end to
+establish EOF, and zeroizes its transport buffer. Only then does it resume the child. Avoiding a
+synchronous pipe flush is part of the launch contract: the child cannot be required to read before
+it is allowed to run. The child accepts one bounded non-empty UTF-8 value and reads to EOF. The
+password never becomes an argument, environment value, file, named object, configuration field, or
+diagnostic value. `JOB_OBJECT_LIMIT_ACTIVE_PROCESS` keeps the child-process count at one, and
+`JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`, timeout, memory, and live filesystem limits remain
+active.
 
-検証後、親は上限付きvalueをUTF-8へ変換し、delimiter付きの1値だけを書いてflushし、controller endを
-閉じ、transport bufferをzeroizeします。childは上限内の空でないUTF-8 1値だけをEOFまで読みます。
+検証後、childがまだsuspendedの間に、親は上限付きvalueをUTF-8へ変換し、専用4 KiB pipeへ
+delimiter付きの1値だけを書き、controller endを閉じてEOFを確定し、transport bufferをzeroize
+します。その後だけchildをresumeします。同期pipe flushを行わないこともlaunch contractの一部です。
+childは実行許可前にreadを要求されないからです。childは上限内の空でないUTF-8 1値だけをEOFまで読みます。
 パスワードをargument、environment value、file、named object、configuration field、diagnostic value
 として保存しません。`JOB_OBJECT_LIMIT_ACTIVE_PROCESS`でchild process数を1に保ち、
 `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`、timeout、memory、live filesystem上限も維持します。
@@ -124,7 +129,7 @@ NoSecret
   └─ bounded secret ─────────────> SecretReady
 SecretReady
   ├─ pipe/spawn/isolation failure > Failed + zeroize + cleanup
-  └─ verified suspended child ───> write once + close + zeroize
+  └─ verified suspended child ───> write once + close + zeroize + resume
 ChildRunning
   ├─ parse/decrypt/policy failure > no retry + cleanup + no publication
   └─ success ────────────────────> independent audit + atomic publication

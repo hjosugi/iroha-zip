@@ -82,6 +82,7 @@ use windows::core::{Error as WindowsError, GUID, HRESULT, PCWSTR, PWSTR};
 use crate::config::IsolationMode;
 use crate::error::{IrohaZipError, Result};
 use crate::monitor;
+use crate::password::MAX_PASSWORD_UTF8_BYTES;
 use crate::platform::{
     FileIdentity, ProcessIsolation, ProcessResult, ProcessSpec, ProcessTempObservation,
 };
@@ -89,6 +90,11 @@ use crate::util;
 use crate::windows_command_line;
 
 const CREATE_NO_WINDOW_RAW: u32 = 0x0800_0000;
+const PASSWORD_PIPE_BUFFER_BYTES: u32 = 4 * 1024;
+const _: () = assert!(
+    MAX_PASSWORD_UTF8_BYTES < PASSWORD_PIPE_BUFFER_BYTES as usize,
+    "the complete delimited password must fit in the pipe before child resume"
+);
 const CONFIG_SAVE_MUTEX_NAME: &str = r"Local\iroha-zip.ConfigSave.v1";
 const CONFIG_SAVE_MUTEX_TIMEOUT_MS: u32 = 30_000;
 static IROHA_ZIP_ATTACHMENT_CLIENT: GUID = GUID::from_u128(0x8d3f90af_f983_4c6f_86ce_79c192a9352a);
@@ -1525,6 +1531,22 @@ fn run_in_appcontainer(
         }
     };
 
+    // The child is still suspended and its token has been positively checked.
+    // A bounded write fits in the dedicated pipe buffer, so close-delimited EOF
+    // is established without FlushFileBuffers waiting on child-side reads.
+    if let Some((mut input, mut password)) = password_channel.take() {
+        let write_result = input.write_all(password.line());
+        drop(input);
+        if let Err(error) = write_result {
+            let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0007) };
+            let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
+            return Err(IrohaZipError::io(
+                "cannot write the one-use password channel",
+                error,
+            ));
+        }
+    }
+
     // The backend must not execute until the token and capability checks above
     // have positively established the requested isolation. CREATE_SUSPENDED
     // closes the interval between CreateProcessW and that fail-closed decision.
@@ -1544,29 +1566,21 @@ fn run_in_appcontainer(
     }
     drop(thread_handle);
 
-    if let Some((mut input, mut password)) = password_channel.take() {
-        let write_result = input
-            .write_all(password.line())
-            .and_then(|()| input.flush());
-        drop(input);
-        if let Err(error) = write_result {
-            let _ = unsafe { TerminateJobObject(job.handle(), 0xE000_0007) };
-            let _ = unsafe { WaitForSingleObject(process.handle(), 5_000) };
-            return Err(IrohaZipError::io(
-                "cannot write the one-use password channel",
-                error,
-            ));
-        }
-    }
-
     wait_for_process(&process, &job, &spec, isolation_evidence)
 }
 
 fn create_noninheritable_pipe() -> Result<(OwnedHandle, OwnedHandle)> {
     let mut read = HANDLE::default();
     let mut write = HANDLE::default();
-    unsafe { CreatePipe(&raw mut read, &raw mut write, None, 0) }
-        .map_err(|error| windows_error("CreatePipe(password channel)", error))?;
+    unsafe {
+        CreatePipe(
+            &raw mut read,
+            &raw mut write,
+            None,
+            PASSWORD_PIPE_BUFFER_BYTES,
+        )
+    }
+    .map_err(|error| windows_error("CreatePipe(password channel)", error))?;
     let read = OwnedHandle::new(read);
     let write = OwnedHandle::new(write);
     for handle in [read.handle(), write.handle()] {

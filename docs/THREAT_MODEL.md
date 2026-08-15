@@ -167,8 +167,9 @@ Windows版bsdtarの対話callbackはconsole handleを要求し、capability 0件
 
 実装は一回限りの匿名pipe、明示的に非継承にしたcontroller write handle、native password dialog、
 zeroizing UTF-16／UTF-8 bufferを組み合わせます。byte-identicalかつ封印済みの内部抽出子は、既存の
-suspended AppContainer launchを維持し、要求modeとcapability 0件を肯定確認した後だけresumeします。
-child側read handleだけを明示的handle listへ含め、親は検証後に1値だけを書いてwrite endを閉じます。
+suspended AppContainer launchを維持します。child側read handleだけを明示的handle listへ含め、親は要求modeと
+capability 0件を肯定確認した後、childがまだsuspendedの間に専用4 KiB pipeへ1値だけを書いて
+write endを閉じます。その後にだけchildを1回resumeし、childはDLL load前に自分のtokenを再検証します。
 内部抽出子はmanifest固定済みDLL候補だけをloadし、libarchive password APIへ1値を登録します。
 通常file／directory以外を作成前に拒否し、UTF-8 path、重複alias、file／directory数、単一／合計容量、
 深さ、path長を再検証しながらcreate-new fileへ書きます。wrong password、timeout、policy違反、backend

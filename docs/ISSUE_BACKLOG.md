@@ -65,7 +65,9 @@ Acceptance: use a protected anonymous channel or equivalent one-use mechanism, z
 Progress (2026-08-15): the product path now uses a one-use anonymous pipe without `--passphrase`,
 inheritable controller handles, or environment/config/file/log storage. A byte-identical sealed
 internal child remains suspended until its AppContainer/LPAC token and zero capabilities are
-verified; only its stdin read handle is admitted through the explicit handle list. It loads only
+verified; only its stdin read handle is admitted through the explicit handle list. The parent writes
+the bounded value into a dedicated 4 KiB pipe and closes it while the verified child is still
+suspended, then performs the sole resume without a synchronous pipe flush. The child loads only
 manifest-pinned libarchive DLL candidates, registers the one bounded value through the public
 libarchive password API, rejects non-file/directory entries before creation, and re-enforces path and
 resource limits while reading. A non-`Clone`, always-redacted secret owns zeroizing UTF-16/UTF-8
