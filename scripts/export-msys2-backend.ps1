@@ -154,6 +154,11 @@ while ($pending.Count -gt 0) {
     foreach ($lineObject in (Invoke-Ldd $batch.ToArray())) {
         $line = [string]$lineObject
         if ($line -match '=>\s+not found(?:\s|$)') {
+            # Windows API-set contract names are virtual loader aliases backed
+            # by the OS API-set schema, not redistributable DLL payloads.
+            if ($line -match '^\s*(?:api|ext)-ms-win-[A-Za-z0-9._-]+\.dll\s+=>\s+not found\s*$') {
+                continue
+            }
             $unresolved = $line.Trim()
             if ($unresolved.Length -gt 512) {
                 $unresolved = $unresolved.Substring(0, 512) + "..."

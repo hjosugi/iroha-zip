@@ -3,9 +3,10 @@
 ## Unreleased
 
 - Resolve MSYS2 backend runtime dependencies through bounded batches of at most 64 `ldd` inputs,
-  deduplicate pending paths, reject unresolved dependencies and inventories larger than 256 files,
-  and lock those boundaries into the ordinary PowerShell launcher regression instead of starting
-  one shell for every discovered DLL.
+  deduplicate pending paths, reject unresolved payload dependencies and inventories larger than 256
+  files, recognize only strict Windows virtual API-set names as OS-provided, and lock those
+  boundaries into the ordinary PowerShell launcher regression instead of starting one shell for
+  every discovered DLL.
 - Preserve the independently verified `v0.6.3` immutable Release as a third exact 11-asset snapshot,
   including API digests and lengths, workflow artifact digests, x64/ARM64 PE identities,
   ZIP-to-standalone equality, unsigned Certificate Tables, tag/release/workflow attestations, public

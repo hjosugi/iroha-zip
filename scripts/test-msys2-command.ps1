@@ -32,6 +32,7 @@ foreach ($marker in @(
     '$maximumRuntimeFiles = 256',
     '$lddBatchSize = 64',
     '$queued.Add($dependency)',
+    '(?:api|ext)-ms-win-[A-Za-z0-9._-]+\.dll',
     "ldd reported an unresolved runtime dependency",
     'Invoke-Ldd $batch.ToArray()'
 )) {

@@ -26,7 +26,8 @@ supported package set for the wrong executable architecture.
 The exporter:
 
 1. resolves `bsdtar.exe` and its transitive same-environment DLLs with `ldd`, in batches of at most
-   64 paths, deduplicates the pending inventory, rejects any unresolved DLL, and rejects an inventory
+   64 paths, deduplicates the pending inventory, rejects unresolved payload DLLs while recognizing
+   only strict Windows `api-ms-win-*`/`ext-ms-win-*` virtual API-set names, and rejects an inventory
    larger than 256 runtime files;
 2. identifies the installed package owning every selected file with `pacman -Qqo`;
 3. creates an isolated pacman database configured with `SigLevel = Required TrustedOnly` and
