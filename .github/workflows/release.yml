@@ -174,7 +174,7 @@ jobs:
             ${{ steps.assets.outputs.shell_exe }}
 
       - name: Preserve exact architecture-specific assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: iroha-zip-${{ needs.release-context.outputs.version }}-windows-${{ matrix.architecture }}-attempt-${{ github.run_attempt }}
           path: ${{ steps.assets.outputs.asset_root }}/*
@@ -222,7 +222,7 @@ jobs:
           subject-path: ${{ steps.assets.outputs.checksums }}
 
       - name: Preserve the complete dry-run or release inventory
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: iroha-zip-${{ needs.release-context.outputs.version }}-complete-release-attempt-${{ github.run_attempt }}
           path: ${{ steps.assets.outputs.asset_root }}/*
