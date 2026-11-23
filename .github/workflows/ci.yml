@@ -71,7 +71,7 @@ jobs:
           rustup default 1.97.1
 
       - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: ci-test-${{ matrix.os }}
           workspaces: |
@@ -163,7 +163,7 @@ jobs:
           }
 
       - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: ci-windows-arm64-native
           cache-on-failure: true
@@ -526,7 +526,7 @@ jobs:
           rustup default 1.97.1
 
       - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: ci-e2e-${{ matrix.os }}
           cache-on-failure: true
@@ -739,7 +739,7 @@ jobs:
           rustup default 1.97.1
 
       - name: Restore Rust tool cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: ci-dependency-policy
           cache-all-crates: true
